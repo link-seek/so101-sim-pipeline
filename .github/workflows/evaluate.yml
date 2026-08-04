@@ -24,12 +24,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -q requests huaweicloudsdkcore huaweicloudsdkecs
+
       - name: Boot V100 ECS
         env:
           HW_AK: ${{ secrets.HW_AK }}
           HW_SK: ${{ secrets.HW_SK }}
         run: |
-          pip install -q hcloud
           python3 scripts/ecs_control.py boot \
             --ak "$HW_AK" --sk "$HW_SK" \
             --region cn-north-4 \
@@ -42,7 +49,7 @@ jobs:
               echo "SSH ready"
               exit 0
             fi
-            echo "Waiting for SSH... ($i)"
+            echo "Waiting for SSH... ($i/60)"
             sleep 10
           done
           echo "SSH timeout"
@@ -56,17 +63,25 @@ jobs:
           NUM_EPISODES: ${{ github.event.inputs.num_episodes || '10' }}
         run: |
           ssh -o StrictHostKeyChecking=no root@1.94.192.234 \
-            "HF_TOKEN=$HF_TOKEN MODEL_REPO=$MODEL_REPO DATASET_REPO=$DATASET_REPO NUM_EPISODES=$NUM_EPISODES \
-             /data/pipeline/run_eval.sh"
+            "HF_TOKEN='$HF_TOKEN' MODEL_REPO='$MODEL_REPO' DATASET_REPO='$DATASET_REPO' NUM_EPISODES='$NUM_EPISODES' bash /data/pipeline/run_eval.sh"
 
-      - name: Download eval results
+      - name: Download results
         run: |
-          scp -o StrictHostKeyChecking=no \
-            root@1.94.192.234:/data/pipeline/results/eval_report.json \
-            ./eval_report.json 2>/dev/null || true
-          scp -o StrictHostKeyChecking=no \
-            root@1.94.192.234:/data/pipeline/results/eval_video.mp4 \
-            ./eval_video.mp4 2>/dev/null || true
+          scp -o StrictHostKeyChecking=no root@1.94.192.234:/data/pipeline/results/eval_report.json ./eval_report.json 2>/dev/null || true
+          scp -o StrictHostKeyChecking=no root@1.94.192.234:/data/pipeline/results/eval_video.mp4 ./eval_video.mp4 2>/dev/null || true
+
+      - name: Upload to OBS
+        env:
+          HW_AK: ${{ secrets.HW_AK }}
+          HW_SK: ${{ secrets.HW_SK }}
+        run: |
+          pip install -q esdk-obs-python
+          python3 scripts/upload_obs.py \
+            --ak "$HW_AK" --sk "$HW_SK" \
+            --endpoint obs.cn-north-4.myhuaweicloud.com \
+            --bucket robotwin-assets \
+            --file ./eval_video.mp4 \
+            --key "so101-eval/eval_video_$(date +%Y%m%d_%H%M%S).mp4"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -82,7 +97,6 @@ jobs:
           HW_AK: ${{ secrets.HW_AK }}
           HW_SK: ${{ secrets.HW_SK }}
         run: |
-          pip install -q hcloud
           python3 scripts/ecs_control.py shutdown \
             --ak "$HW_AK" --sk "$HW_SK" \
             --region cn-north-4 \
