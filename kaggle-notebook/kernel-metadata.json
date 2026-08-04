@@ -1,0 +1,13 @@
+{
+  "id": "xieyucheng/so101-train-act",
+  "title": "so101-train-act",
+  "code_file": "train_act.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": []
+}
