@@ -28,18 +28,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Push notebook to Kaggle
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -q nbformat requests huggingface_hub
+
+      - name: Prepare and push notebook to Kaggle
         env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pip install -q kaggle nbformat
-          mkdir -p ~/.kaggle
-          echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > ~/.kaggle/kaggle.json
-          chmod 600 ~/.kaggle/kaggle.json
-
-          # Prepare notebook with parameters
+          # Inject parameters into notebook
           python3 scripts/prepare_kaggle_notebook.py \
             --dataset "${{ github.event.inputs.dataset_repo || 'xieyucheng123/so101-dataset' }}" \
             --model "${{ github.event.inputs.model_repo || 'xieyucheng123/so101-act' }}" \
@@ -47,24 +49,25 @@ jobs:
             --steps "${{ github.event.inputs.training_steps || '20000' }}" \
             --hf-token "$HF_TOKEN"
 
-          # Push to Kaggle as a new notebook version
-          kaggle kernels push -p kaggle-notebook/
+          # Push to Kaggle via Bearer token API
+          python3 scripts/kaggle_push.py \
+            --notebook kaggle-notebook/train_act.ipynb \
+            --token "$KAGGLE_KEY" \
+            --slug "xieyucheng/so101-train-act" \
+            --title "so101-train-act"
 
       - name: Wait for Kaggle completion
         env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: |
-          pip install -q kaggle
-          mkdir -p ~/.kaggle
-          echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > ~/.kaggle/kaggle.json
-          chmod 600 ~/.kaggle/kaggle.json
-
-          KERNEL_SLUG="so101-train-act"
-          echo "Waiting for Kaggle kernel $KERNEL_SLUG to complete..."
+          SLUG_USER="xieyucheng"
+          SLUG_KERNEL="so101-train-act"
+          echo "Waiting for Kaggle kernel $SLUG_USER/$SLUG_KERNEL to complete..."
           
           for i in $(seq 1 120); do
-            STATUS=$(kaggle kernels status "$KAGGLE_USERNAME/$KERNEL_SLUG" 2>/dev/null | grep -oP 'status"\s*:\s*"\K[^"]+' || echo "unknown")
+            STATUS=$(curl -s -H "Authorization: Bearer $KAGGLE_KEY" \
+              "https://www.kaggle.com/api/v1/kernels/status?user_name=$SLUG_USER&slug=$SLUG_KERNEL" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo "unknown")
             echo "Attempt $i: $STATUS"
             if [ "$STATUS" = "complete" ]; then
               echo "Kaggle training completed!"
