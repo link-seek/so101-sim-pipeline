@@ -30,7 +30,10 @@ DATASET_REPO = "{args.dataset}"
 MODEL_REPO = "{args.model}"
 POLICY_TYPE = "{args.policy}"
 TRAINING_STEPS = {args.steps}
-HF_TOKEN = "{args.hf_token}"
+# HF_TOKEN from Kaggle Secret (not embedded in source)
+HF_TOKEN = os.environ.get("HF_TOKEN", "")
+if not HF_TOKEN:
+    raise RuntimeError("HF_TOKEN not set in environment")
 HF_ENDPOINT = "https://hf-mirror.com"
 # === End Parameters ===
 """.strip()
