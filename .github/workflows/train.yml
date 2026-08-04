@@ -53,7 +53,7 @@ jobs:
           python3 scripts/kaggle_push.py \
             --notebook kaggle-notebook/train_act.ipynb \
             --token "$KAGGLE_KEY" \
-            --slug "xieyucheng/so101-train-act" \
+            --slug "xieyucheng123/so101-train-act" \
             --title "so101-train-act"
 
       - name: Wait for Kaggle completion
