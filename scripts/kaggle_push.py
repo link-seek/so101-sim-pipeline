@@ -81,7 +81,7 @@ def main():
     parser = argparse.ArgumentParser(description="Push notebook to Kaggle")
     parser.add_argument("--notebook", default="kaggle-notebook/train_act.ipynb")
     parser.add_argument("--token", required=True)
-    parser.add_argument("--slug", default="xieyucheng/so101-train-act")
+    parser.add_argument("--slug", default="xieyucheng123/so101-train-act")
     parser.add_argument("--title", default="so101-train-act")
     args = parser.parse_args()
 
