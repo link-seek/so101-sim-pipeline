@@ -1,0 +1,89 @@
+name: Evaluate
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_repo:
+        description: "HF model repo"
+        required: true
+        default: "xieyucheng123/so101-act"
+      dataset_repo:
+        description: "HF dataset repo"
+        required: true
+        default: "xieyucheng123/so101-dataset"
+      num_episodes:
+        description: "Number of eval episodes"
+        required: true
+        default: "10"
+  repository_dispatch:
+    types: [evaluate-trigger]
+
+jobs:
+  evaluate-on-v100:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Boot V100 ECS
+        env:
+          HW_AK: ${{ secrets.HW_AK }}
+          HW_SK: ${{ secrets.HW_SK }}
+        run: |
+          pip install -q hcloud
+          python3 scripts/ecs_control.py boot \
+            --ak "$HW_AK" --sk "$HW_SK" \
+            --region cn-north-4 \
+            --server-id c5b805bd-5e8d-4ba5-a5ab-7523244da0fa
+
+      - name: Wait for SSH
+        run: |
+          for i in $(seq 1 60); do
+            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@1.94.192.234 "echo ok" 2>/dev/null; then
+              echo "SSH ready"
+              exit 0
+            fi
+            echo "Waiting for SSH... ($i)"
+            sleep 10
+          done
+          echo "SSH timeout"
+          exit 1
+
+      - name: Run evaluation on V100
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MODEL_REPO: ${{ github.event.inputs.model_repo || 'xieyucheng123/so101-act' }}
+          DATASET_REPO: ${{ github.event.inputs.dataset_repo || 'xieyucheng123/so101-dataset' }}
+          NUM_EPISODES: ${{ github.event.inputs.num_episodes || '10' }}
+        run: |
+          ssh -o StrictHostKeyChecking=no root@1.94.192.234 \
+            "HF_TOKEN=$HF_TOKEN MODEL_REPO=$MODEL_REPO DATASET_REPO=$DATASET_REPO NUM_EPISODES=$NUM_EPISODES \
+             /data/pipeline/run_eval.sh"
+
+      - name: Download eval results
+        run: |
+          scp -o StrictHostKeyChecking=no \
+            root@1.94.192.234:/data/pipeline/results/eval_report.json \
+            ./eval_report.json 2>/dev/null || true
+          scp -o StrictHostKeyChecking=no \
+            root@1.94.192.234:/data/pipeline/results/eval_video.mp4 \
+            ./eval_video.mp4 2>/dev/null || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: |
+            eval_report.json
+            eval_video.mp4
+
+      - name: Shutdown V100 ECS
+        if: always()
+        env:
+          HW_AK: ${{ secrets.HW_AK }}
+          HW_SK: ${{ secrets.HW_SK }}
+        run: |
+          pip install -q hcloud
+          python3 scripts/ecs_control.py shutdown \
+            --ak "$HW_AK" --sk "$HW_SK" \
+            --region cn-north-4 \
+            --server-id c5b805bd-5e8d-4ba5-a5ab-7523244da0fa

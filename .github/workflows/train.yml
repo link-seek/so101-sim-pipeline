@@ -1,0 +1,92 @@
+name: Train
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset_repo:
+        description: "HF dataset repo (user/dataset_name)"
+        required: true
+        default: "xieyucheng123/so101-dataset"
+      model_repo:
+        description: "HF model repo (user/model_name)"
+        required: true
+        default: "xieyucheng123/so101-act"
+      policy_type:
+        description: "Policy type (act/diffusion/smolvla)"
+        required: true
+        default: "act"
+      training_steps:
+        description: "Training steps"
+        required: true
+        default: "20000"
+  repository_dispatch:
+    types: [train-trigger]
+
+jobs:
+  trigger-kaggle:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push notebook to Kaggle
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pip install -q kaggle
+          mkdir -p ~/.kaggle
+          echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+
+          # Prepare notebook with parameters
+          python3 scripts/prepare_kaggle_notebook.py \
+            --dataset "${{ github.event.inputs.dataset_repo || 'xieyucheng123/so101-dataset' }}" \
+            --model "${{ github.event.inputs.model_repo || 'xieyucheng123/so101-act' }}" \
+            --policy "${{ github.event.inputs.policy_type || 'act' }}" \
+            --steps "${{ github.event.inputs.training_steps || '20000' }}" \
+            --hf-token "$HF_TOKEN"
+
+          # Push to Kaggle as a new notebook version
+          kaggle kernels push -p kaggle-notebook/
+
+      - name: Wait for Kaggle completion
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          pip install -q kaggle
+          mkdir -p ~/.kaggle
+          echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+
+          KERNEL_SLUG="so101-train-act"
+          echo "Waiting for Kaggle kernel $KERNEL_SLUG to complete..."
+          
+          for i in $(seq 1 120); do
+            STATUS=$(kaggle kernels status "$KAGGLE_USERNAME/$KERNEL_SLUG" 2>/dev/null | grep -oP 'status"\s*:\s*"\K[^"]+' || echo "unknown")
+            echo "Attempt $i: $STATUS"
+            if [ "$STATUS" = "complete" ]; then
+              echo "Kaggle training completed!"
+              exit 0
+            fi
+            if [ "$STATUS" = "error" ]; then
+              echo "Kaggle training failed!"
+              exit 1
+            fi
+            sleep 60
+          done
+          echo "Timeout waiting for Kaggle"
+          exit 1
+
+      - name: Trigger evaluation
+        if: success()
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: evaluate-trigger
+          client-payload: |
+            {
+              "model_repo": "${{ github.event.inputs.model_repo || 'xieyucheng123/so101-act' }}",
+              "dataset_repo": "${{ github.event.inputs.dataset_repo || 'xieyucheng123/so101-dataset' }}"
+            }
