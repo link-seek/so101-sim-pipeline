@@ -68,13 +68,13 @@ jobs:
         env:
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: |
-          SLUG_USER="xieyucheng"
+          SLUG_USER="xieyucheng123"
           SLUG_KERNEL="so101-train-act"
           echo "Waiting for Kaggle kernel $SLUG_USER/$SLUG_KERNEL to complete..."
           
           for i in $(seq 1 120); do
             STATUS=$(curl -s -H "Authorization: Bearer $KAGGLE_KEY" \
-              "https://www.kaggle.com/api/v1/kernels/status?user_name=$SLUG_USER&slug=$SLUG_KERNEL" \
+              "https://www.kaggle.com/api/v1/kernels/status?user_name=$SLUG_USER&kernelSlug=$SLUG_KERNEL" \
               | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo "unknown")
             echo "Attempt $i: $STATUS"
             if [ "$STATUS" = "complete" ]; then
