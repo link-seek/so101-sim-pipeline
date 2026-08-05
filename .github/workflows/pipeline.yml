@@ -1,0 +1,79 @@
+name: SO101 Sim Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      num_episodes:
+        description: 'Number of data collection episodes'
+        default: '50'
+      train_steps:
+        description: 'Training steps'
+        default: '10000'
+      num_eval_episodes:
+        description: 'Number of evaluation episodes'
+        default: '20'
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_ENV: /data/so101-env/bin/python
+  MUJOCO_GL: egl
+  HF_ENDPOINT: https://hf-mirror.com
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+  OBS_AK: ${{ secrets.OBS_AK }}
+  OBS_SK: ${{ secrets.OBS_SK }}
+  DATASET_REPO: xieyucheng123/so101-sim-picklift
+  HF_MODEL_REPO: xieyucheng123/so101-act-sim
+
+jobs:
+  pipeline:
+    runs-on: [self-hosted, Linux, X64, V100]
+    timeout-minutes: 600
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify environment
+        run: |
+          $PYTHON_ENV -c "import torch; print(f'torch={torch.__version__}, cuda={torch.cuda.is_available()}')"
+          $PYTHON_ENV -c "import so101_nexus; print(f'so101_nexus={so101_nexus.__version__}')"
+          $PYTHON_ENV -c "import lerobot; print(f'lerobot={lerobot.__version__}')"
+          nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+
+      - name: Data Collection
+        run: |
+          $PYTHON_ENV scripts/collect_data.py \
+            --repo-id $DATASET_REPO \
+            --num-episodes ${{ inputs.num_episodes }}
+
+      - name: ACT Training
+        run: |
+          $PYTHON_ENV scripts/train_act.py \
+            --dataset-repo $DATASET_REPO \
+            --train-steps ${{ inputs.train_steps }}
+
+      - name: Simulation Evaluation
+        run: |
+          $PYTHON_ENV scripts/eval_sim.py \
+            --num-episodes ${{ inputs.num_eval_episodes }}
+
+      - name: Render Video
+        run: |
+          $PYTHON_ENV scripts/render_video.py \
+            --num-episodes 3
+
+      - name: Upload Results
+        run: |
+          $PYTHON_ENV scripts/upload_results.py \
+            --hf-token $HF_TOKEN \
+            --hf-repo $HF_MODEL_REPO \
+            --obs-ak $OBS_AK \
+            --obs-sk $OBS_SK
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-results
+          path: /data/pipeline/results/
+          retention-days: 30
