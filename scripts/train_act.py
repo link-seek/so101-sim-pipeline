@@ -25,7 +25,6 @@ def main():
 
     import shutil
     shutil.rmtree(args.output_dir, ignore_errors=True)
-    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     if args.hf_token:
         Path("~/.huggingface").expanduser().mkdir(exist_ok=True)
