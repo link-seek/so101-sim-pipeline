@@ -23,6 +23,8 @@ def main():
     parser.add_argument("--hf-token", default=os.environ.get("HF_TOKEN"))
     args = parser.parse_args()
 
+    import shutil
+    shutil.rmtree(args.output_dir, ignore_errors=True)
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     if args.hf_token:
