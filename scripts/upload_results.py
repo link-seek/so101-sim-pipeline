@@ -50,10 +50,16 @@ def main():
     parser.add_argument("--skip-obs", action="store_true")
     args = parser.parse_args()
 
-    upload_hf(args.model_path, args.hf_token, args.hf_repo)
+    try:
+        upload_hf(args.model_path, args.hf_token, args.hf_repo)
+    except Exception as e:
+        print(f"Warning: HF upload failed ({e})")
 
     if not args.skip_obs and args.obs_ak:
-        upload_obs(args.obs_ak, args.obs_sk, args.obs_bucket, args.obs_endpoint)
+        try:
+            upload_obs(args.obs_ak, args.obs_sk, args.obs_bucket, args.obs_endpoint)
+        except Exception as e:
+            print(f"Warning: OBS upload failed ({e})")
 
     print("\n=== Upload Complete ===")
 
