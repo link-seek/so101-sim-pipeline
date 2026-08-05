@@ -23,15 +23,16 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 def render_video(env, policy, num_episodes=3, max_steps=200):
     all_frames = []
+    device = next(policy.parameters()).device
 
     for ep in range(num_episodes):
         obs, info = env.reset()
         frames = []
 
         for step in range(max_steps):
-            state = torch.from_numpy(obs["state"]).float().unsqueeze(0).to(policy.device)
-            wrist = torch.from_numpy(obs["wrist_camera"]).float().permute(2, 0, 1).unsqueeze(0).to(policy.device) / 255.0
-            overhead = torch.from_numpy(obs["overhead_camera"]).float().permute(2, 0, 1).unsqueeze(0).to(policy.device) / 255.0
+            state = torch.from_numpy(obs["state"]).float().unsqueeze(0).to(device)
+            wrist = torch.from_numpy(obs["wrist_camera"]).float().permute(2, 0, 1).unsqueeze(0).to(device) / 255.0
+            overhead = torch.from_numpy(obs["overhead_camera"]).float().permute(2, 0, 1).unsqueeze(0).to(device) / 255.0
 
             obs_dict = {
                 "observation.state": state,
