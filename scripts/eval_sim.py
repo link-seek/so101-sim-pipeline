@@ -36,6 +36,7 @@ def load_policy(model_path, device="cuda"):
 def run_eval(env, policy, num_episodes, max_steps=300):
     results = []
     all_frames = []
+    device = next(policy.parameters()).device
 
     for ep in range(num_episodes):
         obs, info = env.reset()
@@ -44,9 +45,9 @@ def run_eval(env, policy, num_episodes, max_steps=300):
         steps = 0
 
         for step in range(max_steps):
-            state = torch.from_numpy(obs["state"]).float().unsqueeze(0).to(policy.device)
-            wrist = torch.from_numpy(obs["wrist_camera"]).float().permute(2, 0, 1).unsqueeze(0).to(policy.device) / 255.0
-            overhead = torch.from_numpy(obs["overhead_camera"]).float().permute(2, 0, 1).unsqueeze(0).to(policy.device) / 255.0
+            state = torch.from_numpy(obs["state"]).float().unsqueeze(0).to(device)
+            wrist = torch.from_numpy(obs["wrist_camera"]).float().permute(2, 0, 1).unsqueeze(0).to(device) / 255.0
+            overhead = torch.from_numpy(obs["overhead_camera"]).float().permute(2, 0, 1).unsqueeze(0).to(device) / 255.0
 
             obs_dict = {
                 "observation.state": state,
