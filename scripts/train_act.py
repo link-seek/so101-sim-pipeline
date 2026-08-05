@@ -43,6 +43,7 @@ def main():
         f"--policy.optimizer_lr={args.learning_rate}",
         "--policy.device=cuda",
         "--policy.use_amp=false",
+        "--policy.push_to_hub=false",
         "--wandb.enable=false",
     ]
 
