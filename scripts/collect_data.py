@@ -30,12 +30,12 @@ def create_dataset(repo_id, root, fps=30):
         "observation.images.wrist": {
             "dtype": "video",
             "shape": (480, 640, 3),
-            "names": None,
+            "names": ["height", "width", "channel"],
         },
         "observation.images.overhead": {
             "dtype": "video",
             "shape": (480, 640, 3),
-            "names": None,
+            "names": ["height", "width", "channel"],
         },
     }
     ds = LeRobotDataset.create(
