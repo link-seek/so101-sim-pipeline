@@ -3,6 +3,9 @@ name: Download NVIDIA Driver
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   download:
     runs-on: ubuntu-latest
