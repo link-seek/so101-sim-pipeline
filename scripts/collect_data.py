@@ -108,7 +108,11 @@ def main():
         successes += success
         print(f"Episode {ep+1}/{args.num_episodes}: success={success}, reward={reward:.3f}, steps={steps}")
 
-    dataset.push_to_hub()
+    try:
+        dataset.push_to_hub()
+        print("Dataset pushed to HF Hub")
+    except Exception as e:
+        print(f"Warning: push_to_hub failed ({e}), data saved locally at {args.root}")
     env.close()
 
     print(f"\n=== Collection Complete ===")
