@@ -108,7 +108,6 @@ def main():
         successes += success
         print(f"Episode {ep+1}/{args.num_episodes}: success={success}, reward={reward:.3f}, steps={steps}")
 
-    dataset.consolidate()
     dataset.push_to_hub()
     env.close()
 
