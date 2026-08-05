@@ -89,7 +89,6 @@ def main():
 
     import shutil
     shutil.rmtree(args.root, ignore_errors=True)
-    Path(args.root).mkdir(parents=True, exist_ok=True)
 
     config = so101_nexus.PickConfig(
         observations=[
