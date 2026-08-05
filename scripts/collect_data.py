@@ -65,6 +65,7 @@ def collect_episode(env, dataset, max_steps=200):
             "observation.state": obs["state"].astype(np.float32),
             "observation.images.wrist": obs["wrist_camera"],
             "observation.images.overhead": obs["overhead_camera"],
+            "task": "pick_and_lift",
         }
         dataset.add_frame(frame)
 
@@ -74,7 +75,7 @@ def collect_episode(env, dataset, max_steps=200):
         if terminated or truncated:
             break
 
-    dataset.save_episode(task=f"PickLift success={success}")
+    dataset.save_episode()
     return success, episode_reward, step + 1
 
 
