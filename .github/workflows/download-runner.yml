@@ -1,0 +1,22 @@
+name: Download GitHub Runner
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download runner
+        run: |
+          wget -q "https://github.com/actions/runner/releases/download/v2.327.1/actions-runner-linux-x64-2.327.1.tar.gz" -O runner.tar.gz
+          ls -lh runner.tar.gz
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: gh-runner-v2.327.1
+          files: runner.tar.gz
