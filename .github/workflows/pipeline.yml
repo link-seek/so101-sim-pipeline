@@ -36,8 +36,10 @@ jobs:
     steps:
       - name: Setup hcloud CLI
         run: |
-          curl -sSL https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh -o /tmp/hcloud_install.sh
-          bash /tmp/hcloud_install.sh -y
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+          hcloud --help | head -3
 
       - name: Start ECS 0002
         run: |
@@ -122,8 +124,10 @@ jobs:
     steps:
       - name: Setup hcloud CLI
         run: |
-          curl -sSL https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh -o /tmp/hcloud_install.sh
-          bash /tmp/hcloud_install.sh -y
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+          hcloud --help | head -3
 
       - name: Stop ECS 0002
         run: |
