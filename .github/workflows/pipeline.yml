@@ -28,6 +28,7 @@ env:
   SCRIPTS_DIR: /data/pipeline/scripts
   ECS_SERVER_ID: 7f39cb83-1a5c-4792-b65e-e578d7ddb88d
   ECS_REGION: cn-north-4
+  HCLOUD_AGREE_PRIVACY: true
 
 jobs:
   start-ecs:
