@@ -127,14 +127,23 @@ jobs:
           $PYTHON $SCRIPTS_DIR/eval_sim.py \
             --num-episodes ${{ inputs.num_eval_episodes }}
 
-      - name: Upload results
+      - name: Upload to OBS + HF
+        if: always()
+        run: |
+          $PYTHON $SCRIPTS_DIR/upload_results.py \
+            --hf-token $HF_TOKEN \
+            --hf-repo $HF_MODEL_REPO \
+            --obs-ak $OBS_AK \
+            --obs-sk $OBS_SK
+
+      - name: Save small reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: warp-results
+          name: warp-reports
           path: |
-            /data/pipeline/results/
-            /data/pipeline/training/
+            /data/pipeline/results/*.json
+            /data/pipeline/results/*.png
 
   stop-ecs:
     needs: warp-pipeline
