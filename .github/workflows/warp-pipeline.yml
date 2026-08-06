@@ -38,6 +38,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Checkout scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+
       - name: Setup hcloud CLI
         run: |
           curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
@@ -74,20 +79,22 @@ jobs:
           echo "ERROR: Server did not become ACTIVE in 300s"
           exit 1
 
+      - name: Upload scripts
+        uses: actions/upload-artifact@v4
+        with:
+          name: scripts
+          path: scripts/
+
   warp-benchmark:
     needs: start-ecs
     runs-on: [self-hosted, Linux, X64, V100]
     timeout-minutes: 30
     steps:
-      - name: Checkout and sync scripts
-        uses: actions/checkout@v4
+      - name: Download scripts
+        uses: actions/download-artifact@v4
         with:
-          path: repo-checkout
-      - name: Sync scripts to SCRIPTS_DIR
-        run: |
-          mkdir -p $SCRIPTS_DIR
-          cp repo-checkout/scripts/*.py $SCRIPTS_DIR/
-          ls $SCRIPTS_DIR/
+          name: scripts
+          path: ${{ env.SCRIPTS_DIR }}
 
       - name: Verify Warp environment
         run: |
@@ -112,6 +119,12 @@ jobs:
     runs-on: [self-hosted, Linux, X64, V100]
     timeout-minutes: 60
     steps:
+      - name: Download scripts
+        uses: actions/download-artifact@v4
+        with:
+          name: scripts
+          path: ${{ env.SCRIPTS_DIR }}
+
       - name: Collect data with Warp
         run: |
           $PYTHON $SCRIPTS_DIR/collect_data_warp.py \
@@ -131,6 +144,12 @@ jobs:
     runs-on: [self-hosted, Linux, X64, V100]
     timeout-minutes: 30
     steps:
+      - name: Download scripts
+        uses: actions/download-artifact@v4
+        with:
+          name: scripts
+          path: ${{ env.SCRIPTS_DIR }}
+
       - name: Train ACT on Warp dataset
         run: |
           $PYTHON $SCRIPTS_DIR/train_act.py \
@@ -148,6 +167,12 @@ jobs:
     runs-on: [self-hosted, Linux, X64, V100]
     timeout-minutes: 60
     steps:
+      - name: Download scripts
+        uses: actions/download-artifact@v4
+        with:
+          name: scripts
+          path: ${{ env.SCRIPTS_DIR }}
+
       - name: Evaluate on MuJoCo backend
         run: |
           $PYTHON $SCRIPTS_DIR/eval_sim.py \
