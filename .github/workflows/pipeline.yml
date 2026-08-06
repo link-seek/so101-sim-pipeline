@@ -49,7 +49,7 @@ jobs:
           echo "Waiting for server to become ACTIVE..."
           for i in $(seq 1 30); do
             sleep 10
-            STATUS=$(hcloud ECS NovaShowServerDetails \
+            STATUS=$(hcloud ECS NovaShowServer \
               --cli-region="${{ env.ECS_REGION }}" \
               --cli-access-key="${{ secrets.OBS_AK }}" \
               --cli-secret-key="${{ secrets.OBS_SK }}" \
@@ -135,7 +135,7 @@ jobs:
           echo "Waiting for server to become SHUTOFF..."
           for i in $(seq 1 18); do
             sleep 10
-            STATUS=$(hcloud ECS NovaShowServerDetails \
+            STATUS=$(hcloud ECS NovaShowServer \
               --cli-region="${{ env.ECS_REGION }}" \
               --cli-access-key="${{ secrets.OBS_AK }}" \
               --cli-secret-key="${{ secrets.OBS_SK }}" \
