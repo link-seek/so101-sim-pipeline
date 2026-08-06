@@ -85,10 +85,10 @@ jobs:
           name: scripts
           path: scripts/
 
-  warp-benchmark:
+  warp-pipeline:
     needs: start-ecs
     runs-on: [self-hosted, Linux, X64, V100]
-    timeout-minutes: 30
+    timeout-minutes: 120
     steps:
       - name: Download scripts
         uses: actions/download-artifact@v4
@@ -108,23 +108,6 @@ jobs:
             --num-envs 1,4,16,64,128 \
             --max-steps 500
 
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
-        with:
-          name: warp-benchmark
-          path: /data/pipeline/results/warp_benchmark.json
-
-  collect-data-warp:
-    needs: warp-benchmark
-    runs-on: [self-hosted, Linux, X64, V100]
-    timeout-minutes: 60
-    steps:
-      - name: Download scripts
-        uses: actions/download-artifact@v4
-        with:
-          name: scripts
-          path: ${{ env.SCRIPTS_DIR }}
-
       - name: Collect data with Warp
         run: |
           $PYTHON $SCRIPTS_DIR/collect_data_warp.py \
@@ -133,59 +116,28 @@ jobs:
             --num-envs ${{ inputs.num_envs }} \
             --max-steps 200
 
-      - name: Upload collection report
-        uses: actions/upload-artifact@v4
-        with:
-          name: warp-collect-report
-          path: /data/pipeline/results/warp_collect_report.json
-
-  train-act:
-    needs: collect-data-warp
-    runs-on: [self-hosted, Linux, X64, V100]
-    timeout-minutes: 30
-    steps:
-      - name: Download scripts
-        uses: actions/download-artifact@v4
-        with:
-          name: scripts
-          path: ${{ env.SCRIPTS_DIR }}
-
       - name: Train ACT on Warp dataset
         run: |
           $PYTHON $SCRIPTS_DIR/train_act.py \
             --dataset-repo $DATASET_REPO_WARP \
             --train-steps ${{ inputs.train_steps }}
 
-      - name: Upload training results
-        uses: actions/upload-artifact@v4
-        with:
-          name: warp-training
-          path: /data/pipeline/training/
-
-  eval-mujoco:
-    needs: train-act
-    runs-on: [self-hosted, Linux, X64, V100]
-    timeout-minutes: 60
-    steps:
-      - name: Download scripts
-        uses: actions/download-artifact@v4
-        with:
-          name: scripts
-          path: ${{ env.SCRIPTS_DIR }}
-
       - name: Evaluate on MuJoCo backend
         run: |
           $PYTHON $SCRIPTS_DIR/eval_sim.py \
             --num-episodes ${{ inputs.num_eval_episodes }}
 
-      - name: Upload eval results
+      - name: Upload results
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: warp-eval-mujoco
-          path: /data/pipeline/results/eval_report.json
+          name: warp-results
+          path: |
+            /data/pipeline/results/
+            /data/pipeline/training/
 
   stop-ecs:
-    needs: eval-mujoco
+    needs: warp-pipeline
     runs-on: ubuntu-latest
     if: always()
     timeout-minutes: 10
