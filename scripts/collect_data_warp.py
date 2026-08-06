@@ -42,7 +42,7 @@ def create_dataset(repo_id, root, fps=30):
         },
     }
     from lerobot.configs.video import RGBEncoderConfig
-    rgb_encoder = RGBEncoderConfig(vcodec="h264_nvenc", preset=1, g=30, crf=30)
+    rgb_encoder = RGBEncoderConfig(vcodec="libx264", preset="fast", g=30, crf=30)
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
     ds = LeRobotDataset.create(
         repo_id=repo_id,
