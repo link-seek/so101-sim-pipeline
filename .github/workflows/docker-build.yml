@@ -33,11 +33,18 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to SWR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.SWR_REGISTRY }}
-          username: cn-north-4@${{ secrets.OBS_AK }}
-          password: ${{ secrets.OBS_SK }}
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+          SWR_AUTH=$(echo "y" | hcloud SWR CreateAuthorizationToken \
+            --cli-region=cn-north-4 \
+            --cli-access-key="${{ secrets.OBS_AK }}" \
+            --cli-secret-key="${{ secrets.OBS_SK }}" \
+            2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['auths']['swr.cn-north-4.myhuaweicloud.com']['auth'])")
+          SWR_USER=$(echo "$SWR_AUTH" | base64 -d | cut -d: -f1)
+          SWR_PASS=$(echo "$SWR_AUTH" | base64 -d | cut -d: -f2)
+          docker login -u "$SWR_USER" -p "$SWR_PASS" ${{ env.SWR_REGISTRY }}
 
       - name: Build and push train image
         uses: docker/build-push-action@v6
@@ -67,11 +74,18 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to SWR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.SWR_REGISTRY }}
-          username: cn-north-4@${{ secrets.OBS_AK }}
-          password: ${{ secrets.OBS_SK }}
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+          SWR_AUTH=$(echo "y" | hcloud SWR CreateAuthorizationToken \
+            --cli-region=cn-north-4 \
+            --cli-access-key="${{ secrets.OBS_AK }}" \
+            --cli-secret-key="${{ secrets.OBS_SK }}" \
+            2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['auths']['swr.cn-north-4.myhuaweicloud.com']['auth'])")
+          SWR_USER=$(echo "$SWR_AUTH" | base64 -d | cut -d: -f1)
+          SWR_PASS=$(echo "$SWR_AUTH" | base64 -d | cut -d: -f2)
+          docker login -u "$SWR_USER" -p "$SWR_PASS" ${{ env.SWR_REGISTRY }}
 
       - name: Build and push eval image
         uses: docker/build-push-action@v6
