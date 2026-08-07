@@ -1,27 +1,27 @@
 FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
 
 RUN apt-get update && apt-get install -y \
-    python3.12 python3.12-venv python3-pip \
+    python3 python3-venv python3-pip \
     git wget curl \
     libegl1 libgles2 libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
-    ln -sf /usr/bin/python3.12 /usr/bin/python
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-RUN pip3 install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir --upgrade pip
 
-RUN pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu128
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu128
 
-RUN pip3 install --no-cache-dir \
+RUN pip install --no-cache-dir \
     huggingface_hub \
     esdk-obs-python \
     requests \
     opencv-python-headless \
     gymnasium \
-    numpy<3
+    "numpy<3"
 
-RUN pip3 install --no-cache-dir \
+RUN pip install --no-cache-dir \
     "git+https://github.com/huggingface/lerobot.git" \
     "git+https://github.com/johnsutor/so101-nexus.git"
 
