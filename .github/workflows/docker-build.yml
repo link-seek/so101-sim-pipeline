@@ -1,0 +1,86 @@
+name: Docker Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'docker/**'
+      - 'scripts/**'
+  schedule:
+    - cron: '0 2 * * 1'
+
+env:
+  SWR_REGISTRY: swr.cn-north-4.myhuaweicloud.com
+  SWR_NAMESPACE: hwstaff_l00392796
+  GHCR_REGISTRY: ghcr.io
+  GHCR_NAMESPACE: link-seek
+
+jobs:
+  build-train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to SWR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.SWR_REGISTRY }}
+          username: cn-north-4@${{ secrets.OBS_AK }}
+          password: ${{ secrets.OBS_SK }}
+
+      - name: Build and push train image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.train
+          push: true
+          tags: |
+            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_NAMESPACE }}/so101-train:latest
+            ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-train:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to SWR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.SWR_REGISTRY }}
+          username: cn-north-4@${{ secrets.OBS_AK }}
+          password: ${{ secrets.OBS_SK }}
+
+      - name: Build and push eval image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.eval
+          push: true
+          tags: |
+            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_NAMESPACE }}/so101-eval:latest
+            ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-eval:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
