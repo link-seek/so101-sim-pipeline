@@ -7,8 +7,6 @@ on:
     paths:
       - 'docker/**'
       - 'scripts/**'
-  schedule:
-    - cron: '0 2 * * 1'
 
 permissions:
   packages: write
