@@ -17,7 +17,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip
 
 RUN pip install --no-cache-dir \
-    "git+https://github.com/huggingface/lerobot.git" \
+    "lerobot[dataset] @ git+https://github.com/huggingface/lerobot.git" \
     "so101-nexus @ git+https://github.com/johnsutor/so101-nexus.git" \
     esdk-obs-python
 
