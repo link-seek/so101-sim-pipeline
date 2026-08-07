@@ -44,7 +44,7 @@ RUN pip install --no-cache-dir \
     imageio imageio-ffmpeg \
     pymunk mujoco \
     h5py einops \
-    deepdiff jsonlines termcolor
+    draccus deepdiff jsonlines termcolor
 
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
