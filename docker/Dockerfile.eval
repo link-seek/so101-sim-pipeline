@@ -16,9 +16,10 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 RUN pip install --no-cache-dir --upgrade pip
 
-RUN pip install --no-cache-dir "torch<2.6" --index-url https://download.pytorch.org/whl/cu121
+RUN pip install --no-cache-dir "torch==2.5.1" --index-url https://download.pytorch.org/whl/cu121
 
-RUN pip install --no-cache-dir \
+RUN echo "torch==2.5.1" > /tmp/constraints.txt && \
+    pip install --no-cache-dir \
     huggingface_hub \
     esdk-obs-python \
     requests \
@@ -28,7 +29,8 @@ RUN pip install --no-cache-dir \
 
 RUN pip install --no-cache-dir \
     "git+https://github.com/huggingface/lerobot.git" \
-    "so101-nexus @ git+https://github.com/johnsutor/so101-nexus.git"
+    "so101-nexus @ git+https://github.com/johnsutor/so101-nexus.git" \
+    -c /tmp/constraints.txt
 
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
