@@ -23,6 +23,7 @@ env:
   TRAIN_IMAGE: swr.cn-north-4.myhuaweicloud.com/link-seek/so101-train:latest
   EVAL_IMAGE: swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest
   HF_MODEL_REPO: xieyucheng123/so101-act-sim
+  DATASET_REPO_WARP: xieyucheng123/so101-warp-dataset
   ECS_SERVER_ID: 7f39cb83-1a5c-4792-b65e-e578d7ddb88d
   ECS_REGION: cn-north-4
 
