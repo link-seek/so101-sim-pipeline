@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir \
     "git+https://github.com/google-deepmind/mujoco_warp.git" \
     "git+https://github.com/huggingface/lerobot.git" \
-    "git+https://github.com/johnsutor/so101-nexus.git[warp,train]"
+    "git+https://github.com/johnsutor/so101-nexus.git#egg=so101-nexus[warp,train]"
 
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
