@@ -43,10 +43,8 @@ RUN pip install --no-cache-dir \
     wandb tensorboard \
     imageio imageio-ffmpeg \
     pymunk mujoco \
-    draccio termcolor \
-    deepdiff jsonlines \
-    "h5py>=3.7" \
-    einops robust_lerobot
+    h5py einops \
+    deepdiff jsonlines termcolor
 
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
