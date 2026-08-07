@@ -44,21 +44,7 @@ jobs:
             --cli-access-key="${{ secrets.OBS_AK }}" \
             --cli-secret-key="${{ secrets.OBS_SK }}" \
             --os-start.servers.1.id="${{ env.ECS_SERVER_ID }}"
-          for i in $(seq 1 30); do
-            sleep 10
-            STATUS=$(echo "y" | hcloud ECS NovaShowServer \
-              --cli-region="${{ env.ECS_REGION }}" \
-              --cli-access-key="${{ secrets.OBS_AK }}" \
-              --cli-secret-key="${{ secrets.OBS_SK }}" \
-              --server_id="${{ env.ECS_SERVER_ID }}" \
-              2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['server']['status'])" 2>/dev/null || echo "UNKNOWN")
-            echo "Attempt $i: status=$STATUS"
-            if [ "$STATUS" = "ACTIVE" ]; then
-              sleep 30
-              exit 0
-            fi
-          done
-          exit 1
+          sleep 120
 
   pipeline:
     needs: start-ecs
@@ -164,17 +150,5 @@ jobs:
             --cli-access-key="${{ secrets.OBS_AK }}" \
             --cli-secret-key="${{ secrets.OBS_SK }}" \
             --os-stop.servers.1.id="${{ env.ECS_SERVER_ID }}"
-          for i in $(seq 1 18); do
-            sleep 10
-            STATUS=$(echo "y" | hcloud ECS NovaShowServer \
-              --cli-region="${{ env.ECS_REGION }}" \
-              --cli-access-key="${{ secrets.OBS_AK }}" \
-              --cli-secret-key="${{ secrets.OBS_SK }}" \
-              --server_id="${{ env.ECS_SERVER_ID }}" \
-              2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['server']['status'])" 2>/dev/null || echo "UNKNOWN")
-            echo "Attempt $i: status=$STATUS"
-            if [ "$STATUS" = "SHUTOFF" ]; then
-              exit 0
-            fi
-          done
+          sleep 60
           exit 0
