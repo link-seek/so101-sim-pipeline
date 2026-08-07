@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: write
+  packages: read
 
 env:
   TRAIN_IMAGE: swr.cn-north-4.myhuaweicloud.com/link-seek/so101-train:latest
