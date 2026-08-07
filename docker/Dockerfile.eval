@@ -16,31 +16,14 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 RUN pip install --no-cache-dir --upgrade pip
 
-RUN pip install --no-cache-dir "torch==2.5.1" "torchvision==0.20.1" --index-url https://download.pytorch.org/whl/cu121
-
 RUN pip install --no-cache-dir \
-    huggingface_hub \
-    esdk-obs-python \
-    requests \
-    opencv-python-headless \
-    gymnasium \
-    "numpy<3"
+    "git+https://github.com/huggingface/lerobot.git" \
+    "so101-nexus @ git+https://github.com/johnsutor/so101-nexus.git" \
+    esdk-obs-python
 
-RUN pip install --no-cache-dir --no-deps \
-    "git+https://github.com/huggingface/lerobot.git"
-
-RUN pip install --no-cache-dir --no-deps \
-    "so101-nexus @ git+https://github.com/johnsutor/so101-nexus.git"
-
-RUN pip install --no-cache-dir \
-    datasets diffusers accelerate transformers \
-    av pyarrow pandas \
-    hydra-core omegaconf \
-    wandb tensorboard \
-    imageio imageio-ffmpeg \
-    pymunk mujoco \
-    h5py einops \
-    draccus deepdiff jsonlines termcolor
+RUN pip install --no-cache-dir --force-reinstall \
+    "torch==2.5.1" "torchvision==0.20.1" \
+    --index-url https://download.pytorch.org/whl/cu121
 
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
