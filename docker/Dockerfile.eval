@@ -34,11 +34,15 @@ RUN pip install --no-cache-dir --no-deps \
 
 RUN pip install --no-cache-dir \
     datasets diffusers accelerate transformers \
-    pyav pyarrow pandas pylights \
+    av pyarrow pandas \
     hydra-core omegaconf \
     wandb tensorboard \
     imageio imageio-ffmpeg \
-    pymunk mujoco
+    pymunk mujoco \
+    draccio termcolor \
+    deepdiff jsonlines \
+    "h5py>=3.7" \
+    einops robust_lerobot
 
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
