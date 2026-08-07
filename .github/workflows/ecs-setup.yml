@@ -46,30 +46,25 @@ jobs:
   setup-ecs:
     needs: start-ecs
     runs-on: [self-hosted, Linux, X64, V100]
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Install nvidia-container-toolkit
         run: |
           if docker info 2>/dev/null | grep -q nvidia; then
             echo "nvidia-container-toolkit already installed"
-          else
-            echo "Installing nvidia-container-toolkit..."
-            curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-            curl -fsSL -o /etc/apt/sources.list.d/nvidia-container-toolkit.list https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list
-            sed -i 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' /etc/apt/sources.list.d/nvidia-container-toolkit.list
-            sudo apt-get update
-            sudo apt-get install -y nvidia-container-toolkit
-            sudo nvidia-ctk runtime configure --runtime=docker
-            if systemctl list-unit-files | grep -q docker.service; then
-              sudo systemctl restart docker
-            elif service --status-all 2>&1 | grep -q docker; then
-              sudo service docker restart
-            else
-              echo "Docker service not found via systemctl or service, skipping restart"
-            fi
-            sleep 10
-            echo "nvidia-container-toolkit installed"
+            exit 0
           fi
+          echo "Installing nvidia-container-toolkit..."
+          export DEBIAN_FRONTEND=noninteractive
+          curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+          curl -fsSL -o /tmp/nct.list https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list
+          sed -i 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' /tmp/nct.list
+          sudo mv /tmp/nct.list /etc/apt/sources.list.d/nvidia-container-toolkit.list
+          sudo apt-get update < /dev/null
+          sudo apt-get install -y nvidia-container-toolkit < /dev/null
+          sudo nvidia-ctk runtime configure --runtime=docker
+          sudo systemctl restart docker 2>/dev/null || sudo service docker restart 2>/dev/null || echo "skip docker restart"
+          sleep 10
 
       - name: Verify GPU access
         run: |
