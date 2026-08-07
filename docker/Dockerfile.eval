@@ -1,24 +1,32 @@
 FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
 
 RUN apt-get update && apt-get install -y \
-    python3.12 python3-pip python3-venv \
+    python3.12 python3.12-venv python3-pip \
     git wget curl \
-    libegl1 libgles2 libgl1-mesa-glx \
+    libegl1 libgles2 libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN ln -sf /usr/bin/python3.12 /usr/bin/python3
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.12 /usr/bin/python
+
+RUN pip3 install --no-cache-dir --upgrade pip
+
+RUN pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu128
 
 RUN pip3 install --no-cache-dir \
-    torch --index-url https://download.pytorch.org/whl/cu128
+    huggingface_hub \
+    esdk-obs-python \
+    requests \
+    opencv-python-headless \
+    gymnasium \
+    numpy<3
 
 RUN pip3 install --no-cache-dir \
-    mujoco opencv-python huggingface_hub
+    "git+https://github.com/huggingface/lerobot.git" \
+    "git+https://github.com/johnsutor/so101-nexus.git"
 
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
 
 WORKDIR /data/pipeline
-COPY scripts/eval_so101_mujoco.py /data/pipeline/
-COPY scripts/run_eval.sh /data/pipeline/
-
-CMD ["/bin/bash", "/data/pipeline/run_eval.sh"]
+COPY scripts/ /scripts/
