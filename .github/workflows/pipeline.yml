@@ -69,7 +69,17 @@ jobs:
     steps:
       - name: Login to SWR
         run: |
-          echo "${{ secrets.OBS_SK }}" | docker login -u cn-north-4@${{ secrets.OBS_AK }} --password-stdin ${{ env.SWR_REGISTRY }}
+          IAM_TOKEN=$(curl -s -X POST "https://iam.cn-north-4.myhuaweicloud.com/v3/auth/tokens" \
+            -H "Content-Type: application/json" \
+            -d "{\"auth\":{\"identity\":{\"methods\":[\"hw_ak_sk\"],\"hw_ak_sk\":{\"access\":{\"key\":\"${{ secrets.OBS_AK }}\"},\"secret\":{\"key\":\"${{ secrets.OBS_SK }}\"}}}},\"scope\":{\"project\":{\"name\":\"cn-north-4\"}}}}" \
+            -D /tmp/iam_headers)
+          AUTH_TOKEN=$(grep -i "x-subject-token" /tmp/iam_headers | tr -d '\r' | awk '{print $2}')
+          SWR_AUTH=$(curl -s -X POST "https://swr.cn-north-4.myhuaweicloud.com/v2/manage/utils/authtokens" \
+            -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{}' \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['auths']['swr.cn-north-4.myhuaweicloud.com']['auth'])")
+          SWR_USER=$(echo "$SWR_AUTH" | base64 -d | cut -d: -f1)
+          SWR_PASS=$(echo "$SWR_AUTH" | base64 -d | cut -d: -f2)
+          docker login -u "$SWR_USER" -p "$SWR_PASS" ${{ env.SWR_REGISTRY }}
 
       - name: Pull Docker images
         run: |
