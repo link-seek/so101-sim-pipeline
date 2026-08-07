@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir "torch==2.5.1" --index-url https://download.pytorch.org/whl/cu121
 
 RUN pip install --no-cache-dir \
-    warp-lang \
+    "warp-lang<1.16" \
     huggingface_hub \
     esdk-obs-python \
     requests \
