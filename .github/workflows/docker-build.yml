@@ -11,8 +11,6 @@ on:
     - cron: '0 2 * * 1'
 
 env:
-  SWR_REGISTRY: swr.cn-north-4.myhuaweicloud.com
-  SWR_NAMESPACE: hwstaff_l00392796
   GHCR_REGISTRY: ghcr.io
   GHCR_NAMESPACE: link-seek
 
@@ -32,23 +30,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to SWR
-        env:
-          HCLOUD_AGREE_PRIVACY: "true"
-        run: |
-          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
-          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
-          sudo mv /tmp/hcloud /usr/local/bin/hcloud
-          hcloud SWR CreateAuthorizationToken \
-            --cli-region=cn-north-4 \
-            --cli-access-key="${{ secrets.OBS_AK }}" \
-            --cli-secret-key="${{ secrets.OBS_SK }}" > /tmp/swr_auth.json 2>/dev/null
-          echo "Auth file size: $(wc -c < /tmp/swr_auth.json)"
-          SWR_AUTH=$(python3 -c "import json; d=json.load(open('/tmp/swr_auth.json')); print(d['auths']['swr.cn-north-4.myhuaweicloud.com']['auth'])")
-          SWR_USER=$(echo "$SWR_AUTH" | base64 -d | cut -d: -f1)
-          SWR_PASS=$(echo "$SWR_AUTH" | base64 -d | cut -d: -f2)
-          docker login -u "$SWR_USER" -p "$SWR_PASS" ${{ env.SWR_REGISTRY }}
-
       - name: Build and push train image
         uses: docker/build-push-action@v6
         with:
@@ -57,7 +38,6 @@ jobs:
           push: true
           tags: |
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_NAMESPACE }}/so101-train:latest
-            ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-train:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -76,23 +56,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to SWR
-        env:
-          HCLOUD_AGREE_PRIVACY: "true"
-        run: |
-          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
-          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
-          sudo mv /tmp/hcloud /usr/local/bin/hcloud
-          hcloud SWR CreateAuthorizationToken \
-            --cli-region=cn-north-4 \
-            --cli-access-key="${{ secrets.OBS_AK }}" \
-            --cli-secret-key="${{ secrets.OBS_SK }}" > /tmp/swr_auth.json 2>/dev/null
-          echo "Auth file size: $(wc -c < /tmp/swr_auth.json)"
-          SWR_AUTH=$(python3 -c "import json; d=json.load(open('/tmp/swr_auth.json')); print(d['auths']['swr.cn-north-4.myhuaweicloud.com']['auth'])")
-          SWR_USER=$(echo "$SWR_AUTH" | base64 -d | cut -d: -f1)
-          SWR_PASS=$(echo "$SWR_AUTH" | base64 -d | cut -d: -f2)
-          docker login -u "$SWR_USER" -p "$SWR_PASS" ${{ env.SWR_REGISTRY }}
-
       - name: Build and push eval image
         uses: docker/build-push-action@v6
         with:
@@ -101,6 +64,5 @@ jobs:
           push: true
           tags: |
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_NAMESPACE }}/so101-eval:latest
-            ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-eval:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
