@@ -20,37 +20,27 @@ permissions:
   contents: write
 
 env:
-  PYTHON: /data/so101-env/bin/python
-  MUJOCO_GL: egl
-  HF_ENDPOINT: https://hf-mirror.com
-  HF_TOKEN: ${{ secrets.HF_TOKEN }}
-  OBS_AK: ${{ secrets.OBS_AK }}
-  OBS_SK: ${{ secrets.OBS_SK }}
+  SWR_REGISTRY: swr.cn-north-4.myhuaweicloud.com
+  SWR_NAMESPACE: hwstaff_l00392796
+  TRAIN_IMAGE: swr.cn-north-4.myhuaweicloud.com/hwstaff_l00392796/so101-train:latest
+  EVAL_IMAGE: swr.cn-north-4.myhuaweicloud.com/hwstaff_l00392796/so101-eval:latest
   DATASET_REPO_WARP: xieyucheng123/so101-sim-picklift-warp
   HF_MODEL_REPO: xieyucheng123/so101-act-sim
-  SCRIPTS_DIR: /data/pipeline/scripts
   ECS_SERVER_ID: 7f39cb83-1a5c-4792-b65e-e578d7ddb88d
   ECS_REGION: cn-north-4
-  HCLOUD_AGREE_PRIVACY: true
 
 jobs:
   start-ecs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout scripts
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: scripts
-
       - name: Setup hcloud CLI
         run: |
           curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
           tar -xzf /tmp/hcloud.tar.gz -C /tmp/
           sudo mv /tmp/hcloud /usr/local/bin/hcloud
-          echo "y" | hcloud --help | head -3
 
-      - name: Start ECS 0002
+      - name: Start ECS
         env:
           HCLOUD_AGREE_PRIVACY: "true"
         run: |
@@ -59,7 +49,6 @@ jobs:
             --cli-access-key="${{ secrets.OBS_AK }}" \
             --cli-secret-key="${{ secrets.OBS_SK }}" \
             --os-start.servers.1.id="${{ env.ECS_SERVER_ID }}"
-          echo "Waiting for server to become ACTIVE..."
           for i in $(seq 1 30); do
             sleep 10
             STATUS=$(echo "y" | hcloud ECS NovaShowServer \
@@ -70,80 +59,95 @@ jobs:
               2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['server']['status'])" 2>/dev/null || echo "UNKNOWN")
             echo "Attempt $i: status=$STATUS"
             if [ "$STATUS" = "ACTIVE" ]; then
-              echo "Server is ACTIVE. Waiting 30s for runner to connect..."
               sleep 30
-              echo "Server ready."
               exit 0
             fi
           done
-          echo "ERROR: Server did not become ACTIVE in 300s"
           exit 1
-
-      - name: Upload scripts
-        uses: actions/upload-artifact@v4
-        with:
-          name: scripts
-          path: scripts/
 
   warp-pipeline:
     needs: start-ecs
     runs-on: [self-hosted, Linux, X64, V100]
     timeout-minutes: 120
     steps:
-      - name: Download scripts
-        uses: actions/download-artifact@v4
-        with:
-          name: scripts
-          path: ${{ env.SCRIPTS_DIR }}
-
-      - name: Verify Warp environment
+      - name: Login to SWR
         run: |
-          $PYTHON -c "import warp; print(f'warp={warp.__version__}')"
-          $PYTHON -c "import mujoco_warp; print(f'mujoco_warp={mujoco_warp.__version__}')"
-          $PYTHON -c "import so101_nexus; import so101_nexus.warp; print('so101_nexus.warp OK')"
+          echo "${{ secrets.OBS_SK }}" | docker login -u cn-north-4@${{ secrets.OBS_AK }} --password-stdin ${{ env.SWR_REGISTRY }}
+
+      - name: Pull Docker images
+        run: |
+          docker pull ${{ env.TRAIN_IMAGE }}
+          docker pull ${{ env.EVAL_IMAGE }}
 
       - name: Run Warp benchmark
         run: |
-          $PYTHON $SCRIPTS_DIR/warp_benchmark.py \
-            --num-envs 1,4,16,64,128 \
-            --max-steps 500
+          docker run --rm --gpus all -v /data:/data \
+            -e MUJOCO_GL=egl -e HF_ENDPOINT=https://hf-mirror.com \
+            ${{ env.TRAIN_IMAGE }} \
+            python /scripts/warp_benchmark.py --num-envs 1,4,16,64,128 --max-steps 500
 
       - name: Collect data with Warp
         run: |
-          $PYTHON $SCRIPTS_DIR/collect_data_warp.py \
-            --repo-id $DATASET_REPO_WARP \
-            --num-episodes ${{ inputs.num_episodes }} \
-            --num-envs ${{ inputs.num_envs }} \
-            --max-steps 200
+          docker run --rm --gpus all -v /data:/data \
+            -e MUJOCO_GL=egl -e HF_ENDPOINT=https://hf-mirror.com \
+            -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
+            ${{ env.TRAIN_IMAGE }} \
+            python /scripts/collect_data_warp.py \
+              --repo-id ${{ env.DATASET_REPO_WARP }} \
+              --num-episodes ${{ inputs.num_episodes }} \
+              --num-envs ${{ inputs.num_envs }} \
+              --max-steps 200
 
       - name: Train ACT on Warp dataset
         run: |
-          $PYTHON $SCRIPTS_DIR/train_act.py \
-            --dataset-repo $DATASET_REPO_WARP \
-            --train-steps ${{ inputs.train_steps }}
+          docker run --rm --gpus all -v /data:/data \
+            -e MUJOCO_GL=egl -e HF_ENDPOINT=https://hf-mirror.com \
+            -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
+            ${{ env.TRAIN_IMAGE }} \
+            python /scripts/train_act.py \
+              --dataset-repo ${{ env.DATASET_REPO_WARP }} \
+              --train-steps ${{ inputs.train_steps }}
 
       - name: Evaluate on MuJoCo backend
         run: |
-          $PYTHON $SCRIPTS_DIR/eval_sim.py \
-            --num-episodes ${{ inputs.num_eval_episodes }}
+          docker run --rm --gpus all -v /data:/data \
+            -e MUJOCO_GL=egl -e HF_ENDPOINT=https://hf-mirror.com \
+            ${{ env.EVAL_IMAGE }} \
+            python /scripts/eval_sim.py --num-episodes ${{ inputs.num_eval_episodes }}
 
       - name: Upload to OBS + HF
         if: always()
         run: |
-          $PYTHON $SCRIPTS_DIR/upload_results.py \
-            --hf-token $HF_TOKEN \
-            --hf-repo $HF_MODEL_REPO \
-            --obs-ak $OBS_AK \
-            --obs-sk $OBS_SK
+          docker run --rm --gpus all -v /data:/data \
+            -e HF_ENDPOINT=https://hf-mirror.com \
+            -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
+            -e OBS_AK=${{ secrets.OBS_AK }} -e OBS_SK=${{ secrets.OBS_SK }} \
+            ${{ env.EVAL_IMAGE }} \
+            python /scripts/upload_results.py \
+              --hf-token ${{ secrets.HF_TOKEN }} \
+              --hf-repo ${{ env.HF_MODEL_REPO }} \
+              --obs-ak ${{ secrets.OBS_AK }} \
+              --obs-sk ${{ secrets.OBS_SK }}
 
-      - name: Save small reports
+      - name: Generate OBS download link
+        if: always()
+        run: |
+          docker run --rm --gpus all -v /data:/data \
+            -e OBS_AK=${{ secrets.OBS_AK }} -e OBS_SK=${{ secrets.OBS_SK }} \
+            ${{ env.EVAL_IMAGE }} \
+            python /scripts/generate_obs_link.py \
+              --model-path /data/pipeline/training/checkpoints/last/pretrained_model \
+              --output /data/pipeline/download_link.txt
+
+      - name: Save artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: warp-reports
+          name: warp-results
           path: |
             /data/pipeline/results/*.json
             /data/pipeline/results/*.png
+            /data/pipeline/download_link.txt
 
   stop-ecs:
     needs: warp-pipeline
@@ -156,9 +160,8 @@ jobs:
           curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
           tar -xzf /tmp/hcloud.tar.gz -C /tmp/
           sudo mv /tmp/hcloud /usr/local/bin/hcloud
-          echo "y" | hcloud --help | head -3
 
-      - name: Stop ECS 0002
+      - name: Stop ECS
         env:
           HCLOUD_AGREE_PRIVACY: "true"
         run: |
@@ -167,7 +170,6 @@ jobs:
             --cli-access-key="${{ secrets.OBS_AK }}" \
             --cli-secret-key="${{ secrets.OBS_SK }}" \
             --os-stop.servers.1.id="${{ env.ECS_SERVER_ID }}"
-          echo "Waiting for server to become SHUTOFF..."
           for i in $(seq 1 18); do
             sleep 10
             STATUS=$(echo "y" | hcloud ECS NovaShowServer \
@@ -178,9 +180,7 @@ jobs:
               2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['server']['status'])" 2>/dev/null || echo "UNKNOWN")
             echo "Attempt $i: status=$STATUS"
             if [ "$STATUS" = "SHUTOFF" ]; then
-              echo "Server is SHUTOFF."
               exit 0
             fi
           done
-          echo "WARNING: Server did not become SHUTOFF in 180s, but workflow continues."
           exit 0
