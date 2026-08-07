@@ -10,6 +10,9 @@ on:
   schedule:
     - cron: '0 2 * * 1'
 
+permissions:
+  packages: write
+
 env:
   GHCR_REGISTRY: ghcr.io
   GHCR_NAMESPACE: link-seek
