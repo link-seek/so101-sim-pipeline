@@ -1,0 +1,34 @@
+FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
+
+RUN apt-get update && apt-get install -y \
+    python3.12 python3.12-venv python3-pip \
+    git wget curl \
+    libegl1 libgles2 libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.12 /usr/bin/python
+
+RUN pip3 install --no-cache-dir --upgrade pip
+
+RUN pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu128
+
+RUN pip3 install --no-cache-dir \
+    warp-lang \
+    huggingface_hub \
+    esdk-obs-python \
+    requests \
+    opencv-python-headless \
+    gymnasium \
+    numpy<3
+
+RUN pip3 install --no-cache-dir \
+    "git+https://github.com/google-deepmind/mujoco_warp.git" \
+    "git+https://github.com/huggingface/lerobot.git" \
+    "git+https://github.com/johnsutor/so101-nexus.git[warp,train]"
+
+ENV MUJOCO_GL=egl
+ENV HF_ENDPOINT=https://hf-mirror.com
+
+WORKDIR /data/pipeline
+COPY scripts/ /scripts/
