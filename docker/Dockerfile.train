@@ -28,7 +28,7 @@ RUN pip install --no-cache-dir \
     "numpy<3"
 
 RUN pip install --no-cache-dir \
-    "git+https://github.com/google-deepmind/mujoco_warp.git" \
+    "git+https://github.com/google-deepmind/mujoco_warp.git@v3.9.0.1" \
     "git+https://github.com/huggingface/lerobot.git" \
     "so101-nexus[warp,train] @ git+https://github.com/johnsutor/so101-nexus.git"
 
