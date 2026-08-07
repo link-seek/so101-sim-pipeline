@@ -61,9 +61,15 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y nvidia-container-toolkit
             sudo nvidia-ctk runtime configure --runtime=docker
-            sudo systemctl restart docker
+            if systemctl list-unit-files | grep -q docker.service; then
+              sudo systemctl restart docker
+            elif service --status-all 2>&1 | grep -q docker; then
+              sudo service docker restart
+            else
+              echo "Docker service not found via systemctl or service, skipping restart"
+            fi
             sleep 10
-            echo "nvidia-container-toolkit installed and Docker restarted"
+            echo "nvidia-container-toolkit installed"
           fi
 
       - name: Verify GPU access
