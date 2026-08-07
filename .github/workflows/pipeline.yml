@@ -68,7 +68,7 @@ jobs:
 
       - name: Data Collection
         run: |
-          docker run --rm --gpus all -v /data:/data \
+          docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e MUJOCO_GL=egl -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
             ${{ env.TRAIN_IMAGE }} \
@@ -78,7 +78,7 @@ jobs:
 
       - name: ACT Training
         run: |
-          docker run --rm --gpus all -v /data:/data \
+          docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e MUJOCO_GL=egl -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
             ${{ env.TRAIN_IMAGE }} \
@@ -88,14 +88,14 @@ jobs:
 
       - name: Simulation Evaluation
         run: |
-          docker run --rm --gpus all -v /data:/data \
+          docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e MUJOCO_GL=egl -e HF_ENDPOINT=https://hf-mirror.com \
             ${{ env.EVAL_IMAGE }} \
             python /scripts/eval_sim.py --num-episodes ${{ inputs.num_eval_episodes }}
 
       - name: Render Video
         run: |
-          docker run --rm --gpus all -v /data:/data \
+          docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e MUJOCO_GL=egl -e HF_ENDPOINT=https://hf-mirror.com \
             ${{ env.EVAL_IMAGE }} \
             python /scripts/render_video.py --num-episodes 3
@@ -103,7 +103,7 @@ jobs:
       - name: Upload Results
         if: always()
         run: |
-          docker run --rm --gpus all -v /data:/data \
+          docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
             -e OBS_AK=${{ secrets.OBS_AK }} -e OBS_SK=${{ secrets.OBS_SK }} \
@@ -117,7 +117,7 @@ jobs:
       - name: Generate OBS download link
         if: always()
         run: |
-          docker run --rm --gpus all -v /data:/data \
+          docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e OBS_AK=${{ secrets.OBS_AK }} -e OBS_SK=${{ secrets.OBS_SK }} \
             ${{ env.EVAL_IMAGE }} \
             python /scripts/generate_obs_link.py \
