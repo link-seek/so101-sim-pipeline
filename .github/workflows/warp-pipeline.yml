@@ -53,7 +53,7 @@ jobs:
   warp-pipeline:
     needs: start-ecs
     runs-on: [self-hosted, Linux, X64, V100]
-    timeout-minutes: 120
+    timeout-minutes: 240
     steps:
       - name: Login to GHCR
         uses: docker/login-action@v3
