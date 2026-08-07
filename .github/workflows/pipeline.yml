@@ -17,10 +17,8 @@ permissions:
   contents: write
 
 env:
-  SWR_REGISTRY: swr.cn-north-4.myhuaweicloud.com
-  SWR_NAMESPACE: hwstaff_l00392796
-  TRAIN_IMAGE: swr.cn-north-4.myhuaweicloud.com/hwstaff_l00392796/so101-train:latest
-  EVAL_IMAGE: swr.cn-north-4.myhuaweicloud.com/hwstaff_l00392796/so101-eval:latest
+  TRAIN_IMAGE: ghcr.io/link-seek/so101-train:latest
+  EVAL_IMAGE: ghcr.io/link-seek/so101-eval:latest
   DATASET_REPO: xieyucheng123/so101-sim-picklift
   HF_MODEL_REPO: xieyucheng123/so101-act-sim
   ECS_SERVER_ID: 7f39cb83-1a5c-4792-b65e-e578d7ddb88d
@@ -67,20 +65,6 @@ jobs:
     runs-on: [self-hosted, Linux, X64, V100]
     timeout-minutes: 600
     steps:
-      - name: Login to SWR
-        run: |
-          IAM_TOKEN=$(curl -s -X POST "https://iam.cn-north-4.myhuaweicloud.com/v3/auth/tokens" \
-            -H "Content-Type: application/json" \
-            -d "{\"auth\":{\"identity\":{\"methods\":[\"hw_ak_sk\"],\"hw_ak_sk\":{\"access\":{\"key\":\"${{ secrets.OBS_AK }}\"},\"secret\":{\"key\":\"${{ secrets.OBS_SK }}\"}}}},\"scope\":{\"project\":{\"name\":\"cn-north-4\"}}}}" \
-            -D /tmp/iam_headers)
-          AUTH_TOKEN=$(grep -i "x-subject-token" /tmp/iam_headers | tr -d '\r' | awk '{print $2}')
-          SWR_AUTH=$(curl -s -X POST "https://swr.cn-north-4.myhuaweicloud.com/v2/manage/utils/authtokens" \
-            -H "X-Auth-Token: $AUTH_TOKEN" -H "Content-Type: application/json" -d '{}' \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['auths']['swr.cn-north-4.myhuaweicloud.com']['auth'])")
-          SWR_USER=$(echo "$SWR_AUTH" | base64 -d | cut -d: -f1)
-          SWR_PASS=$(echo "$SWR_AUTH" | base64 -d | cut -d: -f2)
-          docker login -u "$SWR_USER" -p "$SWR_PASS" ${{ env.SWR_REGISTRY }}
-
       - name: Pull Docker images
         run: |
           docker pull ${{ env.TRAIN_IMAGE }}
