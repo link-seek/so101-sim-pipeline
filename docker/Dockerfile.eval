@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
@@ -16,7 +16,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 RUN pip install --no-cache-dir --upgrade pip
 
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu128
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu121
 
 RUN pip install --no-cache-dir \
     huggingface_hub \
