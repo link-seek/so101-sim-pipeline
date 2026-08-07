@@ -71,14 +71,14 @@ jobs:
 
       - name: Run Warp benchmark
         run: |
-          docker run --rm --gpus all -v /data:/data \
+          docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e MUJOCO_GL=egl -e HF_ENDPOINT=https://hf-mirror.com \
             ${{ env.TRAIN_IMAGE }} \
             python /scripts/warp_benchmark.py --num-envs 1,4,16,64,128 --max-steps 500
 
       - name: Collect data with Warp
         run: |
-          docker run --rm --gpus all -v /data:/data \
+          docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e MUJOCO_GL=egl -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
             ${{ env.TRAIN_IMAGE }} \
@@ -90,7 +90,7 @@ jobs:
 
       - name: Train ACT on Warp dataset
         run: |
-          docker run --rm --gpus all -v /data:/data \
+          docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e MUJOCO_GL=egl -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
             ${{ env.TRAIN_IMAGE }} \
@@ -100,7 +100,7 @@ jobs:
 
       - name: Evaluate on MuJoCo backend
         run: |
-          docker run --rm --gpus all -v /data:/data \
+          docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e MUJOCO_GL=egl -e HF_ENDPOINT=https://hf-mirror.com \
             ${{ env.EVAL_IMAGE }} \
             python /scripts/eval_sim.py --num-episodes ${{ inputs.num_eval_episodes }}
@@ -108,7 +108,7 @@ jobs:
       - name: Upload to OBS + HF
         if: always()
         run: |
-          docker run --rm --gpus all -v /data:/data \
+          docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
             -e OBS_AK=${{ secrets.OBS_AK }} -e OBS_SK=${{ secrets.OBS_SK }} \
@@ -122,7 +122,7 @@ jobs:
       - name: Generate OBS download link
         if: always()
         run: |
-          docker run --rm --gpus all -v /data:/data \
+          docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e OBS_AK=${{ secrets.OBS_AK }} -e OBS_SK=${{ secrets.OBS_SK }} \
             ${{ env.EVAL_IMAGE }} \
             python /scripts/generate_obs_link.py \
