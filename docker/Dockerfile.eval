@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir \
 
 RUN pip install --no-cache-dir \
     "git+https://github.com/huggingface/lerobot.git" \
-    "git+https://github.com/johnsutor/so101-nexus.git"
+    "git+https://github.com/johnsutor/so101-nexus.git#egg=so101-nexus"
 
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
