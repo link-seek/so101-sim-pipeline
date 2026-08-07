@@ -1,0 +1,113 @@
+name: Setup ECS
+
+on:
+  workflow_dispatch:
+
+env:
+  SWR_REGISTRY: swr.cn-north-4.myhuaweicloud.com
+  ECS_SERVER_ID: 7f39cb83-1a5c-4792-b65e-e578d7ddb88d
+  ECS_REGION: cn-north-4
+
+jobs:
+  start-ecs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Setup hcloud CLI
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+
+      - name: Start ECS
+        env:
+          HCLOUD_AGREE_PRIVACY: "true"
+        run: |
+          echo "y" | hcloud ECS BatchStartServers \
+            --cli-region="${{ env.ECS_REGION }}" \
+            --cli-access-key="${{ secrets.OBS_AK }}" \
+            --cli-secret-key="${{ secrets.OBS_SK }}" \
+            --os-start.servers.1.id="${{ env.ECS_SERVER_ID }}"
+          for i in $(seq 1 30); do
+            sleep 10
+            STATUS=$(echo "y" | hcloud ECS NovaShowServer \
+              --cli-region="${{ env.ECS_REGION }}" \
+              --cli-access-key="${{ secrets.OBS_AK }}" \
+              --cli-secret-key="${{ secrets.OBS_SK }}" \
+              --server_id="${{ env.ECS_SERVER_ID }}" \
+              2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['server']['status'])" 2>/dev/null || echo "UNKNOWN")
+            echo "Attempt $i: status=$STATUS"
+            if [ "$STATUS" = "ACTIVE" ]; then
+              sleep 30
+              exit 0
+            fi
+          done
+          exit 1
+
+  setup-ecs:
+    needs: start-ecs
+    runs-on: [self-hosted, Linux, X64, V100]
+    timeout-minutes: 30
+    steps:
+      - name: Install nvidia-container-toolkit
+        run: |
+          if docker info 2>/dev/null | grep -q nvidia; then
+            echo "nvidia-container-toolkit already installed"
+          else
+            echo "Installing nvidia-container-toolkit..."
+            curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+            curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+              sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+              sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+            sudo apt-get update
+            sudo apt-get install -y nvidia-container-toolkit
+            sudo nvidia-ctk runtime configure --runtime=docker
+            sudo systemctl restart docker
+            sleep 10
+            echo "nvidia-container-toolkit installed and Docker restarted"
+          fi
+
+      - name: Verify GPU access
+        run: |
+          docker run --rm --gpus all nvidia/cuda:12.8.0-runtime-ubuntu22.04 nvidia-smi
+
+      - name: Login to SWR
+        run: |
+          echo "${{ secrets.OBS_SK }}" | docker login -u cn-north-4@${{ secrets.OBS_AK }} --password-stdin ${{ env.SWR_REGISTRY }}
+          echo "SWR login persisted"
+
+  stop-ecs:
+    needs: setup-ecs
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 10
+    steps:
+      - name: Setup hcloud CLI
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+
+      - name: Stop ECS
+        env:
+          HCLOUD_AGREE_PRIVACY: "true"
+        run: |
+          echo "y" | hcloud ECS BatchStopServers \
+            --cli-region="${{ env.ECS_REGION }}" \
+            --cli-access-key="${{ secrets.OBS_AK }}" \
+            --cli-secret-key="${{ secrets.OBS_SK }}" \
+            --os-stop.servers.1.id="${{ env.ECS_SERVER_ID }}"
+          for i in $(seq 1 18); do
+            sleep 10
+            STATUS=$(echo "y" | hcloud ECS NovaShowServer \
+              --cli-region="${{ env.ECS_REGION }}" \
+              --cli-access-key="${{ secrets.OBS_AK }}" \
+              --cli-secret-key="${{ secrets.OBS_SK }}" \
+              --server_id="${{ env.ECS_SERVER_ID }}" \
+              2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['server']['status'])" 2>/dev/null || echo "UNKNOWN")
+            echo "Attempt $i: status=$STATUS"
+            if [ "$STATUS" = "SHUTOFF" ]; then
+              exit 0
+            fi
+          done
+          exit 0
