@@ -76,7 +76,7 @@ jobs:
           docker login -u "cn-north-4@${{ secrets.OBS_AK }}" -p "$LOGIN_KEY" swr.cn-north-4.myhuaweicloud.com
           echo "SWR login persisted"
 
-   stop-ecs:
+  stop-ecs:
     needs: setup-ecs
     runs-on: ubuntu-latest
     if: always()
