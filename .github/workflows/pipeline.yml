@@ -116,6 +116,7 @@ jobs:
 
       - name: Generate OBS download link
         if: always()
+        continue-on-error: true
         run: |
           docker run --rm --gpus all --shm-size=8g -v /data:/data \
             -e OBS_AK=${{ secrets.OBS_AK }} -e OBS_SK=${{ secrets.OBS_SK }} \
