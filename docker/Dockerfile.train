@@ -18,11 +18,11 @@ RUN pip install --no-cache-dir --upgrade pip
 
 RUN pip install --no-cache-dir \
     "git+https://github.com/google-deepmind/mujoco_warp.git@v3.9.0.1" \
-    "lerobot[dataset,training] @ git+https://github.com/huggingface/lerobot.git" \
+    "lerobot[dataset] @ git+https://github.com/huggingface/lerobot.git" \
     "so101-nexus[warp,train] @ git+https://github.com/johnsutor/so101-nexus.git" \
     esdk-obs-python \
     "warp-lang<1.16" \
-    "accelerate<1.2.0"
+    "accelerate==1.1.1"
 
 RUN pip install --no-cache-dir --force-reinstall \
     "torch==2.5.1" "torchvision==0.20.1" \
