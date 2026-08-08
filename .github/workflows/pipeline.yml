@@ -52,19 +52,19 @@ jobs:
     runs-on: [self-hosted, Linux, X64, V100]
     timeout-minutes: 600
     steps:
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Pull Docker images
         run: |
-          docker pull ghcr.io/link-seek/so101-train:latest
-          docker pull ghcr.io/link-seek/so101-eval:latest
-          docker tag ghcr.io/link-seek/so101-train:latest ${{ env.TRAIN_IMAGE }}
-          docker tag ghcr.io/link-seek/so101-eval:latest ${{ env.EVAL_IMAGE }}
+          if ! docker image inspect ${{ env.TRAIN_IMAGE }} >/dev/null 2>&1; then
+            docker pull ghcr.io/link-seek/so101-train:latest
+            docker tag ghcr.io/link-seek/so101-train:latest ${{ env.TRAIN_IMAGE }}
+          fi
+          if ! docker image inspect ${{ env.EVAL_IMAGE }} >/dev/null 2>&1; then
+            docker pull ghcr.io/link-seek/so101-eval:latest
+            docker tag ghcr.io/link-seek/so101-eval:latest ${{ env.EVAL_IMAGE }}
+          fi
+          docker image inspect ${{ env.TRAIN_IMAGE }} >/dev/null 2>&1 || { echo "Train image not found"; exit 1; }
+          docker image inspect ${{ env.EVAL_IMAGE }} >/dev/null 2>&1 || { echo "Eval image not found"; exit 1; }
+          echo "Images ready"
 
       - name: Data Collection
         run: |
