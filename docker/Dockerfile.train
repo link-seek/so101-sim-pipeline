@@ -30,7 +30,6 @@ RUN pip install --no-cache-dir \
 
 RUN pip install --no-cache-dir \
     "so101_nexus[warp]" \
-    mujoco==3.3.2 \
     opencv-python
 
 ENV MUJOCO_GL=egl
