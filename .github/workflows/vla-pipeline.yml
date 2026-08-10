@@ -1,0 +1,165 @@
+name: VLA Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      checkpoint:
+        description: "SmolVLA checkpoint (HF repo ID or path)"
+        required: false
+        default: "xieyucheng123/so101-smolvla"
+      dataset:
+        description: "Training dataset repo ID"
+        required: false
+        default: "lerobot/svla_so101_pickplace"
+      steps:
+        description: "Training steps"
+        required: false
+        default: "20000"
+      skip_train:
+        description: "Skip training, only evaluate"
+        required: false
+        default: "false"
+      benchmarks:
+        description: "Benchmarks to run (space-separated, empty=all)"
+        required: false
+        default: ""
+  repository_dispatch:
+    types: [vla-trigger]
+
+env:
+  ECS_IP: "114.116.228.0"
+  ECS_ID: "7f39cb83-1a5c-4792-b65e-e578d7ddb88d"
+  ECS_REGION: "cn-north-4"
+  SWR_REGISTRY: "swr.cn-north-4.myhuaweicloud.com"
+  SWR_NAMESPACE: "link-seek"
+
+jobs:
+  train-and-evaluate:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -q requests huaweicloudsdkcore huaweicloudsdkecs
+
+      - name: Boot V100 ECS
+        env:
+          HW_AK: ${{ secrets.HW_AK }}
+          HW_SK: ${{ secrets.HW_SK }}
+        run: |
+          python3 scripts/ecs_control.py boot \
+            --ak "$HW_AK" --sk "$HW_SK" \
+            --region ${{ env.ECS_REGION }} \
+            --server-id ${{ env.ECS_ID }}
+
+      - name: Wait for SSH
+        run: |
+          for i in $(seq 1 60); do
+            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@${{ env.ECS_IP }} "echo ok" 2>/dev/null; then
+              echo "SSH ready"
+              exit 0
+            fi
+            echo "Waiting for SSH... ($i/60)"
+            sleep 10
+          done
+          echo "SSH timeout"
+          exit 1
+
+      - name: Pull images on ECS
+        run: |
+          ssh -o StrictHostKeyChecking=no root@${{ env.ECS_IP }} << 'EOF'
+            docker pull ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-train:latest
+            docker pull ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-model-server:latest
+            docker pull ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-eval:latest
+            docker pull ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/vla-eval-libero:latest
+            docker pull ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/vla-eval-libero-pro:latest
+          EOF
+
+      - name: Run SmolVLA training
+        if: github.event.inputs.skip_train != 'true'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          DATASET: ${{ github.event.inputs.dataset || 'lerobot/svla_so101_pickplace' }}
+          STEPS: ${{ github.event.inputs.steps || '20000' }}
+        run: |
+          ssh -o StrictHostKeyChecking=no root@${{ env.ECS_IP }} << EOF
+            docker run --rm --gpus all \
+              -e HF_TOKEN='$HF_TOKEN' \
+              -e HF_ENDPOINT=https://hf-mirror.com \
+              -v /data/checkpoints:/data/checkpoints \
+              ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-train:latest \
+              python3 /workspace/scripts/train_smolvla.py \
+                --dataset.repo_id='$DATASET' \
+                --steps=$STEPS
+          EOF
+
+      - name: Run vla-eval evaluation
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          CHECKPOINT: ${{ github.event.inputs.checkpoint || 'xieyucheng123/so101-smolvla' }}
+          BENCHMARKS: ${{ github.event.inputs.benchmarks || '' }}
+        run: |
+          ssh -o StrictHostKeyChecking=no root@${{ env.ECS_IP }} << 'OUTER'
+            # Start model server in background
+            docker run -d --name model-server --gpus all \
+              -e HF_TOKEN='$HF_TOKEN' \
+              -e HF_ENDPOINT=https://hf-mirror.com \
+              -p 8000:8000 \
+              swr.cn-north-4.myhuaweicloud.com/link-seek/so101-model-server:latest \
+              vla-eval serve --config /workspace/configs/model_servers/smolvla_so101.yaml \
+                --args.checkpoint=$CHECKPOINT
+
+            # Wait for health
+            for i in $(seq 1 120); do
+              if curl -s http://localhost:8000/health | grep -q "ok"; then
+                echo "Model server ready"
+                break
+              fi
+              sleep 2
+            done
+
+            # Run evaluation
+            docker run --rm --gpus all \
+              -e HF_TOKEN='$HF_TOKEN' \
+              -e HF_ENDPOINT=https://hf-mirror.com \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v /data/eval:/data/eval \
+              --network host \
+              swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest \
+              python3 /workspace/scripts/eval_vla.py \
+                --checkpoint "$CHECKPOINT" \
+                ${BENCHMARKS:+--benchmarks $BENCHMARKS}
+
+            # Cleanup
+            docker stop model-server || true
+            docker rm model-server || true
+          OUTER
+
+      - name: Download results
+        run: |
+          scp -o StrictHostKeyChecking=no root@${{ env.ECS_IP }}:/data/eval/results/eval_summary.json ./eval_summary.json 2>/dev/null || true
+          scp -r -o StrictHostKeyChecking=no root@${{ env.ECS_IP }}:/data/eval/results/ ./eval-results/ 2>/dev/null || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vla-eval-results
+          path: |
+            eval_summary.json
+            eval-results/
+
+      - name: Shutdown V100 ECS
+        if: always()
+        env:
+          HW_AK: ${{ secrets.HW_AK }}
+          HW_SK: ${{ secrets.HW_SK }}
+        run: |
+          python3 scripts/ecs_control.py shutdown \
+            --ak "$HW_AK" --sk "$HW_SK" \
+            --region ${{ env.ECS_REGION }} \
+            --server-id ${{ env.ECS_ID }}

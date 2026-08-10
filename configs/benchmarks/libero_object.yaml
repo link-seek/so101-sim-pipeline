@@ -1,0 +1,13 @@
+server:
+  url: "ws://localhost:8000"
+docker:
+  image: swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest
+output_dir: "/data/eval/results/libero_object"
+benchmarks:
+  - benchmark: "vla_eval.benchmarks.libero.benchmark:LibEROBenchmark"
+    subname: libero_object
+    episodes_per_task: 50
+    params:
+      suite: libero_object
+      seed: 7
+      num_steps_wait: 10

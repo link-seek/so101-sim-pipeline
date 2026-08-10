@@ -1,0 +1,41 @@
+FROM nvidia/cuda:12.6.3-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 python3.12-venv python3-pip \
+    git wget curl build-essential cmake \
+    libegl1 libgles2 libgl1-mesa-glx \
+    libvulkan1 mesa-vulkan-drivers \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.12 /usr/bin/python
+
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
+
+RUN pip3 install --no-cache-dir \
+    torch==2.11.0 torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu126
+
+RUN pip3 install --no-cache-dir \
+    "lerobot[smolvla,training]==0.6.1"
+
+RUN pip3 install --no-cache-dir \
+    vla-eval==0.4.0
+
+RUN pip3 install --no-cache-dir \
+    "so101_nexus[warp]" \
+    mujoco==3.3.2 \
+    opencv-python
+
+ENV MUJOCO_GL=egl
+ENV HF_ENDPOINT=https://hf-mirror.com
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+
+WORKDIR /workspace
+COPY scripts/ /workspace/scripts/
+COPY configs/ /workspace/configs/
+
+CMD ["python3", "/workspace/scripts/train_smolvla.py"]

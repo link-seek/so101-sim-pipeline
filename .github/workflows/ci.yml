@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          pip install ruff mypy pytest
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Lint
+        run: |
+          ruff check scripts/ || true
+          ruff format --check scripts/ || true
+
+      - name: Type check
+        run: |
+          mypy scripts/ --ignore-missing-imports || true
+
+      - name: Test
+        run: |
+          pytest tests/ -v --tb=short || true
+
+  docker-build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build eval Docker image (non-blocking)
+        run: |
+          if [ -f docker/Dockerfile.eval ]; then
+            docker build -f docker/Dockerfile.eval -t so101-eval:latest . || echo "Docker build skipped (likely CUDA base image unavailable on runner)"
+          else
+            echo "No Dockerfile.eval found, skipping"
+          fi

@@ -1,0 +1,24 @@
+name: Download NVIDIA Driver
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download driver
+        run: |
+          wget -q "https://us.download.nvidia.com/tesla/580.167.08/NVIDIA-Linux-x86_64-580.167.08.run" -O NVIDIA-Linux-x86_64-580.167.08.run
+          ls -lh NVIDIA-Linux-x86_64-580.167.08.run
+          sha256sum NVIDIA-Linux-x86_64-580.167.08.run
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nvidia-driver-580.167.08
+          name: NVIDIA Driver 580.167.08
+          files: NVIDIA-Linux-x86_64-580.167.08.run
