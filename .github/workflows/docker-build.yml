@@ -147,10 +147,8 @@ jobs:
             ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-eval:latest
           docker push ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-eval:latest
 
-  mirror-vla-eval-benchmarks:
+  mirror-libero:
     runs-on: ubuntu-22.04
-    permissions:
-      packages: write
     steps:
       - name: Login to SWR
         uses: docker/login-action@v3
@@ -165,6 +163,16 @@ jobs:
           docker tag ghcr.io/allenai/vla-evaluation-harness/libero:latest \
             ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/vla-eval-libero:latest
           docker push ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/vla-eval-libero:latest
+
+  mirror-libero-pro:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Login to SWR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.SWR_REGISTRY }}
+          username: ${{ secrets.HW_AK }}
+          password: ${{ secrets.HW_SK }}
 
       - name: Mirror vla-eval LIBERO-PRO benchmark
         run: |
