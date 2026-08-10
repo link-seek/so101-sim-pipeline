@@ -11,8 +11,6 @@ on:
 
 env:
   GHCR_REGISTRY: ghcr.io
-  SWR_REGISTRY: swr.cn-north-4.myhuaweicloud.com
-  SWR_NAMESPACE: link-seek
 
 jobs:
   build-train:
@@ -45,20 +43,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Login to SWR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.SWR_REGISTRY }}
-          username: ${{ secrets.HW_AK }}
-          password: ${{ secrets.HW_SK }}
-
-      - name: Mirror to SWR
-        run: |
-          docker pull ${{ env.GHCR_REGISTRY }}/${{ github.repository }}/so101-train:latest
-          docker tag ${{ env.GHCR_REGISTRY }}/${{ github.repository }}/so101-train:latest \
-            ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-train:latest
-          docker push ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-train:latest
-
   build-model-server:
     runs-on: ubuntu-22.04
     permissions:
@@ -89,20 +73,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Login to SWR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.SWR_REGISTRY }}
-          username: ${{ secrets.HW_AK }}
-          password: ${{ secrets.HW_SK }}
-
-      - name: Mirror to SWR
-        run: |
-          docker pull ${{ env.GHCR_REGISTRY }}/${{ github.repository }}/so101-model-server:latest
-          docker tag ${{ env.GHCR_REGISTRY }}/${{ github.repository }}/so101-model-server:latest \
-            ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-model-server:latest
-          docker push ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-model-server:latest
-
   build-eval:
     runs-on: ubuntu-22.04
     permissions:
@@ -132,51 +102,3 @@ jobs:
             ${{ env.GHCR_REGISTRY }}/${{ github.repository }}/so101-eval:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Login to SWR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.SWR_REGISTRY }}
-          username: ${{ secrets.HW_AK }}
-          password: ${{ secrets.HW_SK }}
-
-      - name: Mirror to SWR
-        run: |
-          docker pull ${{ env.GHCR_REGISTRY }}/${{ github.repository }}/so101-eval:latest
-          docker tag ${{ env.GHCR_REGISTRY }}/${{ github.repository }}/so101-eval:latest \
-            ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-eval:latest
-          docker push ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-eval:latest
-
-  mirror-libero:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Login to SWR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.SWR_REGISTRY }}
-          username: ${{ secrets.HW_AK }}
-          password: ${{ secrets.HW_SK }}
-
-      - name: Mirror vla-eval LIBERO benchmark
-        run: |
-          docker pull ghcr.io/allenai/vla-evaluation-harness/libero:latest
-          docker tag ghcr.io/allenai/vla-evaluation-harness/libero:latest \
-            ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/vla-eval-libero:latest
-          docker push ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/vla-eval-libero:latest
-
-  mirror-libero-pro:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Login to SWR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.SWR_REGISTRY }}
-          username: ${{ secrets.HW_AK }}
-          password: ${{ secrets.HW_SK }}
-
-      - name: Mirror vla-eval LIBERO-PRO benchmark
-        run: |
-          docker pull ghcr.io/allenai/vla-evaluation-harness/libero-pro:latest
-          docker tag ghcr.io/allenai/vla-evaluation-harness/libero-pro:latest \
-            ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/vla-eval-libero-pro:latest
-          docker push ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/vla-eval-libero-pro:latest
