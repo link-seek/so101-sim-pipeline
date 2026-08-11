@@ -46,11 +46,9 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Login to SWR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.SWR_REGISTRY }}
-          username: ${{ secrets.HW_AK }}
-          password: ${{ secrets.HW_SK }}
+        run: |
+          LOGIN_KEY=$(printf "${{ secrets.HW_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.HW_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
+          docker login -u cn-north-4@${{ secrets.HW_AK }} -p "$LOGIN_KEY" ${{ env.SWR_REGISTRY }}
 
       - name: Mirror to SWR
         run: |
@@ -90,11 +88,9 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Login to SWR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.SWR_REGISTRY }}
-          username: ${{ secrets.HW_AK }}
-          password: ${{ secrets.HW_SK }}
+        run: |
+          LOGIN_KEY=$(printf "${{ secrets.HW_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.HW_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
+          docker login -u cn-north-4@${{ secrets.HW_AK }} -p "$LOGIN_KEY" ${{ env.SWR_REGISTRY }}
 
       - name: Mirror to SWR
         run: |
@@ -134,11 +130,9 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Login to SWR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.SWR_REGISTRY }}
-          username: ${{ secrets.HW_AK }}
-          password: ${{ secrets.HW_SK }}
+        run: |
+          LOGIN_KEY=$(printf "${{ secrets.HW_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.HW_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
+          docker login -u cn-north-4@${{ secrets.HW_AK }} -p "$LOGIN_KEY" ${{ env.SWR_REGISTRY }}
 
       - name: Mirror to SWR
         run: |
@@ -151,11 +145,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Login to SWR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.SWR_REGISTRY }}
-          username: ${{ secrets.HW_AK }}
-          password: ${{ secrets.HW_SK }}
+        run: |
+          LOGIN_KEY=$(printf "${{ secrets.HW_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.HW_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
+          docker login -u cn-north-4@${{ secrets.HW_AK }} -p "$LOGIN_KEY" ${{ env.SWR_REGISTRY }}
 
       - name: Mirror vla-eval LIBERO benchmark
         run: |
@@ -168,11 +160,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Login to SWR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.SWR_REGISTRY }}
-          username: ${{ secrets.HW_AK }}
-          password: ${{ secrets.HW_SK }}
+        run: |
+          LOGIN_KEY=$(printf "${{ secrets.HW_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.HW_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
+          docker login -u cn-north-4@${{ secrets.HW_AK }} -p "$LOGIN_KEY" ${{ env.SWR_REGISTRY }}
 
       - name: Mirror vla-eval LIBERO-PRO benchmark
         run: |
