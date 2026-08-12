@@ -74,7 +74,6 @@ jobs:
         if: github.event.inputs.skip_train != 'true'
         run: |
           rm -rf /data/checkpoints/smolvla
-          mkdir -p /data/checkpoints/smolvla
           docker run --rm --gpus all --shm-size=8g \
             -v /data/checkpoints:/data/checkpoints \
             -e HF_ENDPOINT=https://hf-mirror.com \
