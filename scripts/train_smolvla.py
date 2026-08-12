@@ -29,6 +29,8 @@ def main():
                         dest="push_to_hub", help="Push to HF Hub")
     parser.add_argument("--wandb.enable", default="true", dest="wandb_enable")
     parser.add_argument("--wandb.project", default="so101-smolvla", dest="wandb_project")
+    parser.add_argument("--rename_map", default=None,
+                        help='Camera rename map JSON, e.g. {"observation.images.side":"observation.images.camera1"}')
     parser.add_argument("--hf_token", default=os.environ.get("HF_TOKEN"))
     args = parser.parse_args()
 
@@ -52,6 +54,9 @@ def main():
         f"--wandb.enable={args.wandb_enable}",
         f"--wandb.project={args.wandb_project}",
     ]
+
+    if args.rename_map:
+        cmd.append(f"--rename_map={args.rename_map}")
 
     print(f"=== SmolVLA Training ===")
     print(f"Policy: {args.policy_path}")
