@@ -3,23 +3,34 @@ FROM nvidia/cuda:12.6.3-runtime-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip \
-    git wget curl \
+    software-properties-common \
+    git wget curl build-essential \
     libegl1 libgles2 libgl1-mesa-glx \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 python3.12-venv python3.12-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN ln -sf /usr/bin/python3 /usr/bin/python
+RUN cd /tmp && \
+    wget -q https://www.sqlite.org/2024/sqlite-autoconf-3450000.tar.gz && \
+    tar xzf sqlite-autoconf-3450000.tar.gz && \
+    cd sqlite-autoconf-3450000 && \
+    ./configure --prefix=/usr/local && make -j4 && make install && \
+    ldconfig && rm -rf /tmp/sqlite-autoconf-3450000*
 
-RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
+RUN python3.12 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-RUN pip3 install --no-cache-dir \
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+RUN pip install --no-cache-dir \
     torch==2.11.0 torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/cu126
 
-RUN pip3 install --no-cache-dir \
+RUN pip install --no-cache-dir \
     "lerobot[smolvla]==0.6.1"
 
-RUN pip3 install --no-cache-dir \
+RUN pip install --no-cache-dir \
     vla-eval==0.4.0
 
 ENV MUJOCO_GL=egl
