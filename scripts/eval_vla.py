@@ -36,10 +36,10 @@ def start_model_server(model_config, checkpoint=None):
     cfg_path = CONFIGS_DIR / "model_servers" / model_config
     cmd = ["vla-eval", "serve", "--config", str(cfg_path)]
     if checkpoint:
-        cmd.append(f"--args.checkpoint={checkpoint}")
+        cmd.extend(["--arg", f"checkpoint={checkpoint}"])
 
     print(f"Starting model server: {' '.join(cmd)}")
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
     for _ in range(120):
         try:
@@ -51,6 +51,8 @@ def start_model_server(model_config, checkpoint=None):
             time.sleep(2)
 
     print("Model server failed to start within 240s")
+    stdout_data = proc.stdout.read() if proc.stdout else ""
+    print(f"Model server stdout:\n{stdout_data}")
     proc.kill()
     sys.exit(1)
 
