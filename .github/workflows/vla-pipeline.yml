@@ -88,6 +88,7 @@ jobs:
               --env_eval_freq=2000 \
               --log_freq=500 \
               --wandb.enable=false \
+              --policy.push_to_hub=false \
               --rename_map='${{ env.RENAME_MAP }}'
 
       - name: Find latest checkpoint
