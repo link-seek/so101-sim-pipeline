@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--steps", type=int, default=20000)
     parser.add_argument("--save_freq", type=int, default=5000)
-    parser.add_argument("--eval_freq", type=int, default=2000)
+    parser.add_argument("--env_eval_freq", type=int, default=2000)
     parser.add_argument("--log_freq", type=int, default=500)
     parser.add_argument("--output_dir", default="/data/checkpoints/smolvla")
     parser.add_argument("--job_name", default="smolvla-pickplace-20k")
@@ -47,7 +47,7 @@ def main():
         f"--batch_size={args.batch_size}",
         f"--steps={args.steps}",
         f"--save_freq={args.save_freq}",
-        f"--eval_freq={args.eval_freq}",
+        f"--env_eval_freq={args.env_eval_freq}",
         f"--log_freq={args.log_freq}",
         f"--output_dir={args.output_dir}",
         f"--job_name={args.job_name}",
