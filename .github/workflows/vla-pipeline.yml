@@ -3,163 +3,147 @@ name: VLA Pipeline
 on:
   workflow_dispatch:
     inputs:
-      checkpoint:
-        description: "SmolVLA checkpoint (HF repo ID or path)"
-        required: false
-        default: "xieyucheng123/so101-smolvla"
-      dataset:
-        description: "Training dataset repo ID"
-        required: false
-        default: "lerobot/svla_so101_pickplace"
       steps:
         description: "Training steps"
         required: false
         default: "20000"
       skip_train:
-        description: "Skip training, only evaluate"
+        description: "Skip training, only replay"
         required: false
         default: "false"
-      benchmarks:
-        description: "Benchmarks to run (space-separated, empty=all)"
+      checkpoint:
+        description: "Checkpoint path (skip train, use this checkpoint)"
         required: false
         default: ""
   repository_dispatch:
     types: [vla-trigger]
 
+permissions:
+  contents: write
+  packages: read
+
 env:
-  ECS_IP: "114.116.228.0"
-  ECS_ID: "7f39cb83-1a5c-4792-b65e-e578d7ddb88d"
-  ECS_REGION: "cn-north-4"
-  SWR_REGISTRY: "swr.cn-north-4.myhuaweicloud.com"
-  SWR_NAMESPACE: "link-seek"
+  TRAIN_IMAGE: swr.cn-north-4.myhuaweicloud.com/link-seek/so101-train:latest
+  EVAL_IMAGE: swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest
+  MODEL_SERVER_IMAGE: swr.cn-north-4.myhuaweicloud.com/link-seek/so101-model-server:latest
+  ECS_SERVER_ID: 7f39cb83-1a5c-4792-b65e-e578d7ddb88d
+  ECS_REGION: cn-north-4
+  HF_MODEL_REPO: xieyucheng123/so101-smolvla
+  DATASET_REPO: shattori/so101_pick_place_thor
+  OBS_BUCKET: so101-sim-pipeline
+  RENAME_MAP: '{"observation.images.wrist": "observation.images.camera1", "observation.images.overhead": "observation.images.camera2"}'
 
 jobs:
-  train-and-evaluate:
-    runs-on: ubuntu-22.04
+  start-ecs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - name: Setup hcloud CLI
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: pip install -q requests huaweicloudsdkcore huaweicloudsdkecs
-
-      - name: Boot V100 ECS
+      - name: Start ECS
         env:
-          HW_AK: ${{ secrets.HW_AK }}
-          HW_SK: ${{ secrets.HW_SK }}
+          HCLOUD_AGREE_PRIVACY: "true"
         run: |
-          python3 scripts/ecs_control.py boot \
-            --ak "$HW_AK" --sk "$HW_SK" \
-            --region ${{ env.ECS_REGION }} \
-            --server-id ${{ env.ECS_ID }}
+          echo "y" | hcloud ECS BatchStartServers \
+            --cli-region="${{ env.ECS_REGION }}" \
+            --cli-access-key="${{ secrets.OBS_AK }}" \
+            --cli-secret-key="${{ secrets.OBS_SK }}" \
+            --os-start.servers.1.id="${{ env.ECS_SERVER_ID }}"
+          sleep 120
 
-      - name: Wait for SSH
+  vla-pipeline:
+    needs: start-ecs
+    runs-on: [self-hosted, Linux, X64, V100]
+    timeout-minutes: 1200
+    steps:
+      - name: Login to SWR
         run: |
-          for i in $(seq 1 60); do
-            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@${{ env.ECS_IP }} "echo ok" 2>/dev/null; then
-              echo "SSH ready"
-              exit 0
-            fi
-            echo "Waiting for SSH... ($i/60)"
-            sleep 10
-          done
-          echo "SSH timeout"
-          exit 1
+          LOGIN_KEY=$(printf "${{ secrets.OBS_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.OBS_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
+          docker login -u "cn-north-4@${{ secrets.OBS_AK }}" -p "$LOGIN_KEY" swr.cn-north-4.myhuaweicloud.com
 
-      - name: Pull images on ECS
+      - name: Pull Docker images
         run: |
-          ssh -o StrictHostKeyChecking=no root@${{ env.ECS_IP }} << 'EOF'
-            docker pull ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-train:latest
-            docker pull ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-model-server:latest
-            docker pull ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-eval:latest
-            docker pull ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/vla-eval-libero:latest
-            docker pull ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/vla-eval-libero-pro:latest
-          EOF
+          docker pull ${{ env.TRAIN_IMAGE }}
+          docker pull ${{ env.EVAL_IMAGE }}
 
-      - name: Run SmolVLA training
+      - name: Train SmolVLA
         if: github.event.inputs.skip_train != 'true'
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          DATASET: ${{ github.event.inputs.dataset || 'lerobot/svla_so101_pickplace' }}
-          STEPS: ${{ github.event.inputs.steps || '20000' }}
         run: |
-          ssh -o StrictHostKeyChecking=no root@${{ env.ECS_IP }} << EOF
-            docker run --rm --gpus all \
-              -e HF_TOKEN='$HF_TOKEN' \
-              -e HF_ENDPOINT=https://hf-mirror.com \
-              -v /data/checkpoints:/data/checkpoints \
-              ${{ env.SWR_REGISTRY }}/${{ env.SWR_NAMESPACE }}/so101-train:latest \
-              python3 /workspace/scripts/train_smolvla.py \
-                --dataset.repo_id='$DATASET' \
-                --steps=$STEPS
-          EOF
+          rm -rf /data/checkpoints/smolvla
+          docker run --rm --gpus all --shm-size=8g \
+            -v /data/checkpoints:/data/checkpoints \
+            -e HF_ENDPOINT=https://hf-mirror.com \
+            -e HF_HUB_DISABLE_XET=1 \
+            -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
+            ${{ env.TRAIN_IMAGE }} \
+            python /workspace/scripts/train_smolvla.py \
+              --dataset.repo_id=${{ env.DATASET_REPO }} \
+              --steps=${{ github.event.inputs.steps || '20000' }} \
+              --batch_size=32 \
+              --save_freq=5000 \
+              --env_eval_freq=2000 \
+              --log_freq=500 \
+              --wandb.enable=false \
+              --policy.push_to_hub=false \
+              --rename_map='${{ env.RENAME_MAP }}'
 
-      - name: Run vla-eval evaluation
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CHECKPOINT: ${{ github.event.inputs.checkpoint || 'xieyucheng123/so101-smolvla' }}
-          BENCHMARKS: ${{ github.event.inputs.benchmarks || '' }}
+      - name: Find latest checkpoint
+        id: checkpoint
         run: |
-          ssh -o StrictHostKeyChecking=no root@${{ env.ECS_IP }} << 'OUTER'
-            # Start model server in background
-            docker run -d --name model-server --gpus all \
-              -e HF_TOKEN='$HF_TOKEN' \
-              -e HF_ENDPOINT=https://hf-mirror.com \
-              -p 8000:8000 \
-              swr.cn-north-4.myhuaweicloud.com/link-seek/so101-model-server:latest \
-              vla-eval serve --config /workspace/configs/model_servers/smolvla_so101.yaml \
-                --args.checkpoint=$CHECKPOINT
+          CKPT=$(ls -d /data/checkpoints/smolvla/checkpoints/*/pretrained_model 2>/dev/null | sort -t/ -k6 -n | tail -1)
+          if [ -z "$CKPT" ]; then
+            CKPT="${{ github.event.inputs.checkpoint }}"
+          fi
+          echo "checkpoint=$CKPT" >> $GITHUB_OUTPUT
+          echo "Using checkpoint: $CKPT"
 
-            # Wait for health
-            for i in $(seq 1 120); do
-              if curl -s http://localhost:8000/health | grep -q "ok"; then
-                echo "Model server ready"
-                break
-              fi
-              sleep 2
-            done
-
-            # Run evaluation
-            docker run --rm --gpus all \
-              -e HF_TOKEN='$HF_TOKEN' \
-              -e HF_ENDPOINT=https://hf-mirror.com \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -v /data/eval:/data/eval \
-              --network host \
-              swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest \
-              python3 /workspace/scripts/eval_vla.py \
-                --checkpoint "$CHECKPOINT" \
-                ${BENCHMARKS:+--benchmarks $BENCHMARKS}
-
-            # Cleanup
-            docker stop model-server || true
-            docker rm model-server || true
-          OUTER
-
-      - name: Download results
+      - name: Simulation replay
         run: |
-          scp -o StrictHostKeyChecking=no root@${{ env.ECS_IP }}:/data/eval/results/eval_summary.json ./eval_summary.json 2>/dev/null || true
-          scp -r -o StrictHostKeyChecking=no root@${{ env.ECS_IP }}:/data/eval/results/ ./eval-results/ 2>/dev/null || true
+          mkdir -p /data/eval/results
+          docker run --rm --gpus all --shm-size=8g \
+            -v /data:/data \
+            -e MUJOCO_GL=egl \
+            -e HF_ENDPOINT=https://hf-mirror.com \
+            -e HF_HUB_DISABLE_XET=1 \
+            -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
+            ${{ env.TRAIN_IMAGE }} \
+            python /workspace/scripts/replay_demo.py \
+              --checkpoint '${{ steps.checkpoint.outputs.checkpoint }}' \
+              --output /data/eval/results/replay_pickplace.mp4 \
+              --max-steps 300
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: vla-eval-results
-          path: |
-            eval_summary.json
-            eval-results/
-
-      - name: Shutdown V100 ECS
+      - name: Upload to OBS
         if: always()
-        env:
-          HW_AK: ${{ secrets.HW_AK }}
-          HW_SK: ${{ secrets.HW_SK }}
         run: |
-          python3 scripts/ecs_control.py shutdown \
-            --ak "$HW_AK" --sk "$HW_SK" \
-            --region ${{ env.ECS_REGION }} \
-            --server-id ${{ env.ECS_ID }}
+          obsutil cp /data/eval/results/ obs://${{ env.OBS_BUCKET }}/eval/ -f -r -flat
+          if [ -d /data/checkpoints/smolvla/checkpoints ]; then
+            obsutil cp /data/checkpoints/smolvla/checkpoints/ obs://${{ env.OBS_BUCKET }}/checkpoints/ -f -r -flat
+          fi
+
+  stop-ecs:
+    needs: vla-pipeline
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 10
+    steps:
+      - name: Setup hcloud CLI
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+
+      - name: Stop ECS
+        env:
+          HCLOUD_AGREE_PRIVACY: "true"
+        run: |
+          echo "y" | hcloud ECS BatchStopServers \
+            --cli-region="${{ env.ECS_REGION }}" \
+            --cli-access-key="${{ secrets.OBS_AK }}" \
+            --cli-secret-key="${{ secrets.OBS_SK }}" \
+            --os-stop.servers.1.id="${{ env.ECS_SERVER_ID }}"
+          sleep 60
+          exit 0
