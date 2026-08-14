@@ -26,6 +26,9 @@ RUN pip install --no-cache-dir \
     "so101_nexus[warp,train]" \
     tyro "imageio[ffmpeg]" opencv-python
 
+RUN pip install --no-cache-dir --upgrade \
+    "mujoco-warp>=3.10.0.1,<3.12"
+
 ENV MUJOCO_GL=egl
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
 
