@@ -74,7 +74,7 @@ jobs:
           docker pull ${{ env.TRAIN_IMAGE }}
           docker pull ${{ env.EVAL_IMAGE }}
 
-      - name: Pre-download dataset
+      - name: Pre-download dataset and model
         run: |
           docker run --rm --gpus all --shm-size=8g \
             -v /data/datasets:/data/datasets \
@@ -82,8 +82,15 @@ jobs:
             -e HF_HUB_DISABLE_XET=1 \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
             ${{ env.TRAIN_IMAGE }} \
+            bash -c "
             python /workspace/scripts/predownload_dataset.py \
-              ${{ env.DATASET_REPO }} /data/datasets
+              ${{ env.DATASET_REPO }} /data/datasets && \
+            python -c \"
+          from huggingface_hub import snapshot_download
+          snapshot_download('lerobot/smolvla_base', endpoint='https://hf-mirror.com')
+          print('SmolVLA base model downloaded')
+          \"
+          "
 
       - name: Train SmolVLA
         if: github.event.inputs.skip_train != 'true'
@@ -91,11 +98,11 @@ jobs:
           rm -rf /data/checkpoints/smolvla
           docker run --rm --gpus all --shm-size=8g \
             -v /data/checkpoints:/data/checkpoints \
-            -v /data/datasets:/root/.cache/huggingface/lerobot \
+            -v /data/datasets:/data/datasets \
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_HUB_DISABLE_XET=1 \
-            -e HF_HUB_OFFLINE=1 \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
+            -e LEROBOT_HOME=/data/datasets \
             ${{ env.TRAIN_IMAGE }} \
             python /workspace/scripts/train_smolvla.py \
               --dataset.repo_id=${{ env.DATASET_REPO }} \
