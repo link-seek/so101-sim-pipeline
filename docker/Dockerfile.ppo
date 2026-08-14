@@ -1,0 +1,35 @@
+FROM nvidia/cuda:12.6.3-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    git wget curl build-essential cmake \
+    libegl1 libgles2 libgl1-mesa-glx \
+    libvulkan1 mesa-vulkan-drivers \
+    ffmpeg \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 python3.12-venv python3.12-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3.12 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+RUN pip install --no-cache-dir \
+    torch==2.11.0 torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu126
+
+RUN pip install --no-cache-dir \
+    "so101_nexus[warp,train]" \
+    tyro "imageio[ffmpeg]" opencv-python
+
+ENV MUJOCO_GL=egl
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+
+WORKDIR /workspace
+COPY scripts/ /workspace/scripts/
+
+CMD ["python", "/workspace/scripts/train_ppo.py"]
