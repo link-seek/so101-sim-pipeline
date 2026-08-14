@@ -88,14 +88,6 @@
 | Runner labels | `[self-hosted, Linux, X64, V100]` |
 | 数据盘 | `/data` 789GB |
 
-## Secrets
-
-| Name | 用途 |
-|------|------|
-| `OBS_AK` | 华为云 AK (OBS + SWR + ECS 控制) |
-| `OBS_SK` | 华为云 SK |
-| `HF_TOKEN` | HuggingFace Token (模型下载/上传) |
-
 ## 使用
 
 ```bash
