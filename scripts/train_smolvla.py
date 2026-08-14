@@ -17,7 +17,7 @@ def main():
     parser.add_argument("--dataset.repo_id", default="lerobot/svla_so101_pickplace",
                         dest="dataset_repo_id", help="Dataset repo ID")
     parser.add_argument("--dataset.fps", type=int, default=None,
-                        dest="dataset_fps", help="Dataset FPS for resampling")
+                        dest="dataset_fps", help="Dataset FPS (unused, kept for compatibility)")
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--steps", type=int, default=20000)
     parser.add_argument("--save_freq", type=int, default=5000)
@@ -56,9 +56,6 @@ def main():
         f"--wandb.enable={args.wandb_enable}",
         f"--wandb.project={args.wandb_project}",
     ]
-
-    if args.dataset_fps is not None:
-        cmd.append(f"--dataset.fps={args.dataset_fps}")
 
     if args.rename_map:
         cmd.append(f"--rename_map={args.rename_map}")
