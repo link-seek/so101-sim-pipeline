@@ -102,7 +102,7 @@ jobs:
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_HUB_DISABLE_XET=1 \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
-            -e LEROBOT_HOME=/data/datasets \
+            -e HF_LEROBOT_HOME=/data/datasets \
             ${{ env.TRAIN_IMAGE }} \
             python /workspace/scripts/train_smolvla.py \
               --dataset.repo_id=${{ env.DATASET_REPO }} \
