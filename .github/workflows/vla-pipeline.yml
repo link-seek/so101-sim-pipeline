@@ -74,12 +74,24 @@ jobs:
           docker pull ${{ env.TRAIN_IMAGE }}
           docker pull ${{ env.EVAL_IMAGE }}
 
+      - name: Pre-download dataset
+        run: |
+          docker run --rm --gpus all --shm-size=8g \
+            -v /data/datasets:/data/datasets \
+            -e HF_ENDPOINT=https://hf-mirror.com \
+            -e HF_HUB_DISABLE_XET=1 \
+            -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
+            ${{ env.TRAIN_IMAGE }} \
+            python /workspace/scripts/predownload_dataset.py \
+              ${{ env.DATASET_REPO }} /data/datasets/lerobot
+
       - name: Train SmolVLA
         if: github.event.inputs.skip_train != 'true'
         run: |
           rm -rf /data/checkpoints/smolvla
           docker run --rm --gpus all --shm-size=8g \
             -v /data/checkpoints:/data/checkpoints \
+            -v /data/datasets:/root/.cache/huggingface/lerobot \
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_HUB_DISABLE_XET=1 \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
