@@ -27,6 +27,17 @@ def main():
         cache_home = os.path.expanduser("~/.cache/huggingface/lerobot")
         lerobot_path = os.path.join(cache_home, repo_id)
 
+    os.makedirs(os.path.dirname(lerobot_path), exist_ok=True)
+
+    # Remove existing file/symlink/dir at target path
+    if os.path.islink(lerobot_path) or os.path.exists(lerobot_path):
+        if os.path.islink(lerobot_path):
+            os.unlink(lerobot_path)
+        elif os.path.isdir(lerobot_path):
+            shutil.rmtree(lerobot_path)
+        else:
+            os.remove(lerobot_path)
+
     os.makedirs(lerobot_path, exist_ok=True)
 
     snapshot_download(
