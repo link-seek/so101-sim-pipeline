@@ -83,7 +83,7 @@ jobs:
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
             ${{ env.TRAIN_IMAGE }} \
             python /workspace/scripts/predownload_dataset.py \
-              ${{ env.DATASET_REPO }} /data/datasets/lerobot
+              ${{ env.DATASET_REPO }} /data/datasets
 
       - name: Train SmolVLA
         if: github.event.inputs.skip_train != 'true'
