@@ -94,6 +94,7 @@ jobs:
             -v /data/datasets:/root/.cache/huggingface/lerobot \
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_HUB_DISABLE_XET=1 \
+            -e HF_HUB_OFFLINE=1 \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
             ${{ env.TRAIN_IMAGE }} \
             python /workspace/scripts/train_smolvla.py \
