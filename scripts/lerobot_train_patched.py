@@ -9,7 +9,7 @@ def _patched(repo_id, revision):
     try:
         return _orig(repo_id, revision)
     except RuntimeError:
-        return revision
+        return "main"
 _utils.get_safe_version = _patched
 
 # Also patch the already-imported reference in dataset_metadata
