@@ -28,7 +28,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from so101_nexus import observations_from_feature_names
+from so101_nexus import observations_from_feature_names, PickConfig
 from so101_nexus._reproducibility import seed_everything
 
 
@@ -153,10 +153,13 @@ def _resolve_env_cls(env_id: str):
     return _env_cls_from_spec(env_id, "vector_entry_point")
 
 
-def _mujoco_config(mujoco_env_id: str, observations):
-    return _env_cls_from_spec(mujoco_env_id, "entry_point").default_config_cls(
-        observations=observations
-    )
+def _mujoco_config(mujoco_env_id: str, observations, lift_threshold=None):
+    kwargs = {}
+    if observations is not None:
+        kwargs["observations"] = observations
+    if lift_threshold is not None:
+        kwargs["lift_threshold"] = lift_threshold
+    return _env_cls_from_spec(mujoco_env_id, "entry_point").default_config_cls(**kwargs)
 
 
 def _fixed_horizon(env_cls):
@@ -170,9 +173,17 @@ def _fixed_horizon(env_cls):
 
 
 def _make_envs(env_id, num_envs, device, seed, *, control_mode="pd_joint_delta_pos",
-               episode_length=512, terminate_on_success=False, observations=None):
+               episode_length=512, terminate_on_success=False, observations=None,
+               lift_threshold=None):
     env_cls = _resolve_env_cls(env_id)
-    config = None if observations is None else env_cls.default_config_cls(observations=observations)
+    config = None
+    if observations is not None or lift_threshold is not None:
+        kwargs = {}
+        if observations is not None:
+            kwargs["observations"] = observations
+        if lift_threshold is not None:
+            kwargs["lift_threshold"] = lift_threshold
+        config = env_cls.default_config_cls(**kwargs)
     if not terminate_on_success:
         env_cls = _fixed_horizon(env_cls)
     return env_cls(
@@ -182,16 +193,19 @@ def _make_envs(env_id, num_envs, device, seed, *, control_mode="pd_joint_delta_p
 
 
 def evaluate_mujoco(agent, obs_norm, device, *, env_id, control_mode, episode_length,
-                    eval_episodes, seed, capture_video, observations=None):
+                    eval_episodes, seed, capture_video, observations=None, lift_threshold=None):
     import gymnasium as gym
     import so101_nexus.mujoco  # noqa: F401
 
     mujoco_id = env_id.replace("Warp", "MuJoCo")
+    config_kwargs = {}
+    if observations is not None or lift_threshold is not None:
+        config_kwargs["config"] = _mujoco_config(mujoco_id, observations, lift_threshold)
     env = gym.make(
         mujoco_id, control_mode=control_mode,
         render_mode="rgb_array" if capture_video else None,
         max_episode_steps=episode_length,
-        **({} if observations is None else {"config": _mujoco_config(mujoco_id, observations)}),
+        **config_kwargs,
     )
     mean = obs_norm.rms.mean.to(device).float()
     var = obs_norm.rms.var.to(device).float()
@@ -266,7 +280,7 @@ def train(*, env_id="WarpPickLift-v1", num_envs=1024, num_steps=16,
            terminate_on_success=False, success_bonus=0.0, stagger_resets=True,
            capture_video=False, eval_freq=0, eval_episodes=5,
            device="cuda", seed=1, torch_deterministic=True,
-           save_dir=None, log_freq=1, log=False):
+           save_dir=None, log_freq=1, log=False, lift_threshold=None):
     batch_size = num_envs * num_steps
     if num_minibatches < 1 or num_minibatches > batch_size:
         raise ValueError(f"num_minibatches must be in [1, {batch_size}], got {num_minibatches}")
@@ -286,7 +300,7 @@ def train(*, env_id="WarpPickLift-v1", num_envs=1024, num_steps=16,
     envs = _make_envs(
         env_id, num_envs, dev, seed,
         control_mode=control_mode, episode_length=episode_length,
-        terminate_on_success=terminate_on_success,
+        terminate_on_success=terminate_on_success, lift_threshold=lift_threshold,
     )
     obs_dim = int(np.prod(envs.single_observation_space.shape))
     act_dim = int(np.prod(envs.single_action_space.shape))
@@ -464,7 +478,7 @@ def train(*, env_id="WarpPickLift-v1", num_envs=1024, num_steps=16,
                 ev, frames = evaluate_mujoco(
                     agent, obs_norm, dev, env_id=env_id, control_mode=control_mode,
                     episode_length=episode_length, eval_episodes=eval_episodes,
-                    seed=seed, capture_video=True,
+                    seed=seed, capture_video=True, lift_threshold=lift_threshold,
                 )
             except Exception as e:
                 print(f"[eval {global_step}] skipped: {e}", flush=True)
@@ -522,6 +536,8 @@ def main():
     parser.add_argument("--eval-episodes", type=int, default=5)
     parser.add_argument("--capture-video", action="store_true")
     parser.add_argument("--log-freq", type=int, default=10)
+    parser.add_argument("--lift-threshold", type=float, default=None,
+                        help="Min lift height for success (default: env default 0.05)")
     args = parser.parse_args()
 
     torch.backends.cudnn.deterministic = True
@@ -555,6 +571,7 @@ def main():
         save_dir=args.save_dir,
         log_freq=args.log_freq,
         log=True,
+        lift_threshold=args.lift_threshold,
     )
 
     print(

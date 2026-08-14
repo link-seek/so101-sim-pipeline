@@ -75,10 +75,13 @@ def _env_cls_from_spec(env_id: str, attr: str):
     return getattr(importlib.import_module(module_path), class_name)
 
 
-def _mujoco_config(mujoco_env_id: str, observations):
-    return _env_cls_from_spec(mujoco_env_id, "entry_point").default_config_cls(
-        observations=observations
-    )
+def _mujoco_config(mujoco_env_id: str, observations, lift_threshold=None):
+    kwargs = {}
+    if observations is not None:
+        kwargs["observations"] = observations
+    if lift_threshold is not None:
+        kwargs["lift_threshold"] = lift_threshold
+    return _env_cls_from_spec(mujoco_env_id, "entry_point").default_config_cls(**kwargs)
 
 
 def write_video(frames, path, fps=30):
@@ -102,6 +105,8 @@ def main():
     parser.add_argument("--episode-length", type=int, default=512)
     parser.add_argument("--seed", type=int, default=12345)
     parser.add_argument("--output", default="/data/ppo/results", help="Output directory")
+    parser.add_argument("--lift-threshold", type=float, default=None,
+                        help="Min lift height for success (default: env default 0.05)")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -111,9 +116,12 @@ def main():
     observations = None if not names else observations_from_feature_names(names)
 
     mujoco_id = args.env_id.replace("Warp", "MuJoCo")
+    config_kwargs = {}
+    if observations is not None or args.lift_threshold is not None:
+        config_kwargs["config"] = _mujoco_config(mujoco_id, observations, args.lift_threshold)
     probe = gym.make(
         mujoco_id, control_mode=args.control_mode, max_episode_steps=args.episode_length,
-        **({} if observations is None else {"config": _mujoco_config(mujoco_id, observations)}),
+        **config_kwargs,
     )
     obs_shape = probe.observation_space.shape
     act_shape = probe.action_space.shape
@@ -131,7 +139,7 @@ def main():
     env = gym.make(
         mujoco_id, control_mode=args.control_mode,
         render_mode="rgb_array", max_episode_steps=args.episode_length,
-        **({} if observations is None else {"config": _mujoco_config(mujoco_id, observations)}),
+        **config_kwargs,
     )
 
     def norm(o):

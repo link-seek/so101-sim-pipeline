@@ -23,6 +23,10 @@ on:
         description: "Eval episodes"
         required: false
         default: "50"
+      lift_threshold:
+        description: "Min lift height for success (m)"
+        required: false
+        default: "0.15"
 
 permissions:
   contents: write
@@ -83,7 +87,8 @@ jobs:
               --seed ${{ github.event.inputs.seed }} \
               --save-dir /data/checkpoints/ppo \
               --result-path /data/ppo/results/train_result.json \
-              --log-freq 10
+              --log-freq 10 \
+              --lift-threshold ${{ github.event.inputs.lift_threshold }}
 
       - name: PPO Eval
         run: |
@@ -95,7 +100,8 @@ jobs:
               --checkpoint /data/checkpoints/ppo/best_agent.pt \
               --env-id ${{ github.event.inputs.env_id }} \
               --num-episodes ${{ github.event.inputs.num_eval_episodes }} \
-              --output /data/ppo/results
+              --output /data/ppo/results \
+              --lift-threshold ${{ github.event.inputs.lift_threshold }}
 
       - name: Print results
         run: |
