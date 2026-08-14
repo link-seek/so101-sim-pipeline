@@ -7,6 +7,10 @@ on:
         description: "Training steps"
         required: false
         default: "20000"
+      dataset_fps:
+        description: "Dataset FPS (resample)"
+        required: false
+        default: "30"
       skip_train:
         description: "Skip training, only replay"
         required: false
@@ -29,9 +33,9 @@ env:
   ECS_SERVER_ID: 7f39cb83-1a5c-4792-b65e-e578d7ddb88d
   ECS_REGION: cn-north-4
   HF_MODEL_REPO: xieyucheng123/so101-smolvla
-  DATASET_REPO: lerobot/svla_so101_pickplace
+  DATASET_REPO: ataghof/so101nexus-cube500-binary
   OBS_BUCKET: so101-sim-pipeline
-  RENAME_MAP: '{"observation.images.side": "observation.images.camera1", "observation.images.up": "observation.images.camera2"}'
+  RENAME_MAP: '{"observation.images.cam0": "observation.images.overhead", "observation.images.cam1": "observation.images.wrist"}'
 
 jobs:
   start-ecs:
@@ -82,6 +86,7 @@ jobs:
             ${{ env.TRAIN_IMAGE }} \
             python /workspace/scripts/train_smolvla.py \
               --dataset.repo_id=${{ env.DATASET_REPO }} \
+              --dataset.fps=${{ github.event.inputs.dataset_fps || '30' }} \
               --steps=${{ github.event.inputs.steps || '20000' }} \
               --batch_size=32 \
               --save_freq=5000 \

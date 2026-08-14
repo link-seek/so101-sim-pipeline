@@ -77,11 +77,9 @@ def predict_action(policy, preprocess, postprocess, obs, task_description, devic
     }
 
     if "wrist_camera" in obs:
-        frame["observation.images.camera1"] = np.asarray(obs["wrist_camera"], dtype=np.uint8)
+        frame["observation.images.wrist"] = np.asarray(obs["wrist_camera"], dtype=np.uint8)
     if "overhead_camera" in obs:
-        frame["observation.images.camera2"] = np.asarray(obs["overhead_camera"], dtype=np.uint8)
-    if "wrist_camera" in obs and "overhead_camera" in obs:
-        frame["observation.images.camera3"] = np.asarray(obs["overhead_camera"], dtype=np.uint8)
+        frame["observation.images.overhead"] = np.asarray(obs["overhead_camera"], dtype=np.uint8)
 
     frame = prepare_observation_for_inference(
         frame, device, task=task_description, robot_type=""
@@ -231,7 +229,7 @@ def main():
                         help="SmolVLA checkpoint (HF repo ID or local path)")
     parser.add_argument("--env", default="MuJoCoPickAndPlace-v1",
                         help="so101_nexus environment ID")
-    parser.add_argument("--task", default="pick up the cube and place it on the target",
+    parser.add_argument("--task", default="Pick up the red cube and place it on the blue circle.",
                         help="Language instruction for the policy")
     parser.add_argument("--max-steps", type=int, default=300)
     parser.add_argument("--output", default="/data/eval/results/replay_pickplace.mp4")
