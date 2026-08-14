@@ -20,13 +20,6 @@ def main():
 
     print(f"Downloading {repo_id} via huggingface_hub...")
 
-    snapshot_path = snapshot_download(
-        repo_id,
-        repo_type="dataset",
-        endpoint=os.environ.get("HF_ENDPOINT", "https://huggingface.co"),
-    )
-    print(f"Snapshot downloaded to: {snapshot_path}")
-
     # Determine lerobot cache path
     if dest_root:
         lerobot_path = os.path.join(dest_root, repo_id)
@@ -34,18 +27,15 @@ def main():
         cache_home = os.path.expanduser("~/.cache/huggingface/lerobot")
         lerobot_path = os.path.join(cache_home, repo_id)
 
-    os.makedirs(os.path.dirname(lerobot_path), exist_ok=True)
+    os.makedirs(lerobot_path, exist_ok=True)
 
-    # Remove old symlink/dir if exists
-    if os.path.islink(lerobot_path) or os.path.exists(lerobot_path):
-        if os.path.islink(lerobot_path):
-            os.unlink(lerobot_path)
-        elif os.path.isdir(lerobot_path):
-            shutil.rmtree(lerobot_path)
-
-    # Create symlink
-    os.symlink(snapshot_path, lerobot_path)
-    print(f"Symlinked: {lerobot_path} -> {snapshot_path}")
+    snapshot_download(
+        repo_id,
+        repo_type="dataset",
+        local_dir=lerobot_path,
+        endpoint=os.environ.get("HF_ENDPOINT", "https://huggingface.co"),
+    )
+    print(f"Downloaded to: {lerobot_path}")
 
     # Verify
     info_path = os.path.join(lerobot_path, "meta", "info.json")
