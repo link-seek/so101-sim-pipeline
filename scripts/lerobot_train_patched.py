@@ -18,4 +18,6 @@ if hasattr(_meta, 'get_safe_version'):
     _meta.get_safe_version = _patched
 
 from lerobot.scripts.lerobot_train import main
-main()
+
+if __name__ == "__main__":
+    main()
