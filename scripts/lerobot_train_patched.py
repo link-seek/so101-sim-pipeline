@@ -12,5 +12,5 @@ def _patched(repo_id, revision):
         return revision
 _utils.get_safe_version = _patched
 
-from lerobot.scripts.lerot_train import main
+from lerobot.scripts.lerobot_train import main
 main()
