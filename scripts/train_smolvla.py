@@ -40,7 +40,7 @@ def main():
         os.environ["HF_TOKEN"] = args.hf_token
 
     cmd = [
-        "lerobot-train",
+        "python", "/workspace/scripts/lerobot_train_patched.py",
         f"--policy.path={args.policy_path}",
         f"--policy.device=cuda",
         f"--policy.repo_id={args.policy_repo_id}",
