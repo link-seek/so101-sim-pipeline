@@ -35,7 +35,7 @@ env:
   HF_MODEL_REPO: xieyucheng123/so101-smolvla
   DATASET_REPO: ataghof/so101nexus-cube500-binary
   OBS_BUCKET: so101-sim-pipeline
-  RENAME_MAP: '{"observation.images.cam0": "observation.images.overhead", "observation.images.cam1": "observation.images.wrist"}'
+  RENAME_MAP: '{"observation.images.cam0": "observation.images.camera2", "observation.images.cam1": "observation.images.camera1"}'
 
 jobs:
   start-ecs:
