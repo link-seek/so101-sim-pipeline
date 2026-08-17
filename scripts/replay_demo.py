@@ -76,8 +76,6 @@ def predict_action(policy, preprocess, postprocess, obs, task_description, devic
         frame["observation.images.camera1"] = np.asarray(obs["wrist_camera"], dtype=np.float32)
     if "overhead_camera" in obs:
         frame["observation.images.camera2"] = np.asarray(obs["overhead_camera"], dtype=np.float32)
-    if "wrist_camera" in obs and "overhead_camera" in obs:
-        frame["observation.images.camera3"] = np.asarray(obs["overhead_camera"], dtype=np.float32)
 
     frame = prepare_observation_for_inference(
         frame, device, task=task_description, robot_type=""
