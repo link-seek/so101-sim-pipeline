@@ -166,8 +166,12 @@ def run_replay(env_id, checkpoint, task_description, max_steps, output_path, dev
             "success": is_success,
         })
 
-        if step % 50 == 0:
+        if step % 10 == 0:
+            current_state = obs["state"] if "state" in obs else np.asarray(obs[:6])
             print(f"Step {step}/{max_steps}: reward={reward:.4f}, success={is_success}")
+            print(f"  state(rad): {np.asarray(current_state).round(4)}")
+            print(f"  action(rad): {action_rad.round(4)}")
+            print(f"  action(ds):  {action_ds.round(4)}")
 
         if terminated or truncated:
             print(f"Episode ended at step {step}: terminated={terminated}, truncated={truncated}")
