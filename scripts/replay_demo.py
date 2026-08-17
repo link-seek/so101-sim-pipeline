@@ -140,6 +140,7 @@ def run_replay(env_id, checkpoint, task_description, max_steps, output_path, dev
     print()
 
     for step in range(max_steps):
+        action_ds = None
         if len(action_queue) == 0:
             try:
                 action_chunk_ds = predict_action_chunk(
@@ -153,22 +154,32 @@ def run_replay(env_id, checkpoint, task_description, max_steps, output_path, dev
 
                 if first_action is None:
                     first_action = action_chunk_ds[0].copy()
-                    action_rad = dataset_row_to_sim_qpos(action_chunk_ds[0])
-                    print(f"First action (rad): {action_rad}")
                     print(f"First action (ds):  {action_chunk_ds[0]}")
                     print(f"Chunk shape: {action_chunk_ds.shape}")
             except Exception as e:
                 if prediction_errors == 0:
                     print(f"Step {step}: FIRST prediction error: {e}")
                 prediction_errors += 1
-                action_rad = env.action_space.sample()
-        else:
+                action_queue.clear()
+
+        if len(action_queue) > 0 and action_ds is None:
             try:
                 action_ds = action_queue.popleft()
+            except Exception as e:
+                prediction_errors += 1
+
+        if action_ds is not None:
+            try:
                 action_rad = dataset_row_to_sim_qpos(action_ds)
             except Exception as e:
                 prediction_errors += 1
                 action_rad = env.action_space.sample()
+        else:
+            action_rad = env.action_space.sample()
+
+        if first_action is not None and step == 0:
+            action_rad_check = dataset_row_to_sim_qpos(first_action)
+            print(f"First action (rad): {action_rad_check}")
 
         obs, reward, terminated, truncated, info = env.step(action_rad)
 
