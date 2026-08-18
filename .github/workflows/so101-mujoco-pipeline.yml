@@ -1,0 +1,173 @@
+name: SO101 MuJoCo Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: "Training steps"
+        required: false
+        default: "20000"
+      batch_size:
+        description: "Batch size"
+        required: false
+        default: "32"
+      skip_train:
+        description: "Skip training, only eval"
+        required: false
+        default: "false"
+      checkpoint:
+        description: "Checkpoint path (skip train, use this checkpoint)"
+        required: false
+        default: ""
+      mode:
+        description: "Eval mode: sweep or record"
+        required: false
+        default: "sweep"
+  repository_dispatch:
+    types: [mujoco-trigger]
+
+permissions:
+  contents: write
+  packages: read
+
+env:
+  MUJOCO_IMAGE: swr.cn-north-4.myhuaweicloud.com/link-seek/so101-mujoco:latest
+  ECS_SERVER_ID: 7f39cb83-1a5c-4792-b65e-e578d7ddb88d
+  ECS_REGION: cn-north-4
+  SIM_DATASET: dobri420/pick-cube-so101-sim
+  HF_MODEL_REPO: xieyucheng123/so101-smolvla-sim
+  OBS_BUCKET: so101-sim-pipeline
+
+jobs:
+  start-ecs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Setup hcloud CLI
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+
+      - name: Start ECS
+        env:
+          HCLOUD_AGREE_PRIVACY: "true"
+        run: |
+          echo "y" | hcloud ECS BatchStartServers \
+            --cli-region="${{ env.ECS_REGION }}" \
+            --cli-access-key="${{ secrets.OBS_AK }}" \
+            --cli-secret-key="${{ secrets.OBS_SK }}" \
+            --os-start.servers.1.id="${{ env.ECS_SERVER_ID }}"
+          sleep 120
+
+  mujoco-pipeline:
+    needs: start-ecs
+    runs-on: [self-hosted, Linux, X64, V100]
+    timeout-minutes: 1200
+    steps:
+      - name: Login to SWR
+        run: |
+          LOGIN_KEY=$(printf "${{ secrets.OBS_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.OBS_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
+          docker login -u "cn-north-4@${{ secrets.OBS_AK }}" -p "$LOGIN_KEY" swr.cn-north-4.myhuaweicloud.com
+
+      - name: Pull Docker image
+        run: |
+          docker pull ${{ env.MUJOCO_IMAGE }}
+
+      - name: Download sim twin dataset and base model
+        run: |
+          docker run --rm --gpus all --shm-size=8g \
+            -v /data/datasets:/data/datasets \
+            -e HF_ENDPOINT=https://hf-mirror.com \
+            -e HF_HUB_DISABLE_XET=1 \
+            -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
+            ${{ env.MUJOCO_IMAGE }} \
+            bash -c "
+            python /workspace/scripts/download_sim_dataset.py \
+              --repo ${{ env.SIM_DATASET }} \
+              --output /data/datasets && \
+            python -c \"
+          from huggingface_hub import snapshot_download
+          snapshot_download('lerobot/smolvla_base', endpoint='https://hf-mirror.com')
+          print('SmolVLA base model downloaded')
+          \"
+          "
+
+      - name: Train SmolVLA on sim twin
+        if: github.event.inputs.skip_train != 'true'
+        run: |
+          rm -rf /data/checkpoints/smolvla-sim
+          docker run --rm --gpus all --shm-size=8g \
+            -v /data/checkpoints:/data/checkpoints \
+            -v /data/datasets:/data/datasets \
+            -e HF_ENDPOINT=https://hf-mirror.com \
+            -e HF_HUB_DISABLE_XET=1 \
+            -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
+            -e HF_LEROBOT_HOME=/data/datasets \
+            ${{ env.MUJOCO_IMAGE }} \
+            python /workspace/scripts/train_smolvla_sim.py \
+              --dataset.repo_id=${{ env.SIM_DATASET }} \
+              --dataset.root=/data/datasets \
+              --steps=${{ github.event.inputs.steps || '20000' }} \
+              --batch_size=${{ github.event.inputs.batch_size || '32' }} \
+              --save_freq=5000 \
+              --log_freq=500 \
+              --wandb.enable=false \
+              --policy.push_to_hub=false
+
+      - name: Find latest checkpoint
+        id: checkpoint
+        run: |
+          CKPT=$(ls -d /data/checkpoints/smolvla-sim/checkpoints/*/pretrained_model 2>/dev/null | sort -t/ -k6 -n | tail -1)
+          if [ -z "$CKPT" ]; then
+            CKPT="${{ github.event.inputs.checkpoint }}"
+          fi
+          echo "checkpoint=$CKPT" >> $GITHUB_OUTPUT
+          echo "Using checkpoint: $CKPT"
+
+      - name: MuJoCo eval
+        run: |
+          mkdir -p /data/eval/results
+          docker run --rm --gpus all --shm-size=8g \
+            -v /data:/data \
+            -e MUJOCO_GL=egl \
+            -e HF_ENDPOINT=https://hf-mirror.com \
+            -e HF_HUB_DISABLE_XET=1 \
+            -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
+            ${{ env.MUJOCO_IMAGE }} \
+            python /workspace/scripts/eval_mujoco_policy.py \
+              --checkpoint '${{ steps.checkpoint.outputs.checkpoint }}' \
+              --mode ${{ github.event.inputs.mode || 'sweep' }} \
+              --output /data/eval/results
+
+      - name: Upload to OBS
+        if: always()
+        run: |
+          obsutil cp /data/eval/results/ obs://${{ env.OBS_BUCKET }}/mujoco-eval/ -f -r -flat
+          if [ -d /data/checkpoints/smolvla-sim/checkpoints ]; then
+            obsutil cp /data/checkpoints/smolvla-sim/checkpoints/ obs://${{ env.OBS_BUCKET }}/mujoco-checkpoints/ -f -r -flat
+          fi
+
+  stop-ecs:
+    needs: mujoco-pipeline
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 10
+    steps:
+      - name: Setup hcloud CLI
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+
+      - name: Stop ECS
+        env:
+          HCLOUD_AGREE_PRIVACY: "true"
+        run: |
+          echo "y" | hcloud ECS BatchStopServers \
+            --cli-region="${{ env.ECS_REGION }}" \
+            --cli-access-key="${{ secrets.OBS_AK }}" \
+            --cli-secret-key="${{ secrets.OBS_SK }}" \
+            --os-stop.servers.1.id="${{ env.ECS_SERVER_ID }}"
+          sleep 60
+          exit 0
