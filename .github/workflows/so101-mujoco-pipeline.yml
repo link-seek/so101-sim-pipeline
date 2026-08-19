@@ -93,6 +93,14 @@ jobs:
           \"
           "
 
+      - name: Download checkpoint from OBS
+        if: github.event.inputs.skip_train == 'true'
+        run: |
+          mkdir -p /data/checkpoints/smolvla-sim/checkpoints
+          obsutil cp obs://${{ env.OBS_BUCKET }}/mujoco-checkpoints/ /data/checkpoints/smolvla-sim/checkpoints/ -f -r -flat
+          echo "Downloaded checkpoints:"
+          ls -la /data/checkpoints/smolvla-sim/checkpoints/
+
       - name: Train SmolVLA on sim twin
         if: github.event.inputs.skip_train != 'true'
         run: |
