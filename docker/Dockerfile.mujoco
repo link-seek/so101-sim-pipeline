@@ -34,6 +34,10 @@ RUN pip install --no-cache-dir \
     opencv-python \
     pandas pyarrow Pillow
 
+RUN git config --global http.version HTTP/1.1 && \
+    git clone --depth 1 https://github.com/TheRobotStudio/SO-ARM100.git \
+    /root/.cache/robot_descriptions/SO-ARM100
+
 RUN git clone --depth 1 https://github.com/dyordan1/so101-mujoco.git /workspace/so101-mujoco
 
 ENV MUJOCO_GL=egl
