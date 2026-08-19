@@ -29,6 +29,7 @@ RUN pip install --no-cache-dir \
     vla-eval==0.4.0
 
 RUN pip install --no-cache-dir \
+    mujoco \
     robot_descriptions \
     opencv-python \
     pandas pyarrow Pillow
