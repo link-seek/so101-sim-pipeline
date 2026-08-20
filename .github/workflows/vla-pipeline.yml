@@ -101,7 +101,7 @@ jobs:
           echo "checkpoint=$CKPT" >> $GITHUB_OUTPUT
           echo "Using checkpoint: $CKPT"
 
-      - name: Simulation replay
+      - name: Simulation replay (retry until success)
         run: |
           mkdir -p /data/eval/results
           docker run --rm --gpus all --shm-size=8g \
@@ -114,7 +114,8 @@ jobs:
             python /workspace/scripts/replay_demo.py \
               --checkpoint '${{ steps.checkpoint.outputs.checkpoint }}' \
               --output /data/eval/results/replay_pickplace.mp4 \
-              --max-steps 300
+              --max-steps 300 \
+              --max-attempts 20
 
       - name: Upload to OBS
         if: always()

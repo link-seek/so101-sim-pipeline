@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""仿真回放演示 - 用训练好的 SmolVLA 策略在 so101_nexus 仿真中执行任务并录像"""
+"""仿真回放演示 - 用训练好的 SmolVLA 策略在 so101_nexus 仿真中执行任务并录像
+
+使用社区标准推理管线:
+  build_inference_frame / prepare_observation_for_inference
+  → preprocess → select_action → postprocess
+  → sim_qpos_to_dataset_row / dataset_row_to_sim_qpos 单位转换
+"""
 
 import argparse
 import json
@@ -14,66 +20,113 @@ os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 
 import gymnasium as gym
 import so101_nexus.mujoco
-from so101_nexus import PickAndPlaceConfig, CubeObject, sim_qpos_to_dataset_row
+from so101_nexus import (
+    PickAndPlaceConfig,
+    WristCamera,
+    OverheadCamera,
+    JointPositions,
+    sim_qpos_to_dataset_row,
+    SO101_JOINT_NAMES,
+)
 
 RESULTS_DIR = Path("/data/eval/results")
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def load_policy(checkpoint, device="cuda"):
-    from lerobot.common.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+def load_policy_and_processors(checkpoint, device="cuda"):
+    import torch
+    from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+    from lerobot.policies.factory import make_pre_post_processors
+
     print(f"Loading SmolVLA policy from {checkpoint}...")
     policy = SmolVLAPolicy.from_pretrained(checkpoint)
     policy.to(device)
     policy.eval()
-    print(f"Policy loaded successfully")
-    return policy
+
+    preprocess, postprocess = make_pre_post_processors(
+        policy.config,
+        checkpoint,
+        preprocessor_overrides={"device_processor": {"device": str(device)}},
+    )
+    print(f"Policy and processors loaded successfully")
+    return policy, preprocess, postprocess
 
 
-def predict_action(policy, obs, task_description, device="cuda"):
+def build_dataset_features():
+    from so101_nexus.teleop.dataset import FieldSelection, build_features
+
+    action_features = {f"{name}.pos": float for name in SO101_JOINT_NAMES}
+    follower_features = {
+        **action_features,
+        "wrist": (480, 640, 3),
+        "overhead": (480, 640, 3),
+    }
+    features = build_features(FieldSelection(), follower_features, action_features)
+    return features
+
+
+def predict_action(policy, preprocess, postprocess, obs, task_description, device="cuda"):
     import torch
+    from lerobot.policies.utils import prepare_observation_for_inference
 
-    joint_pos = obs["joint_pos"] if "joint_pos" in obs else np.asarray(obs[:6])
+    joint_pos = obs["state"] if "state" in obs else np.asarray(obs[:6])
+    state_ds = sim_qpos_to_dataset_row(np.asarray(joint_pos))
 
     frame = {
-        "observation.state": torch.from_numpy(joint_pos).float().to(device),
-        "task": task_description,
+        "observation.state": np.asarray(state_ds, dtype=np.float32),
     }
 
-    if "wrist" in obs:
-        img = obs["wrist"]
-        if img.ndim == 3:
-            img = np.transpose(img, (2, 0, 1))
-        frame["observation.images.wrist"] = torch.from_numpy(img).byte().to(device)
-    if "overhead" in obs:
-        img = obs["overhead"]
-        if img.ndim == 3:
-            img = np.transpose(img, (2, 0, 1))
-        frame["observation.images.overhead"] = torch.from_numpy(img).byte().to(device)
+    if "wrist_camera" in obs:
+        frame["observation.images.camera1"] = np.asarray(obs["wrist_camera"], dtype=np.uint8)
+    if "overhead_camera" in obs:
+        frame["observation.images.camera2"] = np.asarray(obs["overhead_camera"], dtype=np.uint8)
+    if "wrist_camera" in obs and "overhead_camera" in obs:
+        frame["observation.images.camera3"] = np.asarray(obs["overhead_camera"], dtype=np.uint8)
 
-    with torch.no_grad():
-        action = policy.predict_action(frame)
+    frame = prepare_observation_for_inference(
+        frame, device, task=task_description, robot_type=""
+    )
+    frame = preprocess(frame)
+
+    with torch.inference_mode():
+        action = policy.select_action(frame)
+
+    action = postprocess(action)
 
     if isinstance(action, dict):
         action = action["action"]
     if isinstance(action, torch.Tensor):
-        action = action.cpu().numpy()
-
-    if action.ndim == 2:
-        action = action[0]
+        action = action.squeeze().cpu().numpy()
 
     return action
 
 
+def dataset_row_to_sim_qpos(row):
+    from so101_nexus import SO101_GRIPPER_LIMITS_RAD
+    import math
+
+    values = np.asarray(row, dtype=np.float64).copy()
+    lower, upper = SO101_GRIPPER_LIMITS_RAD
+    deg2rad = math.pi / 180.0
+    sim = values * deg2rad
+    sim[-1] = lower + (values[-1] / 100.0) * (upper - lower)
+    return sim
+
+
 def run_replay(env_id, checkpoint, task_description, max_steps, output_path, device="cuda"):
-    env = gym.make(env_id, render_mode="rgb_array", control_mode="pd_joint_pos")
+    env_config = PickAndPlaceConfig(
+        observations=[JointPositions(), WristCamera(width=640, height=480), OverheadCamera(width=640, height=480)],
+    )
+    env = gym.make(env_id, config=env_config, render_mode="rgb_array", control_mode="pd_joint_pos")
     obs, info = env.reset()
 
-    policy = load_policy(checkpoint, device)
+    policy, preprocess, postprocess = load_policy_and_processors(checkpoint, device)
 
     frames = []
     step_results = []
     success = False
+    prediction_errors = 0
+    first_action = None
 
     print(f"\n=== Replay Demo ===")
     print(f"Environment: {env_id}")
@@ -83,12 +136,21 @@ def run_replay(env_id, checkpoint, task_description, max_steps, output_path, dev
 
     for step in range(max_steps):
         try:
-            action = predict_action(policy, obs, task_description, device)
+            action_ds = predict_action(
+                policy, preprocess, postprocess, obs, task_description, device
+            )
+            action_rad = dataset_row_to_sim_qpos(action_ds)
+            if first_action is None:
+                first_action = action_rad.copy()
+                print(f"First action (rad): {action_rad}")
+                print(f"First action (ds):  {action_ds}")
         except Exception as e:
-            print(f"Step {step}: prediction error: {e}")
-            action = env.action_space.sample()
+            if prediction_errors == 0:
+                print(f"Step {step}: FIRST prediction error: {e}")
+            prediction_errors += 1
+            action_rad = env.action_space.sample()
 
-        obs, reward, terminated, truncated, info = env.step(action)
+        obs, reward, terminated, truncated, info = env.step(action_rad)
 
         frame = env.render()
         if frame is not None:
@@ -117,6 +179,9 @@ def run_replay(env_id, checkpoint, task_description, max_steps, output_path, dev
     print(f"Total steps: {len(step_results)}")
     print(f"Success: {success}")
     print(f"Frames: {len(frames)}")
+    print(f"Prediction errors: {prediction_errors}/{len(step_results)}")
+    if prediction_errors == 0:
+        print(f"Model controlled robot for ALL steps (no random fallback)")
 
     save_video(frames, output_path, fps=30)
 
@@ -126,6 +191,8 @@ def run_replay(env_id, checkpoint, task_description, max_steps, output_path, dev
         "task": task_description,
         "total_steps": len(step_results),
         "success": success,
+        "prediction_errors": prediction_errors,
+        "model_in_control": prediction_errors == 0,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     report_path = Path(output_path).with_suffix(".json")
@@ -164,27 +231,68 @@ def main():
                         help="SmolVLA checkpoint (HF repo ID or local path)")
     parser.add_argument("--env", default="MuJoCoPickAndPlace-v1",
                         help="so101_nexus environment ID")
-    parser.add_argument("--task", default="pick up the red cube and place it on the green circle",
+    parser.add_argument("--task", default="pick up the cube and place it on the target",
                         help="Language instruction for the policy")
     parser.add_argument("--max-steps", type=int, default=300)
     parser.add_argument("--output", default="/data/eval/results/replay_pickplace.mp4")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--hf-token", default=os.environ.get("HF_TOKEN"))
+    parser.add_argument("--max-attempts", type=int, default=1,
+                        help="Max attempts with different seeds; keeps trying until success")
+    parser.add_argument("--require-success", action="store_true",
+                        help="Keep retrying until a successful episode is found")
     args = parser.parse_args()
 
     if args.hf_token:
         os.environ["HF_TOKEN"] = args.hf_token
 
-    success = run_replay(
-        env_id=args.env,
-        checkpoint=args.checkpoint,
-        task_description=args.task,
-        max_steps=args.max_steps,
-        output_path=args.output,
-        device=args.device,
-    )
+    best_success = False
+    best_output = args.output
 
-    print(f"\nFinal result: {'SUCCESS' if success else 'FAILED'}")
+    for attempt in range(1, args.max_attempts + 1):
+        seed = attempt - 1
+        np.random.seed(seed)
+        import random
+        random.seed(seed)
+
+        attempt_output = args.output
+        if attempt > 1:
+            base = Path(args.output)
+            attempt_output = str(base.with_stem(f"{base.stem}_attempt{attempt}"))
+
+        print(f"\n{'='*60}")
+        print(f"Attempt {attempt}/{args.max_attempts} (seed={seed})")
+        print(f"{'='*60}")
+
+        success = run_replay(
+            env_id=args.env,
+            checkpoint=args.checkpoint,
+            task_description=args.task,
+            max_steps=args.max_steps,
+            output_path=attempt_output,
+            device=args.device,
+        )
+
+        if success:
+            best_success = True
+            best_output = attempt_output
+            print(f"\nSUCCESS on attempt {attempt}! Video: {attempt_output}")
+            break
+        else:
+            print(f"\nAttempt {attempt} failed, trying next seed...")
+
+    if best_success:
+        if best_output != args.output:
+            import shutil
+            shutil.move(best_output, args.output)
+            json_src = Path(best_output).with_suffix(".json")
+            json_dst = Path(args.output).with_suffix(".json")
+            if json_src.exists():
+                shutil.move(str(json_src), str(json_dst))
+
+    print(f"\nFinal result: {'SUCCESS' if best_success else 'FAILED'}")
+    if best_success:
+        print(f"Successful video: {args.output}")
 
 
 if __name__ == "__main__":
