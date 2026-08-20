@@ -60,9 +60,6 @@ jobs:
     runs-on: [self-hosted, Linux, X64, V100]
     timeout-minutes: 1200
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Login to SWR
         run: |
           LOGIN_KEY=$(printf "${{ secrets.OBS_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.OBS_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
