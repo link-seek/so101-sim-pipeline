@@ -113,7 +113,7 @@ jobs:
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_HUB_DISABLE_XET=1 \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
-            ${{ env.EVAL_IMAGE }} \
+            swr.cn-north-4.myhuaweicloud.com/link-seek/so101-mujoco:latest \
             python /workspace/scripts/eval_mujoco_policy.py \
               --checkpoint '${{ steps.checkpoint.outputs.checkpoint }}' \
               --mode record \
