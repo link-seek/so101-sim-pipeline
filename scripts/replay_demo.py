@@ -113,12 +113,12 @@ def dataset_row_to_sim_qpos(row):
     return sim
 
 
-def run_replay(env_id, checkpoint, task_description, max_steps, output_path, device="cuda"):
+def run_replay(env_id, checkpoint, task_description, max_steps, output_path, device="cuda", seed=None):
     env_config = PickAndPlaceConfig(
         observations=[JointPositions(), WristCamera(width=640, height=480), OverheadCamera(width=640, height=480)],
     )
     env = gym.make(env_id, config=env_config, render_mode="rgb_array", control_mode="pd_joint_pos")
-    obs, info = env.reset()
+    obs, info = env.reset(seed=seed)
 
     policy, preprocess, postprocess = load_policy_and_processors(checkpoint, device)
 
@@ -271,6 +271,7 @@ def main():
             max_steps=args.max_steps,
             output_path=attempt_output,
             device=args.device,
+            seed=seed,
         )
 
         if success:
