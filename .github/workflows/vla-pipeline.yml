@@ -104,7 +104,7 @@ jobs:
           echo "checkpoint=$CKPT" >> $GITHUB_OUTPUT
           echo "Using checkpoint: $CKPT"
 
-      - name: Simulation replay (retry until success)
+      - name: Simulation replay (record successful episodes)
         run: |
           mkdir -p /data/eval/results
           docker run --rm --gpus all --shm-size=8g \
@@ -114,12 +114,12 @@ jobs:
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_HUB_DISABLE_XET=1 \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
-            ${{ env.TRAIN_IMAGE }} \
-            python /workspace/scripts/replay_demo.py \
+            ${{ env.EVAL_IMAGE }} \
+            python /workspace/scripts/eval_mujoco_policy.py \
               --checkpoint '${{ steps.checkpoint.outputs.checkpoint }}' \
-              --output /data/eval/results/replay_pickplace.mp4 \
-              --max-steps 300 \
-              --max-attempts 20
+              --mode record \
+              --seconds 20 \
+              --output /data/eval/results
 
       - name: Upload to OBS
         if: always()
