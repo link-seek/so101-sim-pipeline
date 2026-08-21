@@ -235,7 +235,18 @@ def evaluate(checkpoint_path, env_config, eval_config):
     }
 ```
 
-### 3.3 两种评估策略
+### 3.3 开源评测框架
+
+我们的评测站在社区框架肩膀上：
+
+| 框架 | 用途 | 我们的使用方式 |
+|------|------|---------------|
+| **[Gymnasium](https://gymnasium.farama.org/)** | 环境 API 标准 | 所有 eval 脚本底层 (`env.step()`, `info["success"]`) |
+| **[LeRobot `lerobot-eval`](https://github.com/huggingface/lerobot)** | VLA 通用评测 | `replay_demo.py` 用其推理管线 (`select_action`, `preprocess/postprocess`) |
+| **[LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO)** (2.2k stars) | VLA 标准 benchmark | `eval_vla.py` 通过 vla-eval harness 运行 10 任务 × 50 episodes |
+| **[CleanRL](https://github.com/vwxyzjn/cleanrl)** | RL 评测范式 | `eval_ppo.py` 遵循其确定性评估模式 (固定 seed + `actor_mean`) |
+
+### 3.4 两种评估策略
 
 | | 确定性评估 (PPO) | Grid Sweep (VLA) |
 |--|------------------|-------------------|
@@ -243,9 +254,11 @@ def evaluate(checkpoint_path, env_config, eval_config):
 | **覆盖范围** | 随机采样 | 系统扫描工作空间 |
 | **结果** | 单个 success_rate | 热力图 (成功率 vs 位置) |
 | **适用场景** | 策略稳定, 泛化好 | 策略不稳定, 需找盲区 |
+| **统计显著性** | 100% 时 SE=0, 50 ep 足够 | 47% 时 95% CI ±5.5%, 可接受 |
 | **耗时** | ~14s | ~30min |
+| **范式来源** | CleanRL 确定性评估 | 社区 sim twin (dyordan1/so101-mujoco) |
 
-Grid Sweep 的价值在于能发现**训练数据的覆盖盲区**——中心区域 60-100% 但边缘 ~0%，这是单一指标看不出来的。（详见 Ch6 评测方法论）
+Grid Sweep 的价值在于能发现**训练数据的覆盖盲区**——中心区域 60-100% 但边缘 ~0%，这是单一指标看不出来的。LIBERO benchmark 则测试**跨任务泛化**（不同物体/目标/语言），两者互补。（详见 Ch6 评测方法论）
 
 ---
 
