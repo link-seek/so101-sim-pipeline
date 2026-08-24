@@ -46,27 +46,33 @@ def register_so101():
     print(f"ALL_GRIPPERS: {suite.ALL_GRIPPERS}")
 
     import robosuite.robots as robots_pkg
-    print(f"robots_pkg attrs: {[a for a in dir(robots_pkg) if not a.startswith('_')]}")
-
     if hasattr(robots_pkg, "ROBOT_CLASS_MAPPING"):
-        print(f"ROBOT_CLASS_MAPPING keys: {list(robots_pkg.ROBOT_CLASS_MAPPING.keys())}")
         panda_class = robots_pkg.ROBOT_CLASS_MAPPING.get("Panda")
-        print(f"Panda class type: {panda_class}")
         robots_pkg.ROBOT_CLASS_MAPPING["MountedSO101"] = panda_class
         print(f"Added MountedSO101 -> {panda_class} to ROBOT_CLASS_MAPPING")
-    else:
-        print("ROBOT_CLASS_MAPPING not found!")
 
     import robosuite.models.robots as robots_mod
     import robosuite.models.grippers as grippers_mod
     robots_mod.MountedSO101 = MountedSO101
     grippers_mod.SO101Gripper = SO101Gripper
 
-    try:
-        from robosuite.models.robots.robot_model import REGISTERED_ROBOTS
-        print(f"REGISTERED_ROBOTS: {list(REGISTERED_ROBOTS.keys())}")
-    except ImportError:
-        pass
+    from robosuite.utils.mjcf_utils import find_elements
+    import robosuite.utils.mjcf_utils as mjcf_utils
+    _orig_find = mjcf_utils.find_elements
+    _find_debug = {"called": False}
+    def _patched_find(root, tags, attribs=None, return_first=True):
+        result = _orig_find(root, tags, attribs=attribs, return_first=return_first)
+        if not _find_debug["called"] and tags == "body" and attribs and "name" in attribs:
+            _find_debug["called"] = True
+            all_names = [b.get('name') for b in root.iter('body')]
+            print(f"  find_elements: looking for {tags} name={attribs.get('name')}")
+            print(f"  available body names: {all_names}")
+            print(f"  result: {result}")
+        return result
+    mjcf_utils.find_elements = _patched_find
+    import robosuite.models.robots.manipulators.manipulator_model as mm
+    mm.find_elements = _patched_find
+
     print("SO101 registration complete")
 
 
