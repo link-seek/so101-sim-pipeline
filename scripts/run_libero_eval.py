@@ -52,8 +52,8 @@ def register_so101():
         print(f"ROBOT_CLASS_MAPPING keys: {list(robots_pkg.ROBOT_CLASS_MAPPING.keys())}")
         panda_class = robots_pkg.ROBOT_CLASS_MAPPING.get("Panda")
         print(f"Panda class type: {panda_class}")
-        robots_pkg.ROBOT_CLASS_MAPPING["SO101"] = panda_class
-        print(f"Added SO101 -> {panda_class} to ROBOT_CLASS_MAPPING")
+        robots_pkg.ROBOT_CLASS_MAPPING["MountedSO101"] = panda_class
+        print(f"Added MountedSO101 -> {panda_class} to ROBOT_CLASS_MAPPING")
     else:
         print("ROBOT_CLASS_MAPPING not found!")
 
