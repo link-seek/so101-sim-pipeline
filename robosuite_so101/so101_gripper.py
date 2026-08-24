@@ -1,11 +1,9 @@
 import numpy as np
-from robosuite.models.grippers import register_gripper
 from robosuite.models.grippers.gripper_model import GripperModel
 
 from robosuite.utils.mjcf_utils import xml_path_completion
 
 
-@register_gripper
 class SO101Gripper(GripperModel):
     """SO101 parallel jaw gripper.
 

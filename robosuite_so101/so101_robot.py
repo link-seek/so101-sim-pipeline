@@ -1,11 +1,9 @@
 import numpy as np
 from robosuite.models.robots.manipulators.manipulator_model import ManipulatorModel
-from robosuite.robots import register_robot_class
 
 from robosuite.utils.mjcf_utils import xml_path_completion
 
 
-@register_robot_class("FixedBaseRobot")
 class MountedSO101(ManipulatorModel):
     """SO-ARM101: 5-DoF low-cost robotic arm by TheRobotCompany.
 
