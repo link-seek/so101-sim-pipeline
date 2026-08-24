@@ -174,7 +174,7 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
             env = OffScreenRenderEnv(
                 bddl_file_name=bddl_file,
                 robots=["SO101"],
-                controller="JOINT_POS",
+                controller="JOINT_POSITION",
                 gripper_types="SO101Gripper",
                 camera_heights=128,
                 camera_widths=128,
