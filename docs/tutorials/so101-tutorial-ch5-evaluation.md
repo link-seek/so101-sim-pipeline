@@ -1,6 +1,6 @@
-# Ch6：仿真评测方法论
+# Ch5：仿真评测方法论
 
-> SO101 仿真评测教程 · 第六章  
+> SO101 仿真评测教程 · 第五章  
 > 实战项目：[link-seek/so101-sim-pipeline](https://github.com/link-seek/so101-sim-pipeline)  
 > 参考框架：[Gymnasium](https://gymnasium.farama.org/) · [LeRobot `lerobot-eval`](https://github.com/huggingface/lerobot) · [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) · [LIBERO-PRO](https://github.com/sylvestf/LIBERO-plus)
 
@@ -520,4 +520,4 @@ LeRobot `lerobot-eval` 默认 `seed=1000`，我们的 `eval_ppo.py` 用 `seed=12
 
 ---
 
-> **上一章**：[Ch5 Debug 实战](so101-tutorial-ch4-debug-journey.md) | **下一章**：[Ch7 优化进阶](so101-tutorial-ch6-optimization.md)
+> **上一章**：[Ch4 Debug 实战](so101-tutorial-ch4-debug-journey.md) | **下一章**：[Ch6 优化进阶](so101-tutorial-ch6-optimization.md)
