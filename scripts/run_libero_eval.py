@@ -52,7 +52,7 @@ def register_so101():
         FixedBaseRobot = robots_pkg.ROBOT_CLASS_MAPPING.get("Panda")
 
     if hasattr(robots_pkg, "ROBOT_CLASS_MAPPING"):
-        robots_pkg.ROBOT_CLASS_MAPPING["MountedSO101"] = FixedBaseRobot
+        robots_pkg.ROBOT_CLASS_MAPPING["SO101"] = FixedBaseRobot
         print(f"Added to ROBOT_CLASS_MAPPING: {robots_pkg.ROBOT_CLASS_MAPPING.get('MountedSO101')}")
     elif hasattr(robots_pkg, "register_robot_class"):
         robots_pkg.register_robot_class("FixedBaseRobot")(MountedSO101)
@@ -180,7 +180,7 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
         try:
             env = OffScreenRenderEnv(
                 bddl_file_name=bddl_file,
-                robots=["MountedSO101"],
+                robots=["SO101"],
                 controller="JOINT_POSITION",
                 camera_heights=128,
                 camera_widths=128,
