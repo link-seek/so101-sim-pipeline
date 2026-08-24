@@ -41,8 +41,11 @@ RUN pip install --no-cache-dir \
     robosuite \
     robot_descriptions
 
-RUN pip install --no-cache-dir \
-    libero || echo "WARN: libero install failed, egl_probe issue"
+RUN pip install --no-cache-dir --no-deps libero \
+    && pip install --no-cache-dir \
+    gymnasium hydra-core termcolor wandb \
+    iopath robosuite-models \
+    || echo "WARN: some libero deps failed"
 
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
