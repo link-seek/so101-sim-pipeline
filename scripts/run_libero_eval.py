@@ -187,7 +187,9 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
             env.seed(0)
             init_states = task_suite.get_task_init_states(task_id)
         except Exception as e:
+            import traceback
             print(f"    ERROR creating env: {e}")
+            traceback.print_exc()
             for ep_idx in range(episodes_per_task):
                 results.append({
                     "suite": suite_name, "task": task_name, "task_idx": task_id,
