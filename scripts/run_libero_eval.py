@@ -10,86 +10,206 @@ import sys
 import time
 from pathlib import Path
 
+os.environ.setdefault("MUJOCO_GL", "egl")
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+
 import numpy as np
 
 sys.path.insert(0, "/workspace/robosuite_so101")
 
 
-def scale_bddl_files(benchmarks, output_dir):
-    """Scale BDDL files for SO101 workspace."""
-    from scale_bddl import scale_suite
-    import libero
+def register_so101():
+    """Register SO101 robot and gripper in robosuite."""
+    from robosuite.robots import register_robot_class
+    from robosuite.models.robots import Panda
+    from so101_robot import MountedSO101
+    from so101_gripper import SO101Gripper
 
-    bddl_root = Path(libero.__file__).parent / "bddl_files"
-    output_root = Path(output_dir) / "bddl_files_so101"
-    for suite_name in benchmarks:
-        scale_suite(str(bddl_root / suite_name), str(output_root / suite_name))
-    return output_root
+    import robosuite as suite
+    from robosuite.models.grippers import GripperModel
+
+    suite.ALL_ROBOTS["SO101"] = MountedSO101
+    suite.ALL_GRIPPERS["SO101Gripper"] = SO101Gripper
+    print(f"Registered SO101 robot. Available robots: {suite.ALL_ROBOTS.keys()}")
+    print(f"Registered SO101Gripper. Available grippers: {suite.ALL_GRIPPERS.keys()}")
 
 
-def load_policy(checkpoint_path):
+def load_policy(checkpoint_path, device="cuda"):
     """Load SmolVLA policy from checkpoint."""
+    import torch
     from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
     from lerobot.policies.factory import make_pre_post_processors
 
+    print(f"Loading SmolVLA policy from {checkpoint_path}...")
     policy = SmolVLAPolicy.from_pretrained(checkpoint_path)
+    policy.to(device)
+    policy.eval()
+
     preprocess, postprocess = make_pre_post_processors(
-        policy.config, checkpoint_path
+        policy.config,
+        checkpoint_path,
+        preprocessor_overrides={"device_processor": {"device": str(device)}},
     )
+    print(f"Policy loaded: {type(policy).__name__}")
     return policy, preprocess, postprocess
 
 
-def run_libero_suite(suite_name, policy, preprocess, postprocess,
-                     episodes_per_task, bddl_dir, output_dir):
-    """Run evaluation on a single LIBERO suite."""
-    import libero
-    from libero import get_suite
+def libero_obs_to_policy_obs(obs, task_description, device="cuda"):
+    """Convert LIBERO observation to SmolVLA policy input format."""
+    import torch
+    from lerobot.policies.utils import prepare_observation_for_inference
 
-    suite = get_suite(suite_name)
+    state = obs.get("robot0_joint_pos", np.zeros(6, dtype=np.float32))
+    state = np.asarray(state, dtype=np.float32)
+    if len(state) > 6:
+        state = state[:6]
+    elif len(state) < 6:
+        state = np.pad(state, (0, 6 - len(state)))
+
+    frame = {
+        "observation.state": state,
+    }
+
+    if "robot0_eye_in_hand_image" in obs:
+        frame["observation.images.camera1"] = np.asarray(
+            obs["robot0_eye_in_hand_image"], dtype=np.uint8
+        )
+    if "agentview_image" in obs:
+        frame["observation.images.camera2"] = np.asarray(
+            obs["agentview_image"], dtype=np.uint8
+        )
+    if "robot0_eye_in_hand_image" in obs and "agentview_image" in obs:
+        frame["observation.images.camera3"] = np.asarray(
+            obs["agentview_image"], dtype=np.uint8
+        )
+
+    frame = prepare_observation_for_inference(
+        frame, device, task=task_description, robot_type=""
+    )
+    return frame
+
+
+def predict_action(policy, preprocess, postprocess, obs, task_description, device="cuda"):
+    """Run policy inference and return action numpy array."""
+    import torch
+
+    frame = libero_obs_to_policy_obs(obs, task_description, device)
+    frame = preprocess(frame)
+
+    with torch.inference_mode():
+        action = policy.select_action(frame)
+
+    action = postprocess(action)
+    if isinstance(action, dict):
+        action = action["action"]
+    if isinstance(action, torch.Tensor):
+        action = action.squeeze().cpu().numpy()
+
+    return np.asarray(action, dtype=np.float32)
+
+
+def run_libero_suite(suite_name, policy, preprocess, postprocess,
+                     episodes_per_task, output_dir, device="cuda"):
+    """Run evaluation on a single LIBERO suite."""
+    from libero.libero import benchmark, get_libero_path
+    from libero.libero.envs import OffScreenRenderEnv
+
+    benchmark_dict = benchmark.get_benchmark_dict()
+    if suite_name not in benchmark_dict:
+        print(f"  ERROR: suite '{suite_name}' not in {list(benchmark_dict.keys())}")
+        return []
+
+    task_suite = benchmark_dict[suite_name]()
+    num_tasks = task_suite.n_tasks
+    bddl_root = get_libero_path("bddl_files")
+
+    max_steps = {
+        "libero_spatial": 220,
+        "libero_object": 280,
+        "libero_goal": 300,
+        "libero_10": 520,
+        "libero_90": 400,
+    }.get(suite_name, 300)
+
     results = []
 
-    for task_idx, task in enumerate(suite):
-        task_name = task.name if hasattr(task, "name") else f"task_{task_idx}"
-        print(f"  Task {task_idx}: {task_name}")
+    for task_id in range(num_tasks):
+        task = task_suite.get_task(task_id)
+        task_name = task.name
+        task_desc = task.language
+        bddl_file = os.path.join(bddl_root, task.problem_folder, task.bddl_file)
+        print(f"  Task {task_id}: {task_name} ({task_desc})")
 
-        for ep_idx in range(episodes_per_task):
+        try:
+            env = OffScreenRenderEnv(
+                bddl_file_name=bddl_file,
+                robots=["SO101"],
+                controller="JOINT_POS",
+                gripper_types="SO101Gripper",
+                camera_heights=128,
+                camera_widths=128,
+            )
+            env.seed(0)
+            init_states = task_suite.get_task_init_states(task_id)
+        except Exception as e:
+            print(f"    ERROR creating env: {e}")
+            for ep_idx in range(episodes_per_task):
+                results.append({
+                    "suite": suite_name, "task": task_name, "task_idx": task_id,
+                    "episode": ep_idx, "success": False, "reward": 0.0,
+                    "steps": 0, "error": str(e),
+                })
+            continue
+
+        for ep_idx in range(min(episodes_per_task, len(init_states))):
             try:
-                env = task.get_env()
-                obs = env.reset()
+                env.reset()
+                obs = env.set_init_state(init_states[ep_idx])
+
                 done = False
                 success = False
                 total_reward = 0.0
                 steps = 0
+                num_steps_wait = 10
 
-                while not done and steps < 300:
-                    action = policy.select_action(obs)
+                while not done and steps < max_steps + num_steps_wait:
+                    if steps < num_steps_wait:
+                        action = np.zeros(6, dtype=np.float32)
+                        obs, reward, done, info = env.step(action)
+                        steps += 1
+                        continue
+
+                    action = predict_action(
+                        policy, preprocess, postprocess, obs, task_desc, device
+                    )
+                    if len(action) < 6:
+                        action = np.pad(action, (0, 6 - len(action)))
+                    elif len(action) > 6:
+                        action = action[:6]
+
                     obs, reward, done, info = env.step(action)
                     total_reward += reward
-                    success = success or info.get("success", False)
+                    success = success or env.check_success()
                     steps += 1
 
                 results.append({
-                    "suite": suite_name,
-                    "task": task_name,
-                    "task_idx": task_idx,
-                    "episode": ep_idx,
-                    "success": success,
-                    "reward": total_reward,
-                    "steps": steps,
+                    "suite": suite_name, "task": task_name, "task_idx": task_id,
+                    "episode": ep_idx, "success": bool(success),
+                    "reward": float(total_reward), "steps": steps,
                 })
                 print(f"    ep {ep_idx}: success={success}, reward={total_reward:.3f}, steps={steps}")
             except Exception as e:
                 print(f"    ep {ep_idx}: ERROR {e}")
                 results.append({
-                    "suite": suite_name,
-                    "task": str(task_idx),
-                    "task_idx": task_idx,
-                    "episode": ep_idx,
-                    "success": False,
-                    "reward": 0.0,
-                    "steps": 0,
-                    "error": str(e),
+                    "suite": suite_name, "task": task_name, "task_idx": task_id,
+                    "episode": ep_idx, "success": False, "reward": 0.0,
+                    "steps": 0, "error": str(e),
                 })
+
+        try:
+            env.close()
+        except Exception:
+            pass
 
     return results
 
@@ -110,12 +230,11 @@ def main():
     print(f"Benchmarks: {benchmarks}")
     print(f"Episodes per task: {args.episodes_per_task}")
 
-    print("\n--- Scaling BDDL files for SO101 ---")
-    bddl_dir = scale_bddl_files(benchmarks, args.output_dir)
+    print("\n--- Registering SO101 ---")
+    register_so101()
 
     print("\n--- Loading policy ---")
     policy, preprocess, postprocess = load_policy(args.checkpoint)
-    print(f"Policy loaded: {type(policy).__name__}")
 
     all_results = []
     start_time = time.time()
@@ -124,7 +243,7 @@ def main():
         print(f"\n--- Running {suite_name} ---")
         results = run_libero_suite(
             suite_name, policy, preprocess, postprocess,
-            args.episodes_per_task, bddl_dir, args.output_dir,
+            args.episodes_per_task, args.output_dir,
         )
         all_results.extend(results)
 
