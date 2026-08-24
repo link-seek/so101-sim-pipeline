@@ -20,18 +20,31 @@ sys.path.insert(0, "/workspace/robosuite_so101")
 
 def register_so101():
     """Register SO101 robot and gripper in robosuite."""
-    from robosuite.robots import register_robot_class
-    from robosuite.models.robots import Panda
+    import robosuite as suite
     from so101_robot import MountedSO101
     from so101_gripper import SO101Gripper
 
-    import robosuite as suite
-    from robosuite.models.grippers import GripperModel
+    print(f"robosuite version: {suite.__version__}")
+    print(f"ALL_ROBOTS type: {type(suite.ALL_ROBOTS)}, value: {suite.ALL_ROBOTS}")
+    print(f"ALL_GRIPPERS type: {type(suite.ALL_GRIPPERS)}, value: {suite.ALL_GRIPPERS}")
 
-    suite.ALL_ROBOTS["SO101"] = MountedSO101
-    suite.ALL_GRIPPERS["SO101Gripper"] = SO101Gripper
-    print(f"Registered SO101 robot. Available robots: {suite.ALL_ROBOTS.keys()}")
-    print(f"Registered SO101Gripper. Available grippers: {suite.ALL_GRIPPERS.keys()}")
+    if isinstance(suite.ALL_ROBOTS, dict):
+        suite.ALL_ROBOTS["SO101"] = MountedSO101
+    elif isinstance(suite.ALL_ROBOTS, (set, list)):
+        suite.ALL_ROBOTS.add("SO101") if isinstance(suite.ALL_ROBOTS, set) else suite.ALL_ROBOTS.append("SO101")
+    print(f"After register, ALL_ROBOTS: {suite.ALL_ROBOTS}")
+
+    if isinstance(suite.ALL_GRIPPERS, dict):
+        suite.ALL_GRIPPERS["SO101Gripper"] = SO101Gripper
+    elif isinstance(suite.ALL_GRIPPERS, (set, list)):
+        suite.ALL_GRIPPERS.add("SO101Gripper") if isinstance(suite.ALL_GRIPPERS, set) else suite.ALL_GRIPPERS.append("SO101Gripper")
+    print(f"After register, ALL_GRIPPERS: {suite.ALL_GRIPPERS}")
+
+    import robosuite.models.robots as robots_mod
+    import robosuite.models.grippers as grippers_mod
+    robots_mod.SO101 = MountedSO101
+    grippers_mod.SO101Gripper = SO101Gripper
+    print("SO101 class added to robosuite.models.robots and grippers modules")
 
 
 def load_policy(checkpoint_path, device="cuda"):
