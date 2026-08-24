@@ -18,6 +18,23 @@ import numpy as np
 sys.path.insert(0, "/workspace/robosuite_so101")
 
 
+def setup_libero_config():
+    """Pre-create LIBERO config to avoid interactive prompt."""
+    import libero
+    libero_root = Path(libero.__file__).parent / "libero"
+    config_dir = Path.home() / ".libero"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_file = config_dir / "config.yaml"
+    if not config_file.exists():
+        config_content = f"""benchmark_root: {libero_root}
+init_states: {libero_root / "init_files"}
+datasets: {libero_root.parent / "datasets"}
+bddl_files: {libero_root / "bddl_files"}
+"""
+        config_file.write_text(config_content)
+        print(f"Created LIBERO config at {config_file}")
+
+
 def register_so101():
     """Register SO101 robot and gripper in robosuite."""
     import robosuite as suite
@@ -245,6 +262,9 @@ def main():
 
     print("\n--- Registering SO101 ---")
     register_so101()
+
+    print("\n--- Setting up LIBERO config ---")
+    setup_libero_config()
 
     print("\n--- Loading policy ---")
     policy, preprocess, postprocess = load_policy(args.checkpoint)
