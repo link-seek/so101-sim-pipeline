@@ -228,6 +228,25 @@ benchmarks:
 
 **关键区别**：LIBERO 评测的是**跨任务泛化能力**，grid sweep 评测的是**单任务工作空间覆盖**。两者互补。
 
+### 4.4 当前状态：已设计，未实战
+
+> **结论**：我们的 LIBERO 评测管线已完整设计并实现代码（`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` Docker 镜像），但**尚未实际运行过**（`evaluate.yml` 0 次执行）。
+>
+> **根本障碍**是模型-环境不兼容——我们的 SmolVLA 在 SO101 数据上训练，无法直接控制 LIBERO 的 Franka Panda 机器人（关节定义、观测空间、动作语义都不匹配）。LIBERO 只支持 Franka，社区无人做过 LIBERO + SO101 集成。SO-101 Bench 虽匹配 SO101 但需要 Isaac Lab（RTX GPU），V100 跑不了。
+>
+> **当前可行路径**：MuJoCo Grid Sweep 是 V100 上唯一可行的标准化评测路径（已完成，47%）。LIBERO 评测的落地方案（在 LIBERO 数据上训练新 SmolVLA → 复用 `eval_vla.py` 评测）详见 [Discussion #9](https://github.com/link-seek/so101-sim-pipeline/discussions/9) 和 [Ch6 落地 LIBERO 评测实战](so101-tutorial-ch6-optimization.md)。
+
+**实际评测进展**（截至 2026-08-20）：
+
+| 评测方法 | 状态 | 结果 |
+|----------|------|------|
+| 回放验证（replay_demo.py） | ✅ 已执行 | 方案 A 失败，方案 B 成功 |
+| Grid Sweep（eval_mujoco_policy.py） | ✅ 已执行 | 153/325 = 47% |
+| PPO 确定性评估（eval_ppo.py） | ✅ 已执行 | v1: 100%, v2: 98% |
+| **LIBERO（eval_vla.py）** | **⬜ 已设计未执行** | **详见 [Discussion #9](https://github.com/link-seek/so101-sim-pipeline/discussions/9)** |
+| **LIBERO-PRO** | **⬜ 已设计未执行** | **同上** |
+| **SO-101 Bench (Isaac Lab)** | **⬜ 硬件不支持** | **V100 无法运行** |
+
 ---
 
 ## 5. 评测方法论：从理论到实践
@@ -380,8 +399,9 @@ plt.show()
 | 用途 | 快速 smoke test | 单任务正式评估 | 跨任务泛化评估 |
 | 时机 | 每次训练后 | 关键 checkpoint | 里程碑节点 |
 | 框架 | LeRobot 推理管线 | so101-mujoco | vla-eval harness |
+| **我们是否跑过** | ✅ 已执行 | ✅ 已执行 | ⬜ 已设计未执行 |
 
-回放是"快速 smoke test"，Grid Sweep 是"单任务考试"，LIBERO 是"毕业考试"。
+回放是"快速 smoke test"，Grid Sweep 是"单任务考试"，LIBERO 是"毕业考试"（已设计好考场但还没开考，详见 [Discussion #9](https://github.com/link-seek/so101-sim-pipeline/discussions/9) 和 [Ch6](so101-tutorial-ch6-optimization.md)）。
 
 ### 7.2 回放流程（遵循 LeRobot 推理管线）
 
