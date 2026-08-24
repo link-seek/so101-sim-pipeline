@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
     git wget curl build-essential \
-    libegl1 libgles2 libgl1-mesa-glx \
+    libegl1 libegl-dev libgles2 libgl1-mesa-glx libgl1-mesa-dev \
     && add-apt-repository ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends \
     python3.12 python3.12-venv python3.12-dev \
@@ -35,6 +35,15 @@ RUN pip install --no-cache-dir \
     mujoco==3.3.2 \
     opencv-python
 
+RUN pip install --no-cache-dir \
+    "cmake<4" \
+    && pip install --no-cache-dir \
+    robosuite \
+    robot_descriptions
+
+RUN pip install --no-cache-dir \
+    libero || echo "WARN: libero install failed, egl_probe issue"
+
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
@@ -42,5 +51,6 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
 WORKDIR /workspace
 COPY scripts/ /workspace/scripts/
 COPY configs/ /workspace/configs/
+COPY robosuite_so101/ /workspace/robosuite_so101/
 
 CMD ["python", "/workspace/scripts/eval_vla.py"]

@@ -72,37 +72,11 @@ jobs:
             -e HF_HUB_DISABLE_XET=1 \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
             ${{ env.EVAL_IMAGE }} \
-            bash -c '
-              pip install robosuite libero 2>/dev/null
-              python3 -c "
-              import sys
-              sys.path.insert(0, \"/workspace/scripts\")
-
-              # Step 1: Register SO101 robot
-              from robosuite_so101 import MountedSO101, SO101Gripper
-              import robosuite as suite
-
-              # Step 2: Scale BDDL files for SO101 workspace
-              from scale_bddl import scale_suite
-              import libero
-              from pathlib import Path
-              bddl_root = Path(libero.__file__).parent / \"bddl_files\"
-              output_root = Path(\"/data/eval/bddl_files_so101\")
-              for suite_name in [\"${{ inputs.benchmarks }}\".split(\",\")]:
-                  scale_suite(str(bddl_root / suite_name), str(output_root / suite_name))
-
-              # Step 3: Run evaluation
-              from eval_vla import run_evaluation
-              results = run_evaluation(
-                  checkpoint=\"${{ inputs.checkpoint }}\",
-                  benchmarks=\"${{ inputs.benchmarks }}\".split(\",\"),
-                  episodes_per_task=${{ inputs.episodes_per_task }},
-                  robot=\"SO101\",
-                  output_dir=\"/data/eval/libero_results\"
-              )
-              print(f\"Evaluation complete: {results}\")
-              "
-            '
+            python /workspace/scripts/run_libero_eval.py \
+              --checkpoint '${{ inputs.checkpoint }}' \
+              --benchmarks '${{ inputs.benchmarks }}' \
+              --episodes_per_task ${{ inputs.episodes_per_task }} \
+              --output_dir /data/eval/libero_results
 
       - name: Upload to OBS
         run: |
