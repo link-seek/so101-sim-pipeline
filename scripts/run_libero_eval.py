@@ -42,26 +42,28 @@ def register_so101():
     from so101_gripper import SO101Gripper
 
     print(f"robosuite version: {suite.__version__}")
-    print(f"ALL_ROBOTS type: {type(suite.ALL_ROBOTS)}, value: {suite.ALL_ROBOTS}")
-    print(f"ALL_GRIPPERS type: {type(suite.ALL_GRIPPERS)}, value: {suite.ALL_GRIPPERS}")
+    print(f"ALL_ROBOTS: {suite.ALL_ROBOTS}")
+    print(f"ALL_GRIPPERS: {suite.ALL_GRIPPERS}")
 
-    if isinstance(suite.ALL_ROBOTS, dict):
-        suite.ALL_ROBOTS["SO101"] = MountedSO101
-    elif isinstance(suite.ALL_ROBOTS, (set, list)):
-        suite.ALL_ROBOTS.add("SO101") if isinstance(suite.ALL_ROBOTS, set) else suite.ALL_ROBOTS.append("SO101")
-    print(f"After register, ALL_ROBOTS: {suite.ALL_ROBOTS}")
-
-    if isinstance(suite.ALL_GRIPPERS, dict):
-        suite.ALL_GRIPPERS["SO101Gripper"] = SO101Gripper
-    elif isinstance(suite.ALL_GRIPPERS, (set, list)):
-        suite.ALL_GRIPPERS.add("SO101Gripper") if isinstance(suite.ALL_GRIPPERS, set) else suite.ALL_GRIPPERS.append("SO101Gripper")
-    print(f"After register, ALL_GRIPPERS: {suite.ALL_GRIPPERS}")
+    import robosuite.robots as robots_pkg
+    if hasattr(robots_pkg, "ROBOT_CLASS_MAPPING"):
+        robots_pkg.ROBOT_CLASS_MAPPING["MountedSO101"] = robots_pkg.FixedBaseRobot
+        print(f"Added to ROBOT_CLASS_MAPPING: {robots_pkg.ROBOT_CLASS_MAPPING.get('MountedSO101')}")
+    elif hasattr(robots_pkg, "register_robot_class"):
+        robots_pkg.register_robot_class("FixedBaseRobot")(MountedSO101)
+        print("Used register_robot_class decorator")
 
     import robosuite.models.robots as robots_mod
     import robosuite.models.grippers as grippers_mod
-    robots_mod.SO101 = MountedSO101
+    robots_mod.MountedSO101 = MountedSO101
     grippers_mod.SO101Gripper = SO101Gripper
-    print("SO101 class added to robosuite.models.robots and grippers modules")
+
+    try:
+        from robosuite.models.robots.robot_model import REGISTERED_ROBOTS
+        print(f"REGISTERED_ROBOTS: {list(REGISTERED_ROBOTS.keys())}")
+    except ImportError:
+        pass
+    print("SO101 registration complete")
 
 
 def load_policy(checkpoint_path, device="cuda"):
@@ -173,7 +175,7 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
         try:
             env = OffScreenRenderEnv(
                 bddl_file_name=bddl_file,
-                robots=["Panda"],
+                robots=["MountedSO101"],
                 controller="JOINT_POSITION",
                 camera_heights=128,
                 camera_widths=128,
