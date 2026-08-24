@@ -46,17 +46,16 @@ def register_so101():
     print(f"ALL_GRIPPERS: {suite.ALL_GRIPPERS}")
 
     import robosuite.robots as robots_pkg
-    try:
-        from robosuite.robots.fixed_base_robot import FixedBaseRobot
-    except ImportError:
-        FixedBaseRobot = robots_pkg.ROBOT_CLASS_MAPPING.get("Panda")
+    print(f"robots_pkg attrs: {[a for a in dir(robots_pkg) if not a.startswith('_')]}")
 
     if hasattr(robots_pkg, "ROBOT_CLASS_MAPPING"):
-        robots_pkg.ROBOT_CLASS_MAPPING["SO101"] = FixedBaseRobot
-        print(f"Added to ROBOT_CLASS_MAPPING: {robots_pkg.ROBOT_CLASS_MAPPING.get('MountedSO101')}")
-    elif hasattr(robots_pkg, "register_robot_class"):
-        robots_pkg.register_robot_class("FixedBaseRobot")(MountedSO101)
-        print("Used register_robot_class decorator")
+        print(f"ROBOT_CLASS_MAPPING keys: {list(robots_pkg.ROBOT_CLASS_MAPPING.keys())}")
+        panda_class = robots_pkg.ROBOT_CLASS_MAPPING.get("Panda")
+        print(f"Panda class type: {panda_class}")
+        robots_pkg.ROBOT_CLASS_MAPPING["SO101"] = panda_class
+        print(f"Added SO101 -> {panda_class} to ROBOT_CLASS_MAPPING")
+    else:
+        print("ROBOT_CLASS_MAPPING not found!")
 
     import robosuite.models.robots as robots_mod
     import robosuite.models.grippers as grippers_mod
