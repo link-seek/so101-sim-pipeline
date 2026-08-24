@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--steps", type=int, default=20000)
     parser.add_argument("--save_freq", type=int, default=5000)
-    parser.add_argument("--eval_freq", type=int, default=2000)
+    parser.add_argument("--env_eval_freq", type=int, default=2000)
     parser.add_argument("--log_freq", type=int, default=500)
     parser.add_argument("--output_dir", default="/data/checkpoints/smolvla")
     parser.add_argument("--job_name", default="smolvla-pickplace-20k")
@@ -29,6 +29,8 @@ def main():
                         dest="push_to_hub", help="Push to HF Hub")
     parser.add_argument("--wandb.enable", default="true", dest="wandb_enable")
     parser.add_argument("--wandb.project", default="so101-smolvla", dest="wandb_project")
+    parser.add_argument("--rename_map", default=None,
+                        help='Camera rename map JSON, e.g. {"observation.images.side":"observation.images.camera1"}')
     parser.add_argument("--hf_token", default=os.environ.get("HF_TOKEN"))
     args = parser.parse_args()
 
@@ -45,13 +47,16 @@ def main():
         f"--batch_size={args.batch_size}",
         f"--steps={args.steps}",
         f"--save_freq={args.save_freq}",
-        f"--eval_freq={args.eval_freq}",
+        f"--env_eval_freq={args.env_eval_freq}",
         f"--log_freq={args.log_freq}",
         f"--output_dir={args.output_dir}",
         f"--job_name={args.job_name}",
         f"--wandb.enable={args.wandb_enable}",
         f"--wandb.project={args.wandb_project}",
     ]
+
+    if args.rename_map:
+        cmd.append(f"--rename_map={args.rename_map}")
 
     print(f"=== SmolVLA Training ===")
     print(f"Policy: {args.policy_path}")
