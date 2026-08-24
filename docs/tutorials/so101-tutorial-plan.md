@@ -12,24 +12,23 @@
 
 ---
 
-## 整体结构（7 章 + 序章 + 附录）
+## 整体结构（6 章 + 序章 + 附录）
 
 ```
-序章 → Ch1 技术框架 → Ch2 基础设施 → Ch3 PPO Baseline → Ch4 VLA 入门 → Ch5 Debug 实战 → Ch6 评测方法论 → Ch7 优化进阶 → 附录
+序章 → Ch1 基础设施 → Ch2 PPO Baseline → Ch3 VLA 入门 → Ch4 Debug 实战 → Ch5 评测方法论 → Ch6 优化进阶 → 附录
 ```
 
 每章遵循：**概念（10%）→ 实战代码（60%）→ 踩坑复盘（20%）→ 思考题（10%）**
 
-> **文件名映射**（因新增 Ch1，文件名与章节号错位）:
+> **文件名映射**:
 > | 章节号 | 文件名 |
 > |--------|--------|
-> | Ch1 技术框架 | `so101-tutorial-ch1-framework.md` |
-> | Ch2 基础设施 | `so101-tutorial-ch1-infrastructure.md` |
-> | Ch3 PPO | `so101-tutorial-ch2-ppo-baseline.md` |
-> | Ch4 VLA | `so101-tutorial-ch3-vla-intro.md` |
-> | Ch5 Debug | `so101-tutorial-ch4-debug-journey.md` |
-> | Ch6 评测 | `so101-tutorial-ch5-evaluation.md` |
-> | Ch7 优化 | `so101-tutorial-ch6-optimization.md` |
+> | Ch1 基础设施 | `so101-tutorial-ch1-infrastructure.md` |
+> | Ch2 PPO | `so101-tutorial-ch2-ppo-baseline.md` |
+> | Ch3 VLA | `so101-tutorial-ch3-vla-intro.md` |
+> | Ch4 Debug | `so101-tutorial-ch4-debug-journey.md` |
+> | Ch5 评测 | `so101-tutorial-ch5-evaluation.md` |
+> | Ch6 优化 | `so101-tutorial-ch6-optimization.md` |
 
 ---
 
@@ -39,7 +38,8 @@
 - 真机训练的成本与危险（硬件损耗、采集耗时、安全围栏）
 - 仿真的优势：可复现、低成本、并行加速
 - 核心矛盾：**Sim-to-Real Gap** — 仿真训练 ≠ 真机可用
-- 两条路线：纯仿真验证（PPO）vs Sim-to-Sim 验证（VLA）
+- **仿真环境基础**：MuJoCo 物理引擎、观测/动作空间、Reward、Episode
+- 两条路线：纯仿真验证（PPO / RL）vs Sim-to-Sim 验证（VLA / BC），两种范式对比
 - SO101 项目背景：LeRobot 生态、so101_nexus、SmolVLA
 
 ### 实战
@@ -51,31 +51,17 @@
 
 ---
 
-## Ch1：仿真与评测技术框架 — 理解你运行的每一行代码
-
-> **新增章节**：在动手搭建之前，先建立完整的知识框架
-
-### 内容
-- 仿真环境基础：MuJoCo 物理引擎、观测/动作空间、Reward、Episode
-- 两种学习范式：RL（自探索）vs BC（模仿演示），为什么两种都用了
-- 策略评估基础：训练指标 vs 评估指标、确定性评估 vs Grid Sweep
-- 系统架构全景图：控制层 / 计算层 / 存储层 / 数据层
-- 数据流：数据集 → 训练 → checkpoint → 评估 → 归档
-- 8 个 Workflow + 5 个 Docker 镜像的职责矩阵
-- **流水线详解**：逐步拆解点击 Run 之后每一步在做什么
-- 5 个关键设计决策的 Why（GitHub Actions / Docker / self-hosted / 分镜像 / OBS）
-
-### 产出
-- 学员点击 "Run workflow" 时，清楚知道系统在做什么、为什么
-
----
-
-## Ch2：搭建仿真训练基础设施
+## Ch1：搭建仿真训练基础设施
 
 ### 概念
 - GitHub Actions + Self-hosted Runner + 云 GPU ECS 的工作模式
 - Docker 镜像隔离训练环境的意义
 - 为什么选 V100（sm_70）+ CUDA 12.6 + MuJoCo
+- **系统架构全景图**：控制层 / 计算层 / 存储层 / 数据层
+- **数据流**：数据集 → 训练 → checkpoint → 评估 → 归档
+- **8 个 Workflow + 5 个 Docker 镜像的职责矩阵**
+- **流水线详解**：逐步拆解点击 Run 之后每一步在做什么
+- **5 个关键设计决策的 Why**（GitHub Actions / Docker / self-hosted / 分镜像 / OBS）
 
 ### 实战
 1. **ECS 生命周期管理**：`start-ecs` → `stop-ecs`，hcloud CLI 控制华为云服务器
@@ -97,7 +83,7 @@
 
 ---
 
-## Ch3：PPO 纯仿真 Baseline（最简路径，100% 成功）
+## Ch2：PPO 纯仿真 Baseline（最简路径，100% 成功）
 
 ### 概念
 - PPO 算法简介：Actor-Critic + Clipped Surrogate Objective
@@ -124,7 +110,7 @@
 
 ---
 
-## Ch4：SmolVLA 仿真训练入门（VLA 路线）
+## Ch3：SmolVLA 仿真训练入门（VLA 路线）
 
 ### 概念
 - VLA（Vision-Language-Action）模型：图像 + 语言 → 动作
@@ -153,7 +139,7 @@
 
 ---
 
-## Ch5：Debug 实战 — 从 0% 到 47% 的完整调试旅程
+## Ch4：Debug 实战 — 从 0% 到 47% 的完整调试旅程
 
 > 这是教程的核心章节，用 Discussion #4 的 8 条评论作为时间线
 
@@ -205,7 +191,7 @@
 
 ---
 
-## Ch6：仿真评测方法论
+## Ch5：仿真评测方法论
 
 ### 概念
 - 为什么不能只看 training loss（loss 低 ≠ 性能好）
@@ -235,7 +221,7 @@
 
 ---
 
-## Ch7：优化进阶与社区生态
+## Ch6：优化进阶与社区生态
 
 ### 概念
 - BC 的上限：演示数据质量决定性能天花板
@@ -312,9 +298,9 @@ gh api repos/link-seek/so101-sim-pipeline/actions/runners
 | **交互式** | 用 Jupyter Notebook 嵌入训练曲线和回放视频 |
 
 ### 推荐发布顺序
-1. **序章 + Ch1**（技术框架）→ 建立知识框架，理解全局
-2. **Ch2**（基础设施）→ 动手搭建 ECS + Docker + Runner
-3. **Ch3**（PPO 100%）→ 快速成就感，建立信心
-4. **Ch4 + Ch5**（VLA Debug 旅程）→ 核心价值，最硬核内容
-5. **Ch6**（评测方法论）→ 方法论提升
-6. **Ch7**（优化进阶）→ 展望未来，引导社区参与
+1. **序章**（含仿真环境基础 + RL vs BC）→ 建立知识框架，理解全局
+2. **Ch1**（基础设施 + 流水线详解）→ 动手搭建 ECS + Docker + Runner
+3. **Ch2**（PPO 100%）→ 快速成就感，建立信心
+4. **Ch3 + Ch4**（VLA Debug 旅程）→ 核心价值，最硬核内容
+5. **Ch5**（评测方法论）→ 方法论提升
+6. **Ch6**（优化进阶）→ 展望未来，引导社区参与
