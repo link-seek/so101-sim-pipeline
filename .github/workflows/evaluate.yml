@@ -58,6 +58,9 @@ jobs:
           LOGIN_KEY=$(printf "${{ secrets.OBS_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.OBS_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
           docker login -u "cn-north-4@${{ secrets.OBS_AK }}" -p "$LOGIN_KEY" swr.cn-north-4.myhuaweicloud.com
 
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Setup evaluation
         run: |
           mkdir -p /data/eval/libero_results
@@ -67,6 +70,8 @@ jobs:
         run: |
           docker run --rm --gpus all --shm-size=8g \
             -v /data:/data \
+            -v $(pwd)/scripts:/workspace/scripts \
+            -v $(pwd)/robosuite_so101:/workspace/robosuite_so101 \
             -e MUJOCO_GL=egl \
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_HUB_DISABLE_XET=1 \
