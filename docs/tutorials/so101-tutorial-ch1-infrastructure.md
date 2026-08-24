@@ -55,13 +55,12 @@
   checkpoint + eval_result + eval_video ──→ OBS (长期存储)
 ```
 
-### 1.2 8 个 Workflow 职责矩阵
+### 1.2 7 个 Workflow 职责矩阵
 
 | Workflow | 触发方式 | 做什么 | 用哪个镜像 |
 |----------|---------|--------|-----------|
 | `ci.yml` | push/PR | 代码检查 + 格式化 | 无 (ubuntu-latest) |
 | `docker-build.yml` | push to main | 构建 5 个 Docker 镜像 | 无 (docker buildx) |
-| `download-driver.yml` | 手动 | 下载 GPU 驱动到 ECS | 无 |
 | `train.yml` | 手动 | 通用训练入口 | so101-train |
 | `evaluate.yml` | 手动 | 通用评估入口 | so101-eval |
 | `ppo-pipeline.yml` | 手动 | **PPO 完整流水线** | so101-ppo |

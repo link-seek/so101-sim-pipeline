@@ -59,7 +59,7 @@
 - 为什么选 V100（sm_70）+ CUDA 12.6 + MuJoCo
 - **系统架构全景图**：控制层 / 计算层 / 存储层 / 数据层
 - **数据流**：数据集 → 训练 → checkpoint → 评估 → 归档
-- **8 个 Workflow + 5 个 Docker 镜像的职责矩阵**
+- **7 个 Workflow + 5 个 Docker 镜像的职责矩阵**
 - **流水线详解**：逐步拆解点击 Run 之后每一步在做什么
 - **5 个关键设计决策的 Why**（GitHub Actions / Docker / self-hosted / 分镜像 / OBS）
 
