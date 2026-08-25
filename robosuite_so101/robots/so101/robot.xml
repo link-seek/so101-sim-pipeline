@@ -3,7 +3,7 @@
 <!-- Based on robot_descriptions.so_arm101_mj_description (Apache 2.0) -->
 <!-- Adapted from onshape-to-robot MJCF to RoboSuite format -->
 <mujoco model="so101">
-  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <compiler angle="radian" meshdir="." autolimits="true"/>
   <visual>
     <global ellipsoidinertia="true"/>
   </visual>
