@@ -87,13 +87,14 @@ def register_so101():
         self._arms_joints = []
     ManipulatorModel.__init__ = _patched_mm_init
 
-    import robosuite.models.grippers.gripper_factory as gf
-    _orig_gf = gf.gripper_factory
+    import importlib
+    gf_mod = importlib.import_module("robosuite.models.grippers.gripper_factory")
+    _orig_gf = gf_mod.gripper_factory
     def _patched_gf(name, *args, **kwargs):
         if isinstance(name, dict):
             name = name.get("right", name.get("left", "PandaGripper"))
         return _orig_gf(name, *args, **kwargs)
-    gf.gripper_factory = _patched_gf
+    gf_mod.gripper_factory = _patched_gf
     import robosuite.robots.single_arm as sa
     sa.gripper_factory = _patched_gf
 
