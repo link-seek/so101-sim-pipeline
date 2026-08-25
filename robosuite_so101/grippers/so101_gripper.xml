@@ -39,6 +39,6 @@
     <torque name="torque_ee" site="ft_frame"/>
   </sensor>
   <actuator>
-    <motor name="right_gripper_motor" joint="right_gripper_joint" ctrlrange="-3.35 3.35" ctrllimited="true"/>
+    <position name="right_gripper_motor" joint="right_gripper_joint" ctrlrange="-0.1745 1.7453" ctrllimited="true" kp="100" forcelimited="true" forcerange="-3.35 3.35"/>
   </actuator>
 </mujoco>
