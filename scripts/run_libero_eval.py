@@ -36,7 +36,7 @@ bddl_files: {libero_root / "bddl_files"}
 
 
 def register_so101():
-    """Register SO101 robot and gripper in robosuite."""
+    """Register SO101 robot and gripper in robosuite 1.5."""
     import robosuite as suite
     from so101_robot import MountedSO101
     from so101_gripper import SO101Gripper
@@ -45,11 +45,10 @@ def register_so101():
     print(f"ALL_ROBOTS: {suite.ALL_ROBOTS}")
     print(f"ALL_GRIPPERS: {suite.ALL_GRIPPERS}")
 
+    from robosuite.robots.fixed_base_robot import FixedBaseRobot
     import robosuite.robots as robots_pkg
-    if hasattr(robots_pkg, "ROBOT_CLASS_MAPPING"):
-        panda_class = robots_pkg.ROBOT_CLASS_MAPPING.get("Panda")
-        robots_pkg.ROBOT_CLASS_MAPPING["MountedSO101"] = panda_class
-        print(f"Added MountedSO101 -> {panda_class} to ROBOT_CLASS_MAPPING")
+    robots_pkg.ROBOT_CLASS_MAPPING["MountedSO101"] = FixedBaseRobot
+    print(f"Added MountedSO101 -> FixedBaseRobot to ROBOT_CLASS_MAPPING")
 
     import robosuite.models.robots as robots_mod
     import robosuite.models.grippers as grippers_mod
@@ -57,48 +56,6 @@ def register_so101():
     grippers_mod.SO101Gripper = SO101Gripper
     grippers_mod.GRIPPER_MAPPING["SO101Gripper"] = SO101Gripper
     print(f"Registered SO101Gripper in GRIPPER_MAPPING: {list(grippers_mod.GRIPPER_MAPPING.keys())}")
-
-    import inspect
-    from robosuite.models.robots.manipulators.manipulator_model import ManipulatorModel
-    from robosuite.utils.mjcf_utils import find_elements, string_to_array
-    from collections import OrderedDict
-
-    _orig_mm_init = ManipulatorModel.__init__
-    def _patched_mm_init(self, fname, idn=0):
-        super(ManipulatorModel, self).__init__(fname, idn=idn)
-        self.grippers = OrderedDict()
-        if self.arm_type == "single":
-            eef = self.eef_name["right"] if isinstance(self.eef_name, dict) else self.eef_name
-            hand_element = find_elements(root=self.root, tags="body", attribs={"name": eef}, return_first=True)
-            self.hand_rotation_offset = string_to_array(hand_element.get("quat", "1 0 0 0"))[[1, 2, 3, 0]]
-        else:
-            self.hand_rotation_offset = {}
-            for arm in ("right", "left"):
-                hand_element = find_elements(root=self.root, tags="body", attribs={"name": self.eef_name[arm]}, return_first=True)
-                self.hand_rotation_offset[arm] = string_to_array(hand_element.get("quat", "1 0 0 0"))[[1, 2, 3, 0]]
-        self.cameras = self.get_element_names(self.worldbody, "camera")
-        self._base_actuators = []
-        self._torso_actuators = []
-        self._head_actuators = []
-        self._legs_actuators = []
-        self._arms_actuators = []
-        self._base_joints = []
-        self._torso_joints = []
-        self._head_joints = []
-        self._legs_joints = []
-        self._arms_joints = []
-    ManipulatorModel.__init__ = _patched_mm_init
-
-    import importlib
-    gf_mod = importlib.import_module("robosuite.models.grippers.gripper_factory")
-    _orig_gf = gf_mod.gripper_factory
-    def _patched_gf(name, *args, **kwargs):
-        if isinstance(name, dict):
-            name = name.get("right", name.get("left", "PandaGripper"))
-        return _orig_gf(name, *args, **kwargs)
-    gf_mod.gripper_factory = _patched_gf
-    import robosuite.robots.single_arm as sa
-    sa.gripper_factory = _patched_gf
 
     print("SO101 registration complete")
 
@@ -213,7 +170,7 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
             env = OffScreenRenderEnv(
                 bddl_file_name=bddl_file,
                 robots=["SO101"],
-                controller="JOINT_POSITION",
+                controller="BASIC",
                 camera_heights=128,
                 camera_widths=128,
             )

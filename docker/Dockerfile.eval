@@ -32,18 +32,19 @@ RUN pip install --no-cache-dir \
 
 RUN pip install --no-cache-dir \
     vla-eval==0.4.0 \
-    mujoco==3.3.2 \
     opencv-python
 
 RUN pip install --no-cache-dir \
     "cmake==3.31.6" \
     && pip install --no-cache-dir \
-    robosuite \
+    "robosuite==1.5.2" \
     robot_descriptions
 
 ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
-RUN pip install --no-cache-dir --no-build-isolation egl_probe hf-egl-probe \
-    && pip install --no-cache-dir libero
+RUN pip install --no-cache-dir --no-build-isolation egl_probe hf-egl-probe
+
+RUN pip install --no-cache-dir \
+    "git+https://github.com/Lifelong-Robot-Learning/LIBERO.git@X-embodiment"
 
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
@@ -63,9 +64,9 @@ RUN ROBOSUITE_ASSETS=$(python -c "import robosuite; import os; print(os.path.joi
     cp /workspace/robosuite_so101/grippers/so101_gripper.xml $ROBOSUITE_ASSETS/grippers/ && \
     cp -r /workspace/robosuite_so101/grippers/meshes/* $ROBOSUITE_ASSETS/grippers/so101_gripper_meshes/
 
-# Install SO101 controller config
-RUN ROBOSUITE_CTRL=$(python -c "import robosuite; import os; print(os.path.join(os.path.dirname(robosuite.__file__), 'controllers', 'configs', 'robot'))") && \
-    mkdir -p $ROBOSUITE_CTRL/so101 && \
-    python -c "import json; json.dump({'type': 'JOINT_POSITION', 'input_max': 1.0, 'input_min': -1.0, 'output_max': 0.5, 'output_min': -0.5, 'kp': 50.0, 'damping': 1.0, 'velocity_limits': [-1.0, 1.0], 'ramp_ratio': 0.2, 'interpolation': 'linear'}, open('$ROBOSUITE_CTRL/so101/default_so101.json', 'w'))"
+# Install SO101 controller config (v1.5 composite controller format)
+RUN ROBOSUITE_CTRL=$(python -c "import robosuite; import os; print(os.path.join(os.path.dirname(robosuite.__file__), 'controllers', 'configs', 'robots'))") && \
+    mkdir -p $ROBOSUITE_CTRL && \
+    python -c "import json; json.dump({'arm': {'type': 'JOINT_POSITION', 'input_max': 1.0, 'input_min': -1.0, 'output_max': 0.5, 'output_min': -0.5, 'kp': 50.0, 'damping': 1.0, 'velocity_limits': [-1.0, 1.0], 'ramp_ratio': 0.2, 'interpolation': 'linear'}, 'gripper': {'type': 'POSITION', 'input_max': 1.0, 'input_min': -1.0, 'output_max': 0.1, 'output_min': -0.1, 'kp': 50.0, 'damping': 1.0, 'velocity_limits': [-1.0, 1.0]}}, open('$ROBOSUITE_CTRL/default_so101.json', 'w'))"
 
 CMD ["python", "/workspace/scripts/eval_vla.py"]
