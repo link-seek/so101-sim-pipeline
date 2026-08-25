@@ -52,10 +52,12 @@ def register_so101():
 
     import robosuite.models.robots as robots_mod
     import robosuite.models.grippers as grippers_mod
+    from robosuite.models.robots.robot_model import REGISTERED_ROBOTS
     robots_mod.MountedSO101 = MountedSO101
+    REGISTERED_ROBOTS["SO101"] = MountedSO101
     grippers_mod.SO101Gripper = SO101Gripper
     grippers_mod.GRIPPER_MAPPING["SO101Gripper"] = SO101Gripper
-    print(f"Registered SO101Gripper in GRIPPER_MAPPING: {list(grippers_mod.GRIPPER_MAPPING.keys())}")
+    print(f"Registered SO101 in REGISTERED_ROBOTS and GRIPPER_MAPPING")
 
     print("SO101 registration complete")
 
