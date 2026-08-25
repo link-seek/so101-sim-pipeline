@@ -43,7 +43,9 @@ RUN pip install --no-cache-dir \
 ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
 RUN pip install --no-cache-dir --no-build-isolation egl_probe hf-egl-probe
 
-RUN git clone --depth 1 --branch X-embodiment https://github.com/Lifelong-Robot-Learning/LIBERO.git /tmp/libero && \
+RUN pip install --no-cache-dir \
+    "bddl==1.0.1" easydict cloudpickle "gym==0.25.2" num2words && \
+    git clone --depth 1 --branch X-embodiment https://github.com/Lifelong-Robot-Learning/LIBERO.git /tmp/libero && \
     touch /tmp/libero/libero/__init__.py && \
     pip install --no-cache-dir -e /tmp/libero && \
     rm -rf /tmp/libero/.git
