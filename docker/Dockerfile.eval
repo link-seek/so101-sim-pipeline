@@ -67,7 +67,7 @@ RUN ROBOSUITE_ASSETS=$(python -c "import robosuite; import os; print(os.path.joi
     cp /workspace/robosuite_so101/robots/so101/robot.xml $ROBOSUITE_ASSETS/robots/so101/ && \
     cp -r /workspace/robosuite_so101/robots/so101/meshes/* $ROBOSUITE_ASSETS/robots/so101/ && \
     cp /workspace/robosuite_so101/grippers/so101_gripper.xml $ROBOSUITE_ASSETS/grippers/ && \
-    cp -r /workspace/robosuite_so101/grippers/meshes/* $ROBOSUITE_ASSETS/grippers/so101_gripper_meshes/
+    cp -r /workspace/robosuite_so101/grippers/meshes/* $ROBOSUITE_ASSETS/grippers/
 
 # Install SO101 controller config (v1.5 composite controller format)
 RUN ROBOSUITE_CTRL=$(python -c "import robosuite; import os; print(os.path.join(os.path.dirname(robosuite.__file__), 'controllers', 'configs', 'robots'))") && \
