@@ -61,6 +61,14 @@ def register_so101():
 
     print("SO101 registration complete")
 
+    import sys
+    rm = MountedSO101()
+    print(f"DEBUG joints: {rm.joints}", flush=True)
+    print(f"DEBUG arm_joints: {rm.arm_joints}", flush=True)
+    print(f"DEBUG actuators: {rm.actuators}", flush=True)
+    print(f"DEBUG arm_actuators: {rm.arm_actuators}", flush=True)
+    sys.stdout.flush()
+
 
 def load_policy(checkpoint_path, device="cuda"):
     """Load SmolVLA policy from checkpoint."""
