@@ -58,24 +58,33 @@ def register_so101():
 
     import inspect
     from robosuite.models.robots.manipulators.manipulator_model import ManipulatorModel
-    print(f"=== ManipulatorModel source (first 60 lines) ===")
-    src = inspect.getsource(ManipulatorModel.__init__)
-    for i, line in enumerate(src.split('\n')[:60]):
-        print(f"  {i+1}: {line}")
-    print(f"=== end source ===")
+    from robosuite.utils.mjcf_utils import find_elements, string_to_array
+    from collections import OrderedDict
 
     _orig_mm_init = ManipulatorModel.__init__
     def _patched_mm_init(self, fname, idn=0):
-        try:
-            _orig_mm_init(self, fname, idn=idn)
-        except AttributeError as e:
-            all_names = [b.get('name') for b in self.root.iter('body')]
-            print(f"MM INIT ERROR: {e}")
-            print(f"  fname: {fname}")
-            print(f"  eef_name: {self.eef_name if hasattr(self, 'eef_name') else 'N/A'}")
-            print(f"  _eef_name: {self._eef_name if hasattr(self, '_eef_name') else 'N/A'}")
-            print(f"  all body names: {all_names}")
-            raise
+        super(ManipulatorModel, self).__init__(fname, idn=idn)
+        self.grippers = OrderedDict()
+        if self.arm_type == "single":
+            eef = self.eef_name["right"] if isinstance(self.eef_name, dict) else self.eef_name
+            hand_element = find_elements(root=self.root, tags="body", attribs={"name": eef}, return_first=True)
+            self.hand_rotation_offset = string_to_array(hand_element.get("quat", "1 0 0 0"))[[1, 2, 3, 0]]
+        else:
+            self.hand_rotation_offset = {}
+            for arm in ("right", "left"):
+                hand_element = find_elements(root=self.root, tags="body", attribs={"name": self.eef_name[arm]}, return_first=True)
+                self.hand_rotation_offset[arm] = string_to_array(hand_element.get("quat", "1 0 0 0"))[[1, 2, 3, 0]]
+        self.cameras = self.get_element_names(self.worldbody, "camera")
+        self._base_actuators = []
+        self._torso_actuators = []
+        self._head_actuators = []
+        self._legs_actuators = []
+        self._arms_actuators = []
+        self._base_joints = []
+        self._torso_joints = []
+        self._head_joints = []
+        self._legs_joints = []
+        self._arms_joints = []
     ManipulatorModel.__init__ = _patched_mm_init
 
     print("SO101 registration complete")
