@@ -182,6 +182,19 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
             import traceback
             print(f"    ERROR creating env: {e}")
             traceback.print_exc()
+            try:
+                import mujoco
+                from robosuite.robots import REGISTERED_ROBOTS
+                robot_cls = REGISTERED_ROBOTS["SO101"]
+                robot_model = robot_cls.robot_model
+                print(f"    DEBUG: robot_model.joints = {robot_model.joints}")
+                print(f"    DEBUG: arm_joints = {robot_model.arm_joints}")
+                print(f"    DEBUG: all joints in XML:")
+                from robosuite.utils import XMLEditor
+                for j in robot_model.worldbody.find_all("joint"):
+                    print(f"      joint name={j.get('name')} type={j.get('type')}")
+            except Exception as e2:
+                print(f"    DEBUG failed: {e2}")
             for ep_idx in range(episodes_per_task):
                 results.append({
                     "suite": suite_name, "task": task_name, "task_idx": task_id,
