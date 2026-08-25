@@ -56,7 +56,14 @@ def register_so101():
     robots_mod.MountedSO101 = MountedSO101
     grippers_mod.SO101Gripper = SO101Gripper
 
+    import inspect
     from robosuite.models.robots.manipulators.manipulator_model import ManipulatorModel
+    print(f"=== ManipulatorModel source (first 60 lines) ===")
+    src = inspect.getsource(ManipulatorModel.__init__)
+    for i, line in enumerate(src.split('\n')[:60]):
+        print(f"  {i+1}: {line}")
+    print(f"=== end source ===")
+
     _orig_mm_init = ManipulatorModel.__init__
     def _patched_mm_init(self, fname, idn=0):
         try:
