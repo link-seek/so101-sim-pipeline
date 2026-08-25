@@ -32,6 +32,10 @@ class MountedSO101(ManipulatorModel):
         return "RethinkMount"
 
     @property
+    def default_mount(self):
+        return "RethinkMount"
+
+    @property
     def default_gripper(self):
         return {"right": "SO101Gripper"}
 
