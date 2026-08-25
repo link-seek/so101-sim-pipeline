@@ -56,22 +56,20 @@ def register_so101():
     robots_mod.MountedSO101 = MountedSO101
     grippers_mod.SO101Gripper = SO101Gripper
 
-    from robosuite.utils.mjcf_utils import find_elements
-    import robosuite.utils.mjcf_utils as mjcf_utils
-    _orig_find = mjcf_utils.find_elements
-    _find_debug = {"called": False}
-    def _patched_find(root, tags, attribs=None, return_first=True):
-        result = _orig_find(root, tags, attribs=attribs, return_first=return_first)
-        if not _find_debug["called"] and tags == "body" and attribs and "name" in attribs:
-            _find_debug["called"] = True
-            all_names = [b.get('name') for b in root.iter('body')]
-            print(f"  find_elements: looking for {tags} name={attribs.get('name')}")
-            print(f"  available body names: {all_names}")
-            print(f"  result: {result}")
-        return result
-    mjcf_utils.find_elements = _patched_find
-    import robosuite.models.robots.manipulators.manipulator_model as mm
-    mm.find_elements = _patched_find
+    from robosuite.models.robots.manipulators.manipulator_model import ManipulatorModel
+    _orig_mm_init = ManipulatorModel.__init__
+    def _patched_mm_init(self, fname, idn=0):
+        try:
+            _orig_mm_init(self, fname, idn=idn)
+        except AttributeError as e:
+            all_names = [b.get('name') for b in self.root.iter('body')]
+            print(f"MM INIT ERROR: {e}")
+            print(f"  fname: {fname}")
+            print(f"  eef_name: {self.eef_name if hasattr(self, 'eef_name') else 'N/A'}")
+            print(f"  _eef_name: {self._eef_name if hasattr(self, '_eef_name') else 'N/A'}")
+            print(f"  all body names: {all_names}")
+            raise
+    ManipulatorModel.__init__ = _patched_mm_init
 
     print("SO101 registration complete")
 
