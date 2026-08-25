@@ -7,11 +7,6 @@
   <visual>
     <global ellipsoidinertia="true"/>
   </visual>
-  <default>
-    <default class="so101">
-      <joint damping="0.60" frictionloss="0.052" armature="0.028"/>
-    </default>
-  </default>
   <asset>
     <material name="arm_white" rgba="0.964706 0.964706 0.952941 1"/>
     <material name="arm_gray" rgba="0.627451 0.627451 0.627451 1"/>
@@ -39,7 +34,7 @@
       <site name="right_center" pos="0.020791 0.0157608 0.0324817" size="0.01" rgba="1 0.3 0.3 1" group="2"/>
 
       <body name="shoulder" pos="0.0207909 -0.0230745 0.0948817" quat="7.88629e-16 -0.707107 -0.707107 7.69003e-16">
-        <joint name="joint1" type="hinge" class="so101" axis="0 0 1" range="-1.9198621771937616 1.9198621771937634"/>
+        <joint name="joint1" type="hinge" axis="0 0 1" range="-1.9198621771937616 1.9198621771937634" damping="0.60" frictionloss="0.052" armature="0.028"/>
         <inertial pos="-0.0307604 -1.66727e-05 -0.0252713" mass="0.100006" fullinertia="8.3759e-05 8.10403e-05 2.39783e-05 7.55525e-08 -1.16342e-06 1.54663e-07"/>
         <geom type="mesh" group="1" contype="0" conaffinity="0" pos="-0.0303992 0.000422241 -0.0417" quat="0.5 0.5 0.5 -0.5" mesh="sts3215_03a_v1" material="arm_gray"/>
         <geom type="mesh" group="0" pos="-0.0303992 0.000422241 -0.0417" quat="0.5 0.5 0.5 -0.5" mesh="sts3215_03a_v1" material="arm_gray"/>
@@ -49,7 +44,7 @@
         <geom type="mesh" group="0" pos="0.0122008 2.22413e-05 0.0464" quat="0.707107 -0.707107 0 0" mesh="rotation_pitch_so101_v1" material="arm_white"/>
 
         <body name="upper_arm" pos="-0.0303992 -0.0182778 -0.0542" quat="0.5 -0.5 -0.5 -0.5">
-          <joint name="joint2" type="hinge" class="so101" axis="0 0 1" range="-1.7453292519943269 1.7453292519943322"/>
+          <joint name="joint2" type="hinge" axis="0 0 1" range="-1.7453292519943269 1.7453292519943322" damping="0.60" frictionloss="0.052" armature="0.028"/>
           <inertial pos="-0.0898471 -0.00838224 0.0184089" mass="0.103" fullinertia="4.08002e-05 0.000147318 0.000142487 -1.97819e-05 -4.03016e-08 8.97326e-09"/>
           <geom type="mesh" group="1" contype="0" conaffinity="0" pos="-0.11257 -0.0155 0.0187" quat="4.31775e-16 -0.707107 0.707107 -2.94392e-16" mesh="sts3215_03a_v1" material="arm_gray"/>
           <geom type="mesh" group="0" pos="-0.11257 -0.0155 0.0187" quat="4.31775e-16 -0.707107 0.707107 -2.94392e-16" mesh="sts3215_03a_v1" material="arm_gray"/>
@@ -57,7 +52,7 @@
           <geom type="mesh" group="0" pos="-0.065085 0.012 0.0182" quat="0 1 0 0" mesh="upper_arm_so101_v1" material="arm_white"/>
 
           <body name="lower_arm" pos="-0.11257 -0.028 2.46331e-16" quat="0.707107 -2.94392e-16 -3.85906e-16 0.707107">
-            <joint name="joint3" type="hinge" class="so101" axis="0 0 1" range="-1.7453292519943295 1.5707963267948966"/>
+            <joint name="joint3" type="hinge" axis="0 0 1" range="-1.7453292519943295 1.5707963267948966" damping="0.60" frictionloss="0.052" armature="0.028"/>
             <inertial pos="-0.0980701 0.00324376 0.0182831" mass="0.104" fullinertia="2.87438e-05 0.000159844 0.00014529 7.41152e-06 1.26409e-06 -4.90188e-08"/>
             <geom type="mesh" group="1" contype="0" conaffinity="0" pos="-0.0648499 -0.032 0.0182" quat="0 1 0 0" mesh="under_arm_so101_v1" material="arm_white"/>
             <geom type="mesh" group="0" pos="-0.0648499 -0.032 0.0182" quat="0 1 0 0" mesh="under_arm_so101_v1" material="arm_white"/>
@@ -67,7 +62,7 @@
             <geom type="mesh" group="0" pos="-0.1224 0.0052 0.0187" quat="8.32667e-16 -1.56949e-15 -1 5.55112e-16" mesh="sts3215_03a_v1" material="arm_gray"/>
 
             <body name="wrist" pos="-0.1349 0.0052 1.65232e-16" quat="0.707107 1.31614e-15 9.90601e-97 -0.707107">
-              <joint name="joint4" type="hinge" class="so101" axis="0 0 1" range="-1.6580627969561903 1.658062781833036"/>
+              <joint name="joint4" type="hinge" axis="0 0 1" range="-1.6580627969561903 1.658062781833036" damping="0.60" frictionloss="0.052" armature="0.028"/>
               <inertial pos="-0.000103312 -0.0386143 0.0281156" mass="0.079" fullinertia="3.68263e-05 2.5391e-05 2.1e-05 1.7893e-08 -5.28128e-08 3.6412e-06"/>
               <geom type="mesh" group="1" contype="0" conaffinity="0" pos="5.55112e-17 -0.0424 0.0306" quat="0.5 0.5 0.5 -0.5" mesh="sts3215_03a_no_horn_v1" material="arm_gray"/>
               <geom type="mesh" group="0" pos="5.55112e-17 -0.0424 0.0306" quat="0.5 0.5 0.5 -0.5" mesh="sts3215_03a_no_horn_v1" material="arm_gray"/>
@@ -75,7 +70,7 @@
               <geom type="mesh" group="0" pos="0 -0.028 0.0181" quat="0.5 -0.5 -0.5 -0.5" mesh="wrist_roll_pitch_so101_v2" material="arm_white"/>
 
               <body name="gripper" pos="0 -0.0611 0.0181" quat="3.31663e-08 -3.31663e-08 -0.707107 -0.707107">
-                <joint name="joint5" type="hinge" class="so101" axis="0 0 1" range="-2.7925268969992407 2.7925267093826136"/>
+                <joint name="joint5" type="hinge" axis="0 0 1" range="-2.7925268969992407 2.7925267093826136" damping="0.60" frictionloss="0.052" armature="0.028"/>
                 <inertial pos="0.000213627 0.000245138 -0.025187" mass="0.087" fullinertia="2.75087e-05 4.33657e-05 3.45059e-05 -3.35241e-07 -5.7352e-06 -5.17847e-08"/>
                 <geom type="mesh" group="1" contype="0" conaffinity="0" pos="0.0077 0.0001 -0.0234" quat="0.707107 -0.707107 6.48145e-15 1.58472e-15" mesh="sts3215_03a_v1" material="arm_gray"/>
                 <geom type="mesh" group="0" pos="0.0077 0.0001 -0.0234" quat="0.707107 -0.707107 6.48145e-15 1.58472e-15" mesh="sts3215_03a_v1" material="arm_gray"/>
