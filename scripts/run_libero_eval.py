@@ -186,15 +186,22 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
                 import mujoco
                 from robosuite.robots import REGISTERED_ROBOTS
                 robot_cls = REGISTERED_ROBOTS["SO101"]
-                robot_model = robot_cls.robot_model
-                print(f"    DEBUG: robot_model.joints = {robot_model.joints}")
-                print(f"    DEBUG: arm_joints = {robot_model.arm_joints}")
-                print(f"    DEBUG: all joints in XML:")
-                from robosuite.utils import XMLEditor
-                for j in robot_model.worldbody.find_all("joint"):
-                    print(f"      joint name={j.get('name')} type={j.get('type')}")
+                rm = robot_cls.robot_model
+                print(f"    DEBUG: robot_model.joints = {rm.joints}")
+                print(f"    DEBUG: arm_joints = {rm.arm_joints}")
             except Exception as e2:
-                print(f"    DEBUG failed: {e2}")
+                print(f"    DEBUG1 failed: {e2}")
+            try:
+                from robosuite.models.robots.manipulators.manipulator_model import ManipulatorModel
+                rm2 = ManipulatorModel(
+                    xml_path="/workspace/robosuite_so101/robots/so101/robot.xml",
+                    idn=0,
+                    initial_qpos=[0, -0.5, 0.5, 0, 0],
+                )
+                print(f"    DEBUG2: joints = {rm2.joints}")
+                print(f"    DEBUG2: arm_joints = {rm2.arm_joints}")
+            except Exception as e3:
+                print(f"    DEBUG2 failed: {e3}")
             for ep_idx in range(episodes_per_task):
                 results.append({
                     "suite": suite_name, "task": task_name, "task_idx": task_id,
