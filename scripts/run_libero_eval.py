@@ -47,8 +47,8 @@ def register_so101():
 
     from robosuite.robots.fixed_base_robot import FixedBaseRobot
     import robosuite.robots as robots_pkg
-    robots_pkg.ROBOT_CLASS_MAPPING["MountedSO101"] = FixedBaseRobot
-    print(f"Added MountedSO101 -> FixedBaseRobot to ROBOT_CLASS_MAPPING")
+    robots_pkg.ROBOT_CLASS_MAPPING["SO101"] = FixedBaseRobot
+    print(f"Added SO101 -> FixedBaseRobot to ROBOT_CLASS_MAPPING")
 
     import robosuite.models.robots as robots_mod
     import robosuite.models.grippers as grippers_mod
