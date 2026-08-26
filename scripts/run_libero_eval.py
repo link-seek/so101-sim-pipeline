@@ -61,23 +61,47 @@ def register_so101():
 
     print("SO101 registration complete")
 
-    import sys
-    rm = MountedSO101()
-    print(f"DEBUG joints: {rm.joints}", flush=True)
-    print(f"DEBUG arm_joints: {rm.arm_joints}", flush=True)
-    print(f"DEBUG actuators: {rm.actuators}", flush=True)
-    print(f"DEBUG arm_actuators: {rm.arm_actuators}", flush=True)
-    sys.stdout.flush()
-
     import mujoco
     from robosuite.utils.binding_utils import MjModel
+
     _orig_get_joint_qpos_addr = MjModel.get_joint_qpos_addr
+    _orig_get_joint_qvel_addr = MjModel.get_joint_qvel_addr
+
     def _patched_get_joint_qpos_addr(self, name):
         joint_id = self.joint_name2id(name)
-        joint_type = self.jnt_type[joint_id]
-        print(f"    JOINT DEBUG: name={name} id={joint_id} type={joint_type} HINGE={mujoco.mjtJoint.mjJNT_HINGE} SLIDE={mujoco.mjtJoint.mjJNT_SLIDE} FREE={mujoco.mjtJoint.mjJNT_FREE} BALL={mujoco.mjtJoint.mjJNT_BALL}", flush=True)
-        return _orig_get_joint_qpos_addr(self, name)
+        joint_type = int(self.jnt_type[joint_id])
+        joint_addr = self.jnt_qposadr[joint_id]
+        if joint_type == int(mujoco.mjtJoint.mjJNT_FREE):
+            ndim = 7
+        elif joint_type == int(mujoco.mjtJoint.mjJNT_BALL):
+            ndim = 4
+        else:
+            assert joint_type in (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE))
+            ndim = 1
+        if ndim == 1:
+            return joint_addr
+        else:
+            return (joint_addr, joint_addr + ndim)
+
+    def _patched_get_joint_qvel_addr(self, name):
+        joint_id = self.joint_name2id(name)
+        joint_type = int(self.jnt_type[joint_id])
+        joint_addr = self.jnt_dofadr[joint_id]
+        if joint_type == int(mujoco.mjtJoint.mjJNT_FREE):
+            ndim = 6
+        elif joint_type == int(mujoco.mjtJoint.mjJNT_BALL):
+            ndim = 3
+        else:
+            assert joint_type in (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE))
+            ndim = 1
+        if ndim == 1:
+            return joint_addr
+        else:
+            return (joint_addr, joint_addr + ndim)
+
     MjModel.get_joint_qpos_addr = _patched_get_joint_qpos_addr
+    MjModel.get_joint_qvel_addr = _patched_get_joint_qvel_addr
+    print("Patched get_joint_qpos_addr and get_joint_qvel_addr for MuJoCo Enum compatibility")
 
 
 def load_policy(checkpoint_path, device="cuda"):
@@ -200,15 +224,6 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
             import traceback
             print(f"    ERROR creating env: {e}")
             traceback.print_exc()
-            try:
-                import mujoco
-                from robosuite.robots import REGISTERED_ROBOTS
-                robot_cls = REGISTERED_ROBOTS["SO101"]
-                rm = robot_cls.robot_model
-                print(f"    DEBUG: robot_model.joints = {rm.joints}")
-                print(f"    DEBUG: arm_joints = {rm.arm_joints}")
-            except Exception as e2:
-                print(f"    DEBUG1 failed: {e2}")
             for ep_idx in range(episodes_per_task):
                 results.append({
                     "suite": suite_name, "task": task_name, "task_idx": task_id,
