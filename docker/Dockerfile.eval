@@ -37,7 +37,7 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir \
     "cmake==3.31.6" \
     && pip install --no-cache-dir \
-    "mujoco==3.2.0" \
+    "mujoco==3.3.1" \
     "robosuite==1.5.2" \
     robot_descriptions
 
