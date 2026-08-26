@@ -69,6 +69,16 @@ def register_so101():
     print(f"DEBUG arm_actuators: {rm.arm_actuators}", flush=True)
     sys.stdout.flush()
 
+    import mujoco
+    from robosuite.utils.binding_utils import MjModel
+    _orig_get_joint_qpos_addr = MjModel.get_joint_qpos_addr
+    def _patched_get_joint_qpos_addr(self, name):
+        joint_id = self.joint_name2id(name)
+        joint_type = self.jnt_type[joint_id]
+        print(f"    JOINT DEBUG: name={name} id={joint_id} type={joint_type} HINGE={mujoco.mjtJoint.mjJNT_HINGE} SLIDE={mujoco.mjtJoint.mjJNT_SLIDE} FREE={mujoco.mjtJoint.mjJNT_FREE} BALL={mujoco.mjtJoint.mjJNT_BALL}", flush=True)
+        return _orig_get_joint_qpos_addr(self, name)
+    MjModel.get_joint_qpos_addr = _patched_get_joint_qpos_addr
+
 
 def load_policy(checkpoint_path, device="cuda"):
     """Load SmolVLA policy from checkpoint."""
