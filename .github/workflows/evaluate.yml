@@ -53,6 +53,8 @@ jobs:
     runs-on: [self-hosted, Linux, X64, V100]
     timeout-minutes: 1800
     steps:
+      - uses: actions/checkout@v4
+
       - name: Login to SWR
         run: |
           LOGIN_KEY=$(printf "${{ secrets.OBS_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.OBS_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
@@ -67,16 +69,25 @@ jobs:
         run: |
           docker run --rm --gpus all --shm-size=8g \
             -v /data:/data \
+            -v $(pwd)/scripts:/workspace/scripts \
+            -v $(pwd)/configs:/workspace/configs \
+            -v $(pwd)/robosuite_so101:/workspace/robosuite_so101 \
             -e MUJOCO_GL=egl \
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_HUB_DISABLE_XET=1 \
             -e HF_TOKEN=${{ secrets.HF_TOKEN }} \
             ${{ env.EVAL_IMAGE }} \
-            python /workspace/scripts/run_libero_eval.py \
-              --checkpoint '${{ inputs.checkpoint }}' \
-              --benchmarks '${{ inputs.benchmarks }}' \
-              --episodes_per_task ${{ inputs.episodes_per_task }} \
-              --output_dir /data/eval/libero_results
+            bash -c '\
+              ROBOSUITE_ASSETS=$(python -c "import robosuite,os;print(os.path.join(os.path.dirname(robosuite.__file__),\"models\",\"assets\"))") && \
+              cp /workspace/robosuite_so101/robots/so101/robot.xml $ROBOSUITE_ASSETS/robots/so101/ && \
+              cp -r /workspace/robosuite_so101/robots/so101/meshes/* $ROBOSUITE_ASSETS/robots/so101/ && \
+              cp /workspace/robosuite_so101/grippers/so101_gripper.xml $ROBOSUITE_ASSETS/grippers/ && \
+              cp -r /workspace/robosuite_so101/grippers/meshes/* $ROBOSUITE_ASSETS/grippers/ && \
+              python /workspace/scripts/run_libero_eval.py \
+                --checkpoint "${{ inputs.checkpoint }}" \
+                --benchmarks "${{ inputs.benchmarks }}" \
+                --episodes_per_task ${{ inputs.episodes_per_task }} \
+                --output_dir /data/eval/libero_results'
 
       - name: Upload to OBS
         run: |
