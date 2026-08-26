@@ -83,6 +83,9 @@ jobs:
               cp -r /workspace/robosuite_so101/robots/so101/meshes/* $ROBOSUITE_ASSETS/robots/so101/ && \
               cp /workspace/robosuite_so101/grippers/so101_gripper.xml $ROBOSUITE_ASSETS/grippers/ && \
               cp -r /workspace/robosuite_so101/grippers/meshes/* $ROBOSUITE_ASSETS/grippers/ && \
+              ROBOSUITE_CTRL=$(python -c "import robosuite,os;print(os.path.join(os.path.dirname(robosuite.__file__),\"controllers\",\"configs\",\"robots\"))") && \
+              mkdir -p $ROBOSUITE_CTRL && \
+              cp /workspace/robosuite_so101/controllers/so101_basic.json $ROBOSUITE_CTRL/default_so101.json && \
               python /workspace/scripts/run_libero_eval.py \
                 --checkpoint "${{ inputs.checkpoint }}" \
                 --benchmarks "${{ inputs.benchmarks }}" \

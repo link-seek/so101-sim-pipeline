@@ -220,10 +220,15 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
         print(f"  Task {task_id}: {task_name} ({task_desc})")
 
         try:
+            import robosuite as _suite
+            _ctrl_path = os.path.join(
+                os.path.dirname(_suite.__file__),
+                "controllers", "configs", "robots", "default_so101.json"
+            )
             env = OffScreenRenderEnv(
                 bddl_file_name=bddl_file,
                 robots=["SO101"],
-                controller="BASIC",
+                controller=_ctrl_path,
                 camera_heights=128,
                 camera_widths=128,
             )
