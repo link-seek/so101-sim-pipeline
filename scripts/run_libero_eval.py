@@ -218,7 +218,10 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
                 camera_heights=128,
                 camera_widths=128,
             )
-            env.seed(0)
+            try:
+                env.seed(0)
+            except (TypeError, AttributeError):
+                pass
             init_states = task_suite.get_task_init_states(task_id)
         except Exception as e:
             import traceback
