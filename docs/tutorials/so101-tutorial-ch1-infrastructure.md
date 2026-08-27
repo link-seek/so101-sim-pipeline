@@ -157,7 +157,7 @@ Status: online
 | `so101-train` | Dockerfile.train | cuda:12.6.3 | torch cu126 + lerobot[smolvla] 0.6.1 + so101_nexus | VLA 训练 + 回放 |
 | `so101-ppo` | Dockerfile.ppo | cuda:12.6.3 | torch cu126 + so101_nexus[warp,train] | PPO 训练 + 评估 |
 | `so101-mujoco` | Dockerfile.mujoco | cuda:12.6.3 | robot_descriptions + mujoco_env | Sim twin 训练 + grid sweep |
-| `so101-eval` | Dockerfile.eval | cuda:12.6.3 | vla-eval + SQLite | LIBERO benchmark 评估（已构建，未运行） |
+| `so101-eval` | Dockerfile.eval | cuda:12.6.3 | vla-eval + SQLite | LIBERO benchmark 评估（已构建，已运行：首次 LIBERO 评测 0%，详见 Ch5 §4.8） |
 | `so101-model-server` | Dockerfile.model-server | cuda:12.6.3 | 模型推理服务 | HTTP/ZMQ 推理 |
 
 ### 3.1 为什么不用一个大镜像
@@ -266,16 +266,16 @@ Sim twin 路线专属：它在 MuJoCo 里**训练一个 SO101 仿真孪生模型
 - **输出**：sim twin checkpoint、`success_rate` 矩阵、热力图（各区域成功率，中心 60-100% / 边缘 ~0% 就是这么来的）。
 - **与 `so101-train` 的区别**：`train` 在原始 LeRobot 数据集上微调通用 SmolVLA；`mujoco` 在 MuJoCo 仿真数据上训练/评测 sim twin，两者数据来源与用途不同，所以分开成镜像。
 
-#### `so101-eval` — LIBERO 标准化 benchmark 评估（已构建，未运行）
+#### `so101-eval` — LIBERO 标准化 benchmark 评估（已构建，已运行）
 
-这是为「跨任务标准化评测」准备的镜像，目前基础设施已就绪但从未实际跑过（详见 Ch5 §4.8）。
+这是为「跨任务标准化评测」准备的镜像，基础设施已就绪，且已通过 `evaluate.yml` 实际跑过首次 LIBERO 评测（结果 0%，详见 Ch5 §4.8）。
 
 - **职责**：通过 `vla-eval` harness 统一调度 LIBERO / LIBERO-PRO 等多个 benchmark，产出每任务 success_rate 与 SQLite 结果库。
-- **被谁调用**：`evaluate.yml`（0 runs，从未运行）。
+- **被谁调用**：`evaluate.yml`（已运行，含 LIBERO 评测，首次跑出 0% 成功率，详见 Ch5 §4.8）。
 - **关键脚本**：`eval_vla.py`。
 - **输入**：模型 checkpoint、`configs/benchmarks/*.yaml`（8 个 LIBERO 配置）。
 - **输出**：每任务 success_rate、SQLite 数据库。
-- **当前状态**：因 LIBERO 仅支持 Franka Panda，与我们的 SO101 模型不兼容，需先在 LIBERO 中添加 SO101 机器人才能跑（Ch6 方案）。
+- **当前状态**：首次实战已验证「模型-环境不兼容」——我们的 SO101 SmolVLA 无法驱动 LIBERO 的 Franka Panda（libero_goal 100 个 episode `steps=0` 初始化即失败，libero_spatial 20 个 episode 跑满 230 步仍 0% 成功）。根本解决仍需先在 LIBERO 中添加 SO101 机器人（Ch6 方案）。
 
 #### `so101-model-server` — 模型推理部署
 
