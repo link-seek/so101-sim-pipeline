@@ -73,6 +73,6 @@ RUN ROBOSUITE_ASSETS=$(python -c "import robosuite; import os; print(os.path.joi
 # Install SO101 controller config (v1.5 composite controller format)
 RUN ROBOSUITE_CTRL=$(python -c "import robosuite; import os; print(os.path.join(os.path.dirname(robosuite.__file__), 'controllers', 'configs', 'robots'))") && \
     mkdir -p $ROBOSUITE_CTRL && \
-    python -c "import json; json.dump({'arm': {'type': 'JOINT_POSITION', 'input_max': 1.0, 'input_min': -1.0, 'output_max': 0.5, 'output_min': -0.5, 'kp': 50.0, 'damping': 1.0, 'velocity_limits': [-1.0, 1.0], 'ramp_ratio': 0.2, 'interpolation': 'linear'}, 'gripper': {'type': 'POSITION', 'input_max': 1.0, 'input_min': -1.0, 'output_max': 0.1, 'output_min': -0.1, 'kp': 50.0, 'damping': 1.0, 'velocity_limits': [-1.0, 1.0]}}, open('$ROBOSUITE_CTRL/default_so101.json', 'w'))"
+    cp /workspace/robosuite_so101/controllers/so101_basic.json $ROBOSUITE_CTRL/default_so101.json
 
 CMD ["python", "/workspace/scripts/eval_vla.py"]
