@@ -133,17 +133,53 @@ def load_policy(checkpoint_path, device="cuda"):
     return policy, preprocess, postprocess
 
 
+# SO101 calibration (from dyordan1/so101-mujoco calib/so101_robot.json, ENCODER_RES=4096)
+# offsets are degrees added to the LeRobot .pos value to reach the model joint frame
+SO101_CALIB_OFFSETS = np.array(
+    [5.88998, -1.45055, -7.25275, -0.96704, -0.04396], dtype=np.float64
+)
+SO101_JOINT_LO = np.array(
+    [-1.9198621772, -1.7453292520, -1.7453292520, -1.6580627970, -2.7925268970],
+    dtype=np.float64,
+)
+SO101_JOINT_HI = np.array(
+    [1.9198621772, 1.7453292520, 1.5707963268, 1.6580627818, 2.7925267094],
+    dtype=np.float64,
+)
+SO101_GRIP_LO = -0.1745329252
+SO101_GRIP_HI = 1.7453292520
+
+
+def _policy_state_from_obs(obs):
+    """Convert LIBERO radian joint state to training-unit .pos state
+    (5 arm joints in degrees relative to calibration midpoint + gripper 0-100)."""
+    joint_rad = np.asarray(obs.get("robot0_joint_pos", np.zeros(5)), dtype=np.float64).reshape(-1)[:5]
+    grip_q = float(np.asarray(obs.get("robot0_gripper_qpos", [0.0]), dtype=np.float64).reshape(-1)[0])
+    arm_pos = np.degrees(joint_rad) - SO101_CALIB_OFFSETS
+    grip_pos = (grip_q - SO101_GRIP_LO) / (SO101_GRIP_HI - SO101_GRIP_LO) * 100.0
+    return np.concatenate([arm_pos, [grip_pos]]).astype(np.float32)
+
+
+def _env_action_from_policy(action):
+    """Convert policy action in .pos units (degrees + gripper 0-100) to robosuite env action:
+    absolute joint targets in radians for JOINT_POSITION(absolute) + GRIP input for gripper."""
+    a = np.asarray(action, dtype=np.float64).reshape(-1)
+    if a.size < 6:
+        a = np.pad(a, (0, 6 - a.size))
+    else:
+        a = a[:6]
+    arm_rad = np.radians(a[:5] + SO101_CALIB_OFFSETS)
+    arm_rad = np.clip(arm_rad, SO101_JOINT_LO, SO101_JOINT_HI)
+    grip_cmd = np.clip(a[5] / 50.0 - 1.0, -1.0, 1.0)
+    return np.concatenate([arm_rad, [grip_cmd]]).astype(np.float32)
+
+
 def libero_obs_to_policy_obs(obs, task_description, device="cuda"):
     """Convert LIBERO observation to SmolVLA policy input format."""
     import torch
     from lerobot.policies.utils import prepare_observation_for_inference
 
-    state = obs.get("robot0_joint_pos", np.zeros(6, dtype=np.float32))
-    state = np.asarray(state, dtype=np.float32)
-    if len(state) > 6:
-        state = state[:6]
-    elif len(state) < 6:
-        state = np.pad(state, (0, 6 - len(state)))
+    state = _policy_state_from_obs(obs)
 
     frame = {
         "observation.state": state,
@@ -151,19 +187,18 @@ def libero_obs_to_policy_obs(obs, task_description, device="cuda"):
 
     if "robot0_eye_in_hand_image" in obs:
         frame["observation.images.camera1"] = np.asarray(
+            obs["agentview_image"] if "agentview_image" in obs else obs["robot0_eye_in_hand_image"], dtype=np.uint8
+        )
+        frame["observation.images.camera2"] = np.asarray(
             obs["robot0_eye_in_hand_image"], dtype=np.uint8
         )
-    if "agentview_image" in obs:
-        frame["observation.images.camera2"] = np.asarray(
-            obs["agentview_image"], dtype=np.uint8
-        )
-    if "robot0_eye_in_hand_image" in obs and "agentview_image" in obs:
-        frame["observation.images.camera3"] = np.asarray(
-            obs["agentview_image"], dtype=np.uint8
-        )
+        if "birdview_image" in obs:
+            frame["observation.images.camera3"] = np.asarray(obs["birdview_image"], dtype=np.uint8)
+        elif "agentview_image" in obs:
+            frame["observation.images.camera3"] = np.asarray(obs["agentview_image"], dtype=np.uint8)
 
     frame = prepare_observation_for_inference(
-        frame, device, task=task_description, robot_type=""
+        frame, device, task=task_description, robot_type="so_follower"
     )
     return frame
 
@@ -229,6 +264,7 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
                 bddl_file_name=bddl_file,
                 robots=["SO101"],
                 controller=_ctrl_path,
+                camera_names=["agentview", "birdview", "robot0_eye_in_hand"],
                 camera_heights=128,
                 camera_widths=128,
             )
@@ -251,6 +287,7 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
 
         for ep_idx in range(min(episodes_per_task, len(init_states))):
             try:
+                policy.reset()
                 env.reset()
                 obs = env.set_init_state(init_states[ep_idx])
 
@@ -262,18 +299,22 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
 
                 while not done and steps < max_steps + num_steps_wait:
                     if steps < num_steps_wait:
-                        action = np.zeros(6, dtype=np.float32)
+                        hold = _policy_state_from_obs(obs)
+                        action = _env_action_from_policy(hold)
                         obs, reward, done, info = env.step(action)
                         steps += 1
                         continue
 
-                    action = predict_action(
+                    raw_action = predict_action(
                         policy, preprocess, postprocess, obs, task_desc, device
                     )
-                    if len(action) < 6:
-                        action = np.pad(action, (0, 6 - len(action)))
-                    elif len(action) > 6:
-                        action = action[:6]
+                    action = _env_action_from_policy(raw_action)
+                    if steps % 50 == 0:
+                        jp = np.asarray(obs.get("robot0_joint_pos", np.zeros(5)), dtype=np.float64).reshape(-1)[:5]
+                        print(
+                            f"      step {steps}: cur_arm_deg={np.round(np.degrees(jp), 1)}, "
+                            f"tgt_pos={np.round(np.asarray(raw_action).reshape(-1)[:6], 1)}"
+                        )
 
                     obs, reward, done, info = env.step(action)
                     total_reward += reward
