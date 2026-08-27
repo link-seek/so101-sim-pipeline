@@ -177,7 +177,10 @@ def rescale_scene_to_reach(env, factor=SCENE_SCALE_FACTOR):
         seen.add(root_body)
         if any(k in root_body.lower() for k in ("table", "desk", "floor", "wall")):
             continue
-        bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, root_body)
+        try:
+            bid = model.body_name2id(root_body)
+        except Exception:
+            continue
         if bid < 0:
             continue
         model.body_pos[bid][0] *= factor
@@ -186,14 +189,17 @@ def rescale_scene_to_reach(env, factor=SCENE_SCALE_FACTOR):
 
     # Also move free-joint bodies whose current qpos placement differs from body_pos
     for jadr in range(model.njnt):
-        b = model.jnt_bodyid[jadr]
-        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b)
+        b = int(model.jnt_bodyid[jadr])
+        try:
+            name = model.body_id2name(b)
+        except Exception:
+            continue
         if name is None or name in seen:
             continue
         if any(k in name.lower() for k in ("table", "desk", "floor", "wall")):
             continue
-        if model.jnt_type[jadr] == int(mujoco.mjtJoint.mjJNT_FREE):
-            qadr = model.jnt_qposadr[jadr]
+        if int(model.jnt_type[jadr]) == int(mujoco.mjtJoint.mjJNT_FREE):
+            qadr = int(model.jnt_qposadr[jadr])
             data.qpos[qadr] *= factor
             data.qpos[qadr + 1] *= factor
 
