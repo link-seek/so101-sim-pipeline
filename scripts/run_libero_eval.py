@@ -149,6 +149,57 @@ SO101_JOINT_HI = np.array(
 SO101_GRIP_LO = -0.1745329252
 SO101_GRIP_HI = 1.7453292520
 
+SCENE_SCALE_FACTOR = 0.55  # SO101 reach (~0.47m) vs Panda reach (~0.86m)
+
+
+def rescale_scene_to_reach(env, factor=SCENE_SCALE_FACTOR):
+    """Shrink the xy position of all task-relevant objects (movable + fixtures)
+    toward the table center so they fall within SO101's smaller reach envelope.
+    Relative geometry (in contact / on top of / left of) is preserved because
+    every object is scaled by the same factor about the origin."""
+    import mujoco
+
+    sim = env.env.sim
+    model, data = sim.model, sim.data
+    touched = []
+    domain_env = getattr(env, "env", env)
+
+    body_dicts = []
+    for attr in ("objects_dict", "fixtures_dict"):
+        d = getattr(domain_env, attr, None) or {}
+        body_dicts.extend(d.values())
+
+    seen = set()
+    for obj in body_dicts:
+        root_body = getattr(obj, "root_body", None)
+        if root_body is None or root_body in seen:
+            continue
+        seen.add(root_body)
+        if any(k in root_body.lower() for k in ("table", "desk", "floor", "wall")):
+            continue
+        bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, root_body)
+        if bid < 0:
+            continue
+        model.body_pos[bid][0] *= factor
+        model.body_pos[bid][1] *= factor
+        touched.append(root_body)
+
+    # Also move free-joint bodies whose current qpos placement differs from body_pos
+    for jadr in range(model.njnt):
+        b = model.jnt_bodyid[jadr]
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b)
+        if name is None or name in seen:
+            continue
+        if any(k in name.lower() for k in ("table", "desk", "floor", "wall")):
+            continue
+        if model.jnt_type[jadr] == int(mujoco.mjtJoint.mjJNT_FREE):
+            qadr = model.jnt_qposadr[jadr]
+            data.qpos[qadr] *= factor
+            data.qpos[qadr + 1] *= factor
+
+    sim.forward()
+    print(f"    [scene-rescale x{factor}] moved {len(touched)} bodies: {touched[:6]}...")
+
 
 def _policy_state_from_obs(obs):
     """Convert LIBERO radian joint state to training-unit .pos state
@@ -290,6 +341,7 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
                 policy.reset()
                 env.reset()
                 obs = env.set_init_state(init_states[ep_idx])
+                rescale_scene_to_reach(env)
 
                 done = False
                 success = False
