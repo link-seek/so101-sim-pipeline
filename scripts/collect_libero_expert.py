@@ -42,14 +42,20 @@ def mj_raw(sim):
     return m, d
 
 
-def body_id(sim, name):
+def body_id(sim, name, verbose=False):
     import mujoco
 
-    m = mj_raw(sim)
+    m = mj_raw(sim)[0] if isinstance(mj_raw(sim), tuple) else mj_raw(sim)
     for candidate in (name, f"robot0_{name}"):
         bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, candidate)
         if bid >= 0:
             return bid
+    if verbose:
+        names = [
+            mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) for b in range(m.nbody)
+        ]
+        print(f"    [debug] bodies containing hand/grip/wrist: "
+              f"{[n for n in names if n and any(k in n.lower() for k in ('hand', 'grip', 'wrist', 'eef'))]}")
     raise RuntimeError(f"body {name} not found")
 
 
@@ -68,7 +74,10 @@ class ArmIK:
 
         self.mujoco = mujoco
         self.m, self.d = mj_raw(sim)
-        self.eef_bid = body_id(sim, "right_hand")
+        try:
+            self.eef_bid = body_id(sim, "right_hand")
+        except RuntimeError:
+            self.eef_bid = body_id(sim, "gripper_site", verbose=True)
         self.arm_qadr, self.arm_dofadr = [], []
         for j in range(self.m.njnt):
             name = self.mujoco.mj_id2name(self.m, self.mujoco.mjtObj.mjOBJ_JOINT, j)
