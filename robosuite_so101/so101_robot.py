@@ -4,6 +4,25 @@ from robosuite.models.robots.manipulators.manipulator_model import ManipulatorMo
 from robosuite.utils.mjcf_utils import xml_path_completion
 
 
+class _DualInterfaceOffset:
+    """Both callable (tabletop arena) and subscriptable (floor arena).
+
+    LIBERO X-embodiment's floor branch does base_xpos_offset["table"][-1]
+    while the tabletop branch does base_xpos_offset["table"](1.0). Stock
+    robot classes only support one style, so SO101 supports both.
+    """
+
+    def __init__(self, fixed, dynamic):
+        self._fixed = tuple(fixed)
+        self._dynamic = dynamic
+
+    def __call__(self, table_length):
+        return self._dynamic(table_length)
+
+    def __getitem__(self, idx):
+        return self._fixed[idx]
+
+
 class MountedSO101(ManipulatorModel):
     """SO-ARM101: 5-DoF low-cost robotic arm by TheRobotCompany.
 
@@ -29,11 +48,13 @@ class MountedSO101(ManipulatorModel):
 
     @property
     def default_base(self):
-        return "RethinkMount"
+        # Free-standing base: real SO101 is not mounted; floor scenes require
+        # the arm to reach ground-level objects, which RethinkMount prevents.
+        return "NullMount"
 
     @property
     def default_mount(self):
-        return "RethinkMount"
+        return "NullMount"
 
     @property
     def default_gripper(self):
@@ -52,7 +73,10 @@ class MountedSO101(ManipulatorModel):
         return {
             "bins": (-0.5, -0.1, 0),
             "empty": (-0.6, 0, 0),
-            "table": lambda table_length: (-0.16 - table_length / 2, 0, 0),
+            "table": _DualInterfaceOffset(
+                fixed=(-0.16, 0, 0),
+                dynamic=lambda table_length: (-0.16 - table_length / 2, 0, 0),
+            ),
         }
 
     @property
