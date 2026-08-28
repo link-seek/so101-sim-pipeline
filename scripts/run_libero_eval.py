@@ -280,7 +280,7 @@ def predict_action(policy, preprocess, postprocess, obs, task_description, devic
 
 
 def run_libero_suite(suite_name, policy, preprocess, postprocess,
-                     episodes_per_task, output_dir, device="cuda"):
+                     episodes_per_task, output_dir, device="cuda", force_prompt=None):
     """Run evaluation on a single LIBERO suite."""
     from libero.libero import benchmark, get_libero_path
     from libero.libero.envs import OffScreenRenderEnv
@@ -308,6 +308,8 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
         task = task_suite.get_task(task_id)
         task_name = task.name
         task_desc = task.language
+        if force_prompt:
+            task_desc = force_prompt
         bddl_file = os.path.join(bddl_root, task.problem_folder, task.bddl_file)
         print(f"  Task {task_id}: {task_name} ({task_desc})")
 
@@ -407,6 +409,7 @@ def main():
     parser.add_argument("--benchmarks", required=True, help="Comma-separated benchmark names")
     parser.add_argument("--episodes_per_task", type=int, default=50)
     parser.add_argument("--output_dir", default="/data/eval/libero_results")
+    parser.add_argument("--force_prompt", default="", help="Override task language instruction")
     args = parser.parse_args()
 
     benchmarks = [b.strip() for b in args.benchmarks.split(",")]
@@ -434,6 +437,7 @@ def main():
         results = run_libero_suite(
             suite_name, policy, preprocess, postprocess,
             args.episodes_per_task, args.output_dir,
+            force_prompt=(args.force_prompt or None),
         )
         all_results.extend(results)
 

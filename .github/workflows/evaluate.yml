@@ -15,6 +15,10 @@ on:
         description: "Episodes per task"
         required: false
         default: "10"
+      force_prompt:
+        description: "Override task language instruction"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -102,6 +106,7 @@ jobs:
               --checkpoint '${{ inputs.checkpoint }}' \
               --benchmarks "$SUITES" \
               --episodes_per_task ${{ inputs.episodes_per_task }} \
+              --force_prompt '${{ inputs.force_prompt }}' \
               --output_dir /data/eval/libero_results/gpu_${{ matrix.gpu }}
 
       - name: Upload artifacts
