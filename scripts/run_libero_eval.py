@@ -438,11 +438,11 @@ def main():
     print(f"Benchmarks: {benchmarks}")
     print(f"Episodes per task: {args.episodes_per_task}")
 
-    print("\n--- Registering SO101 ---")
-    register_so101()
-
     print("\n--- Setting up LIBERO config ---")
     setup_libero_config()
+
+    print("\n--- Registering SO101 ---")
+    register_so101()
 
     print("\n--- Loading policy ---")
     policy, preprocess, postprocess = load_policy(args.checkpoint)

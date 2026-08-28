@@ -239,8 +239,8 @@ def main():
     parser.add_argument("--output_dir", default="/data/datasets/libero_so101_expert")
     args = parser.parse_args()
 
-    register_so101()
     setup_libero_config()
+    register_so101()
 
     from libero.libero import benchmark, get_libero_path
     from libero.libero.envs import OffScreenRenderEnv
