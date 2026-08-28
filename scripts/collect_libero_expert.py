@@ -37,7 +37,9 @@ MAX_GRASP_RETRY = 2
 
 
 def mj_raw(sim):
-    return sim.model._model if hasattr(sim.model, "_model") else sim.model
+    m = sim.model._model if hasattr(sim.model, "_model") else sim.model
+    d = sim.data._data if hasattr(sim.data, "_data") else sim.data
+    return m, d
 
 
 def body_id(sim, name):
@@ -65,8 +67,7 @@ class ArmIK:
         import mujoco
 
         self.mujoco = mujoco
-        self.m = mj_raw(sim)
-        self.d = sim.data
+        self.m, self.d = mj_raw(sim)
         self.eef_bid = body_id(sim, "right_hand")
         self.arm_qadr, self.arm_dofadr = [], []
         for j in range(self.m.njnt):
@@ -165,7 +166,8 @@ def run_episode(env, ik, max_steps=450):
     sim.data.qvel[:] = qvel_snapshot
     import mujoco
 
-    mujoco.mj_forward(mj_raw(sim), sim.data)
+    m_raw, d_raw = mj_raw(sim)
+    mujoco.mj_forward(m_raw, d_raw)
     actions = actions[:max_steps]
     if not actions:
         return False, 0, 0.0, [], []
