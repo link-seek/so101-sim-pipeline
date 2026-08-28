@@ -10,7 +10,7 @@
 
 前五章我们完成了从基础设施搭建到 PPO/VLA 训练到 Debug 实战到评测方法论的完整闭环。但评测一直停留在**单任务**层面——Grid Sweep 只测一个 pick-and-place 任务的工作空间覆盖。
 
-**LIBERO 是 VLA 领域的标准 benchmark**（2.2k stars），提供 3 个 suite × 10 tasks 的多任务泛化评测。我们的仓库已设计好完整管线（`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` 镜像），但从未运行过——因为 LIBERO 只有 Franka Panda 机器人，和我们的 SO101 模型不兼容。
+**LIBERO 是 VLA 领域的标准 benchmark**（2.2k stars），提供 3 个 suite × 10 tasks 的多任务泛化评测。我们的仓库已设计好完整管线（`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` 镜像），并已于 2026-08-27 首次实战跑出 0%——直接验证了 LIBERO 只有 Franka Panda 机器人、与我们的 SO101 模型不兼容（详见 Ch5 §4.8 实战数据）。
 
 这一章讲**如何把 SO101 机器人添加到 LIBERO 中**，让我们自己的 SO101 SmolVLA 模型能在 LIBERO 多任务框架里跑评测。
 

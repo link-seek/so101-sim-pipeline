@@ -157,7 +157,7 @@ Status: online
 | `so101-train` | Dockerfile.train | cuda:12.6.3 | torch cu126 + lerobot[smolvla] 0.6.1 + so101_nexus | VLA 训练 + 回放 |
 | `so101-ppo` | Dockerfile.ppo | cuda:12.6.3 | torch cu126 + so101_nexus[warp,train] | PPO 训练 + 评估 |
 | `so101-mujoco` | Dockerfile.mujoco | cuda:12.6.3 | robot_descriptions + mujoco_env | Sim twin 训练 + grid sweep |
-| `so101-eval` | Dockerfile.eval | cuda:12.6.3 | vla-eval + SQLite | LIBERO benchmark 评估 |
+| `so101-eval` | Dockerfile.eval | cuda:12.6.3 | vla-eval + SQLite | LIBERO benchmark 评估（已构建，已运行：首次 LIBERO 评测 0%，详见 Ch5 §4.8） |
 | `so101-model-server` | Dockerfile.model-server | cuda:12.6.3 | 模型推理服务 | HTTP/ZMQ 推理 |
 
 ### 3.1 为什么不用一个大镜像
@@ -222,6 +222,71 @@ jobs:
             ghcr.io/link-seek/so101-ppo:latest
             swr.cn-north-4.myhuaweicloud.com/link-seek/so101-ppo:latest
 ```
+
+### 3.4 各镜像职责详解
+
+上面那张矩阵表只列了「用途」一句话。这里把每个镜像到底在跑什么、被谁调用、输入输出是什么逐一拆开，方便你点 Run 之前就知道屏幕上会发生什么。
+
+#### `so101-train` — VLA 训练与回放
+
+这是 SmolVLA 这条路线的核心镜像，几乎所有与「训练一个模仿学习模型」相关的事情都在它里面完成。
+
+- **职责**：在 LeRobot 格式数据集上微调 SmolVLA（行为克隆 / SFT），并负责训练后的「回放验证」——把模型加载进仿真跑一遍，确认动作能驱动机器人。
+- **被谁调用**：`vla-pipeline.yml`（旧版训练+回放）、`so101-mujoco-pipeline.yml`（sim twin 训练阶段）。
+- **关键脚本**：`train_smolvla.py`（训练）、`replay_demo.py`（回放验证）。
+- **输入**：LeRobot 数据集（parquet）、SmolVLA base 权重、可选 `rename_map` 修正相机键名。
+- **输出**：`/data/ckpt/<steps>/` 下的 checkpoint（上传 OBS）、回放视频 mp4。
+- **典型命令**：
+
+```bash
+docker run --gpus all so101-train:latest \
+  train_smolvla.py --dataset so101/so101_pick_cube_sim \
+  --steps 20000 --batch_size 32
+```
+
+#### `so101-ppo` — 强化学习训练与评估一体
+
+PPO 路线和 VLA 最大的结构差异是：**它一个镜像内就完成了「训练 + 评估」的闭环**，不需要单独的评估镜像，因为 RL 的评估就是在同一个仿真环境里再跑几百个 episode 算 success_rate。
+
+- **职责**：用 Warp GPU 并行环境训练 PPO 策略（WarpPickLift 等），并立即在同一环境做独立评估。
+- **被谁调用**：`ppo-pipeline.yml`。
+- **关键脚本**：`train_ppo.py`（CleanRL 风格单文件实现）、`eval_ppo.py`（加载 `best_agent.pt` 跑评估）。
+- **输入**：`env_id`（如 `WarpPickLift-v1`）、超参数（`total_timesteps`、`lr`、`gamma` 等）。
+- **输出**：`best_agent.pt`（策略权重，约 591KB）、`eval_result.json`、`eval_video.mp4`，全部上传 OBS。
+- **注意点**：镜像里打了 `mujoco-warp>=3.10.0.1,<3.12` 修复 NVRTC bug，并设置 `MUJOCO_GL=egl` 做无头渲染——这是 V100 上能跑的关键。
+
+#### `so101-mujoco` — 仿真孪生训练与网格扫描评测
+
+Sim twin 路线专属：它在 MuJoCo 里**训练一个 SO101 仿真孪生模型**（方案 B，即拿到 47% 成功率的那个），再对训练出的模型做 grid sweep 评测。
+
+- **职责**：拉取仿真数据集 → 训练 SO101 sim twin（SmolVLA）→ 多初始条件 × 多 seed 的 grid sweep 评测，产出成功率热力图。
+- **被谁调用**：`so101-mujoco-pipeline.yml`（流水线内依次调用以下三个脚本）。
+- **关键脚本**：`download_sim_dataset.py`（拉取仿真数据集）、`train_smolvla_sim.py`（训练 sim twin）、`eval_mujoco_policy.py`（grid sweep 主程序）。
+- **输入**：仿真数据集、SmolVLA base 权重、初始条件 grid 定义。
+- **输出**：sim twin checkpoint、`success_rate` 矩阵、热力图（各区域成功率，中心 60-100% / 边缘 ~0% 就是这么来的）。
+- **与 `so101-train` 的区别**：`train` 在原始 LeRobot 数据集上微调通用 SmolVLA；`mujoco` 在 MuJoCo 仿真数据上训练/评测 sim twin，两者数据来源与用途不同，所以分开成镜像。
+
+#### `so101-eval` — LIBERO 标准化 benchmark 评估（已构建，已运行）
+
+这是为「跨任务标准化评测」准备的镜像，基础设施已就绪，且已通过 `evaluate.yml` 实际跑过首次 LIBERO 评测（结果 0%，详见 Ch5 §4.8）。
+
+- **职责**：通过 `vla-eval` harness 统一调度 LIBERO / LIBERO-PRO 等多个 benchmark，产出每任务 success_rate 与 SQLite 结果库。
+- **被谁调用**：`evaluate.yml`（已运行，含 LIBERO 评测，首次跑出 0% 成功率，详见 Ch5 §4.8）。
+- **关键脚本**：`eval_vla.py`。
+- **输入**：模型 checkpoint、`configs/benchmarks/*.yaml`（8 个 LIBERO 配置）。
+- **输出**：每任务 success_rate、SQLite 数据库。
+- **当前状态**：首次实战已验证「模型-环境不兼容」——我们的 SO101 SmolVLA 无法驱动 LIBERO 的 Franka Panda（libero_goal 100 个 episode `steps=0` 初始化即失败，libero_spatial 20 个 episode 跑满 230 步仍 0% 成功）。根本解决仍需先在 LIBERO 中添加 SO101 机器人（Ch6 方案）。
+
+#### `so101-model-server` — 模型推理部署
+
+把训练好的策略包装成一个可被外部程序调用的推理服务，是「从训练环境走向真机/实时控制」的桥梁。
+
+- **职责**：基于 `vla-eval serve` 子命令，把 SmolVLA SO101 模型托管为推理服务，对外接收观测、返回动作。Dockerfile 的启动命令即 `vla-eval serve --config configs/model_servers/smolvla_so101.yaml`。
+- **接口**：由 `vla-eval` 提供的推理服务端点（HTTP）。
+- **典型场景**：真机 SO101 实时控制、Web 可视化演示、或作为其他系统的策略后端。
+- **与训练镜像的关系**：训练产出的 checkpoint 在这里被加载为常驻服务；它复用 `vla-eval` 推理栈（与 `so101-eval` 共享 lerobot[smolvla] + vla-eval 依赖），单独成镜像是为了把「服务部署」与「训练/评测」解耦。
+
+> **一句话总结**：`train` 和 `ppo` 负责「造模型」，`mujoco` 和 `eval` 负责「测模型」，`model-server` 负责「用模型」。训练与评估分离是刻意的——依赖不同、镜像更小、构建更快（见 §3.1）。
 
 ---
 

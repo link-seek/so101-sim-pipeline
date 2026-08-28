@@ -506,23 +506,23 @@ benchmarks:
 
 **关键区别**：LIBERO 评测的是**跨任务泛化能力**，grid sweep 评测的是**单任务工作空间覆盖**。两者互补。
 
-### 4.8 当前状态：已设计，未实战
+### 4.8 当前状态：已实战（首次 LIBERO 评测 0%）
 
-> **结论**：我们的 LIBERO 评测管线已完整设计并实现代码（`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` Docker 镜像），但**尚未实际运行过**（`evaluate.yml` 0 次执行）。
+> **结论**：我们的 LIBERO 评测管线已完整设计并实现代码（`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` Docker 镜像），并已于 2026-08-27 通过 `evaluate.yml` 实际运行（`smolvla-fresh` 分支，run 33053613547）。
 >
-> **根本障碍**是模型-环境不兼容——我们的 SmolVLA 在 SO101 数据上训练，无法直接控制 LIBERO 的 Franka Panda 机器人（关节定义、观测空间、动作语义都不匹配）。LIBERO 只支持 Franka，社区无人做过 LIBERO + SO101 集成。SO-101 Bench 虽匹配 SO101 但需要 Isaac Lab（RTX GPU），V100 跑不了。
+> **实战结果**：首次 LIBERO 评测共 120 episodes、0% 成功率。其中 `libero_goal` 100 episodes 全部 `steps=0`（环境初始化即失败），`libero_spatial` 20 episodes 跑满 230 步但 0% 成功。这**直接证实了模型-环境不兼容**——我们的 SO101 SmolVLA 无法驱动 LIBERO 的 Franka Panda（关节定义、观测空间、动作语义都不匹配）。LIBERO 只支持 Franka，社区无人做过 LIBERO + SO101 集成。SO-101 Bench 虽匹配 SO101 但需要 Isaac Lab（RTX GPU），V100 跑不了。
 >
-> **当前可行路径**：MuJoCo Grid Sweep 是 V100 上唯一可行的标准化评测路径（已完成，47%）。LIBERO 评测的落地方案详见 [Discussion #9](https://github.com/link-seek/so101-sim-pipeline/discussions/9) 和 [Ch6 落地 LIBERO 评测实战](so101-tutorial-ch6-optimization.md)。
+> **当前可行路径**：MuJoCo Grid Sweep 仍是 V100 上唯一跑通的、有正结果的标准化评测路径（47%）。要让 LIBERO 出正分，仍需先按 Ch6 方案在 LIBERO 中添加 SO101 机器人。落地方案详见 [Discussion #9](https://github.com/link-seek/so101-sim-pipeline/discussions/9) 和 [Ch6 落地 LIBERO 评测实战](so101-tutorial-ch6-optimization.md)。
 
-**实际评测进展**（截至 2026-08-20）：
+**实际评测进展**（截至 2026-08-27）：
 
 | 评测方法 | 状态 | 结果 |
 |----------|------|------|
 | 回放验证（replay_demo.py） | ✅ 已执行 | 方案 A 失败，方案 B 成功 |
 | Grid Sweep（eval_mujoco_policy.py） | ✅ 已执行 | 153/325 = 47% |
 | PPO 确定性评估（eval_ppo.py） | ✅ 已执行 | v1: 100%, v2: 98% |
-| **LIBERO（eval_vla.py）** | **⬜ 已设计未执行** | **详见 [Discussion #9](https://github.com/link-seek/so101-sim-pipeline/discussions/9)** |
-| **LIBERO-PRO** | **⬜ 已设计未执行** | **同上** |
+| **LIBERO（eval_vla.py）** | **✅ 已执行（0%，模型-环境不兼容）** | **120 episodes / 0%：libero_goal 100×steps=0，libero_spatial 20×230 步仍 0%** |
+| **LIBERO-PRO** | **⬜ 已设计未执行** | **同上（依赖 LIBERO 先出正分）** |
 | **SO-101 Bench (Isaac Lab)** | **⬜ 硬件不支持** | **V100 无法运行** |
 
 ---
@@ -627,7 +627,7 @@ SUCCESS 153/325 = 47%
 | 用途 | 快速 smoke test | 单任务工作空间扫描 | RL 策略评估 | 跨任务泛化评估 |
 | 时机 | 每次训练后 | 关键 checkpoint | PPO 训练完成 | 里程碑节点 |
 | 框架 | LeRobot 推理管线 | so101-mujoco | CleanRL 范式 | vla-eval harness |
-| **我们是否跑过** | ✅ 已执行 | ✅ 已执行 | ✅ 已执行 | ⬜ 已设计未执行 |
+| **我们是否跑过** | ✅ 已执行 | ✅ 已执行 | ✅ 已执行 | ✅ 已执行（0%，模型-环境不兼容） |
 
 **从快到慢，从简单到全面**：
 
