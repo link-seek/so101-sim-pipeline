@@ -61,6 +61,24 @@ def register_so101():
 
     print("SO101 registration complete")
 
+    # LIBERO X-embodiment bug: Libero_Floor_Manipulation never defines
+    # robot_base_xpos_offset (referenced by bddl_base_domain._load_model),
+    # so floor-arena tasks crash for every robot. Patch it here.
+    try:
+        from libero.libero.envs.problems.libero_floor_manipulation import (
+            Libero_Floor_Manipulation,
+        )
+
+        if not hasattr(Libero_Floor_Manipulation, "robot_base_xpos_offset"):
+            Libero_Floor_Manipulation.robot_base_xpos_offset = {
+                "bins": (-0.5, -0.1, 0),
+                "empty": (-0.6, 0, 0),
+                "table": (-0.16, 0, 0),
+            }
+            print("Patched Libero_Floor_Manipulation.robot_base_xpos_offset")
+    except ImportError:
+        pass
+
     import mujoco
     from robosuite.utils.binding_utils import MjModel
 
