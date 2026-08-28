@@ -64,13 +64,14 @@ def register_so101():
     # LIBERO X-embodiment bug: Libero_Floor_Manipulation never defines
     # robot_base_xpos_offset (referenced by bddl_base_domain._load_model),
     # so floor-arena tasks crash for every robot. Patch it here.
+    # Note: register_problem has no return, so the module attribute is None;
+    # fetch the real class from TASK_MAPPING.
     try:
-        from libero.libero.envs.problems.libero_floor_manipulation import (
-            Libero_Floor_Manipulation,
-        )
+        from libero.libero.envs.bddl_base_domain import TASK_MAPPING
 
-        if not hasattr(Libero_Floor_Manipulation, "robot_base_xpos_offset"):
-            Libero_Floor_Manipulation.robot_base_xpos_offset = {
+        floor_cls = TASK_MAPPING.get("libero_floor_manipulation")
+        if floor_cls is not None and not hasattr(floor_cls, "robot_base_xpos_offset"):
+            floor_cls.robot_base_xpos_offset = {
                 "bins": (-0.5, -0.1, 0),
                 "empty": (-0.6, 0, 0),
                 "table": (-0.16, 0, 0),
