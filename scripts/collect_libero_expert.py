@@ -142,8 +142,15 @@ def plan_actions(domain, sim, ik, q_start_rad):
     HOLD, GRIP_HOLD = 10, 20
     q = np.array(q_start_rad, dtype=np.float64)
     actions = []
+    checkpoints = {}
     for phase, tgt, grip_open in waypoints:
         q_sol = ik.solve(tgt, q)
+        _, z_axis = ik._fk(q_sol)
+        pos_reached = np.array(ik.d.xpos[ik.eef_bid])
+        print(
+            f"    [ik:{phase}] err={np.linalg.norm(tgt - pos_reached):.4f}m "
+            f"reached={np.round(pos_reached, 3)} z_axis={np.round(z_axis, 2)}"
+        )
         tgt_deg = np.degrees(q_sol) - SO101_CALIB_OFFSETS
         cur_deg = np.degrees(q) - SO101_CALIB_OFFSETS
         dist = float(np.max(np.abs(tgt_deg - cur_deg)))
@@ -155,8 +162,9 @@ def plan_actions(domain, sim, ik, q_start_rad):
         hold = GRIP_HOLD if phase in ("grip", "release") else HOLD
         for _ in range(hold):
             actions.append(np.concatenate([tgt_deg, [grip_open * 100.0]]))
+        checkpoints[len(actions)] = phase
         q = q_sol
-    return actions
+    return actions, checkpoints
 
 
 def run_episode(env, ik, max_steps=450):
@@ -170,7 +178,7 @@ def run_episode(env, ik, max_steps=450):
     # Planning: IK solvers write sim state, so snapshot & restore afterwards
     qpos_snapshot = np.array(sim.data.qpos).copy()
     qvel_snapshot = np.array(sim.data.qvel).copy()
-    actions = plan_actions(domain, sim, ik, q_start)
+    actions, checkpoints = plan_actions(domain, sim, ik, q_start)
     sim.data.qpos[:] = qpos_snapshot
     sim.data.qvel[:] = qvel_snapshot
     import mujoco
@@ -181,10 +189,16 @@ def run_episode(env, ik, max_steps=450):
     if not actions:
         return False, 0, 0.0, [], []
 
+    # track the manipulated object body for diagnostics
+    obj_name = next(
+        (n for n in domain.objects_dict if "basket" not in n.lower()), None
+    )
+    obj_bid = body_id(sim, domain.objects_dict[obj_name].root_body) if obj_name else -1
+
     obs_list, act_list = [], []
     success_streak = 0
     total_reward = 0.0
-    for act6 in actions:
+    for step_idx, act6 in enumerate(actions):
         obs_list.append({
             "camera1": np.asarray(obs["birdview_image"]).copy(),
             "camera2": np.asarray(obs["robot0_eye_in_hand_image"]).copy(),
@@ -201,6 +215,10 @@ def run_episode(env, ik, max_steps=450):
         total_reward += float(reward)
         # LIBERO official practice: success latches only after 10 consecutive checks
         success_streak = success_streak + 1 if domain._check_success() else 0
+        if (step_idx + 1) in checkpoints and obj_bid >= 0:
+            label = checkpoints[step_idx + 1]
+            p_obj = np.array(sim.data.xpos[obj_bid])
+            print(f"    [{label}@{step_idx + 1}] obj_pos={np.round(p_obj, 3)}")
         if done or success_streak >= 10:
             break
 
