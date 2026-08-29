@@ -200,7 +200,7 @@ def run_episode(env, ik, max_steps=450):
         obs, reward, done, info = env.step(_env_action_from_policy(act6))
         total_reward += float(reward)
         # LIBERO official practice: success latches only after 10 consecutive checks
-        success_streak = success_streak + 1 if domain.check_success() else 0
+        success_streak = success_streak + 1 if domain._check_success() else 0
         if done or success_streak >= 10:
             break
 
