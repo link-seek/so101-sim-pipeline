@@ -74,10 +74,14 @@ class ArmIK:
 
         self.mujoco = mujoco
         self.m, self.d = mj_raw(sim)
+        # position is tracked at the moving-jaw body (the actual grasp point);
+        # orientation keeps the hand frame's z-axis pointing straight down
         try:
-            self.eef_bid = body_id(sim, "right_hand")
+            self.pos_bid = body_id(sim, "right_moving_jaw")
         except RuntimeError:
-            self.eef_bid = body_id(sim, "gripper_site", verbose=True)
+            self.pos_bid = body_id(sim, "right_hand")
+        self.rot_bid = body_id(sim, "right_hand")
+        self.eef_bid = self.pos_bid
         self.arm_qadr, self.arm_dofadr = [], []
         for j in range(self.m.njnt):
             name = self.mujoco.mj_id2name(self.m, self.mujoco.mjtObj.mjOBJ_JOINT, j)
@@ -92,8 +96,8 @@ class ArmIK:
         for a, v in zip(self.arm_qadr, q):
             self.d.qpos[a] = v
         self.mujoco.mj_forward(self.m, self.d)
-        pos = np.array(self.d.xpos[self.eef_bid])
-        z_axis = np.array(self.d.xmat[self.eef_bid]).reshape(3, 3)[:, 2]
+        pos = np.array(self.d.xpos[self.pos_bid])
+        z_axis = np.array(self.d.xmat[self.rot_bid]).reshape(3, 3)[:, 2]
         return pos, z_axis
 
     def _jls(self, target_xyz, q0, iters, damping, tol, ori_w, ori_w_ramp=True):
@@ -110,7 +114,8 @@ class ArmIK:
                 break
             jac_pos = np.zeros((3, m.nv))
             jac_rot = np.zeros((3, m.nv))
-            self.mujoco.mj_jacBody(m, d, jac_pos, jac_rot, self.eef_bid)
+            self.mujoco.mj_jacBody(m, d, jac_pos, None, self.pos_bid)
+            self.mujoco.mj_jacBody(m, d, None, jac_rot, self.rot_bid)
             J = np.vstack([jac_pos[:, self.arm_dofadr], jac_rot[:2, self.arm_dofadr] * ow])
             dq = J.T @ np.linalg.solve(J @ J.T + damping * np.eye(5), err)
             q = np.clip(q + dq, SO101_JOINT_LO, SO101_JOINT_HI)
@@ -166,17 +171,17 @@ def plan_actions(domain, sim, ik, q_start_rad):
     p_basket = body_pos(sim, domain.objects_dict[basket_name].root_body)
     print(f"    plan: obj={obj_name}@{np.round(p_obj, 3)} basket@{np.round(p_basket, 3)}")
 
-    TCP_OFFSET_Z = 0.075  # right_hand origin sits ~7.5cm above the jaw center
-
+    # IK controls the moving-jaw body directly, so targets are in jaw-center
+    # coordinates relative to the object/basket centers
     waypoints = [
-        ("move", p_obj + np.array([0.0, 0.0, 0.14 + TCP_OFFSET_Z]), 1.0, 1.5),
-        ("approach", p_obj + np.array([0.0, 0.0, 0.035 + TCP_OFFSET_Z]), 1.0, 0.8),
-        ("grip", p_obj + np.array([0.0, 0.0, 0.035 + TCP_OFFSET_Z]), 0.0, 1.5),
-        ("lift", p_obj + np.array([0.0, 0.0, 0.22 + TCP_OFFSET_Z]), 0.0, 1.5),
-        ("move", p_basket + np.array([0.0, 0.0, 0.24 + TCP_OFFSET_Z]), 0.0, 1.5),
-        ("move", p_basket + np.array([0.0, 0.0, 0.12 + TCP_OFFSET_Z]), 0.0, 1.5),
-        ("release", p_basket + np.array([0.0, 0.0, 0.12 + TCP_OFFSET_Z]), 1.0, 1.5),
-        ("move", p_basket + np.array([0.0, 0.0, 0.30 + TCP_OFFSET_Z]), 1.0, 1.5),
+        ("move", p_obj + np.array([0.0, 0.0, 0.10]), 1.0, 1.5),
+        ("approach", p_obj + np.array([0.0, 0.0, 0.045]), 1.0, 0.8),
+        ("grip", p_obj + np.array([0.0, 0.0, 0.035]), 0.0, 1.5),
+        ("lift", p_obj + np.array([0.0, 0.0, 0.20]), 0.0, 1.5),
+        ("move", p_basket + np.array([0.0, 0.0, 0.22]), 0.0, 1.5),
+        ("move", p_basket + np.array([0.0, 0.0, 0.10]), 0.0, 1.5),
+        ("release", p_basket + np.array([0.0, 0.0, 0.10]), 1.0, 1.5),
+        ("move", p_basket + np.array([0.0, 0.0, 0.28]), 1.0, 1.5),
     ]
 
     HOLD, GRIP_HOLD = 10, 20
@@ -186,7 +191,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
     for phase, tgt, grip_open, max_step_deg in waypoints:
         q_sol = ik.solve(tgt, q)
         _, z_axis = ik._fk(q_sol)
-        pos_reached = np.array(ik.d.xpos[ik.eef_bid])
+        pos_reached = np.array(ik.d.xpos[ik.pos_bid])
         print(
             f"    [ik:{phase}] err={np.linalg.norm(tgt - pos_reached):.4f}m "
             f"reached={np.round(pos_reached, 3)} z_axis={np.round(z_axis, 2)}"
@@ -207,7 +212,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
     return actions, checkpoints
 
 
-def run_episode(env, ik, max_steps=650):
+def run_episode(env, ik, max_steps=900):
     obs = env.reset()
     rescale_scene_to_reach(env)
     sim = env.env.sim
@@ -351,7 +356,7 @@ def main():
             camera_heights=RENDER_HW[0],
             camera_widths=RENDER_HW[1],
             control_freq=FPS,
-            horizon=700,
+            horizon=950,
         )
         try:
             ik = ArmIK(env.env.sim)
