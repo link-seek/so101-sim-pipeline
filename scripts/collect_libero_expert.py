@@ -159,17 +159,25 @@ class ArmIK:
 
 def plan_actions(domain, sim, ik, q_start_rad):
     """Return list of per-step action vectors in .pos units (5 arm deg + gripper 0-100)."""
+    # resolve the object to grasp and the goal container from BDDL obj_of_interest
     obj_name, basket_name = None, None
-    for name in domain.objects_dict:
-        if "basket" in name.lower():
-            basket_name = name
-        elif obj_name is None:
-            obj_name = name
+    interest = None
+    parsed = getattr(domain, "parsed_problem", None)
+    if parsed is not None:
+        interest = parsed.get("obj_of_interest")
+    if interest and len(interest) >= 2 and interest[0] in domain.objects_dict:
+        obj_name, basket_name = interest[0], interest[1]
+    else:
+        for name in domain.objects_dict:
+            if any(k in name.lower() for k in ("basket", "plate", "box")):
+                basket_name = name
+            elif obj_name is None:
+                obj_name = name
     if obj_name is None or basket_name is None:
         raise RuntimeError(f"could not resolve objects: {list(domain.objects_dict)}")
     p_obj = body_pos(sim, domain.objects_dict[obj_name].root_body)
     p_basket = body_pos(sim, domain.objects_dict[basket_name].root_body)
-    print(f"    plan: obj={obj_name}@{np.round(p_obj, 3)} basket@{np.round(p_basket, 3)}")
+    print(f"    plan: obj={obj_name}@{np.round(p_obj, 3)} goal={basket_name}@{np.round(p_basket, 3)}")
 
     # IK controls the moving-jaw body directly, so targets are in jaw-center
     # coordinates relative to the object/basket centers
