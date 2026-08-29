@@ -74,7 +74,9 @@ def register_so101():
             floor_cls.robot_base_xpos_offset = {
                 "bins": (-0.5, -0.1, 0),
                 "empty": (-0.6, 0, 0),
-                "table": (-0.16, 0, 0),
+                # SO101 has a short reach (0.47m): place the base close to the
+                # object regions so ground-level grasps don't hit joint limits
+                "table": (-0.06, 0, 0),
             }
             print("Patched Libero_Floor_Manipulation.robot_base_xpos_offset")
     except ImportError:
