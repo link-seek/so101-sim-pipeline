@@ -166,22 +166,24 @@ def plan_actions(domain, sim, ik, q_start_rad):
     p_basket = body_pos(sim, domain.objects_dict[basket_name].root_body)
     print(f"    plan: obj={obj_name}@{np.round(p_obj, 3)} basket@{np.round(p_basket, 3)}")
 
+    TCP_OFFSET_Z = 0.075  # right_hand origin sits ~7.5cm above the jaw center
+
     waypoints = [
-        ("move", p_obj + np.array([0.0, 0.0, 0.14]), 1.0),
-        ("move", p_obj + np.array([0.0, 0.0, 0.035]), 1.0),
-        ("grip", p_obj + np.array([0.0, 0.0, 0.035]), 0.0),
-        ("move", p_obj + np.array([0.0, 0.0, 0.22]), 0.0),
-        ("move", p_basket + np.array([0.0, 0.0, 0.24]), 0.0),
-        ("move", p_basket + np.array([0.0, 0.0, 0.12]), 0.0),
-        ("release", p_basket + np.array([0.0, 0.0, 0.12]), 1.0),
-        ("move", p_basket + np.array([0.0, 0.0, 0.30]), 1.0),
+        ("move", p_obj + np.array([0.0, 0.0, 0.14 + TCP_OFFSET_Z]), 1.0, 1.5),
+        ("approach", p_obj + np.array([0.0, 0.0, 0.035 + TCP_OFFSET_Z]), 1.0, 0.8),
+        ("grip", p_obj + np.array([0.0, 0.0, 0.035 + TCP_OFFSET_Z]), 0.0, 1.5),
+        ("lift", p_obj + np.array([0.0, 0.0, 0.22 + TCP_OFFSET_Z]), 0.0, 1.5),
+        ("move", p_basket + np.array([0.0, 0.0, 0.24 + TCP_OFFSET_Z]), 0.0, 1.5),
+        ("move", p_basket + np.array([0.0, 0.0, 0.12 + TCP_OFFSET_Z]), 0.0, 1.5),
+        ("release", p_basket + np.array([0.0, 0.0, 0.12 + TCP_OFFSET_Z]), 1.0, 1.5),
+        ("move", p_basket + np.array([0.0, 0.0, 0.30 + TCP_OFFSET_Z]), 1.0, 1.5),
     ]
 
     HOLD, GRIP_HOLD = 10, 20
     q = np.array(q_start_rad, dtype=np.float64)
     actions = []
     checkpoints = {}
-    for phase, tgt, grip_open in waypoints:
+    for phase, tgt, grip_open, max_step_deg in waypoints:
         q_sol = ik.solve(tgt, q)
         _, z_axis = ik._fk(q_sol)
         pos_reached = np.array(ik.d.xpos[ik.eef_bid])
@@ -192,7 +194,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
         tgt_deg = np.degrees(q_sol) - SO101_CALIB_OFFSETS
         cur_deg = np.degrees(q) - SO101_CALIB_OFFSETS
         dist = float(np.max(np.abs(tgt_deg - cur_deg)))
-        n = max(4, int(dist / 1.5))
+        n = max(4, int(dist / max_step_deg))
         for k in range(1, n + 1):
             t = k / n
             a5 = (1 - t) * cur_deg + t * tgt_deg
@@ -205,7 +207,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
     return actions, checkpoints
 
 
-def run_episode(env, ik, max_steps=450):
+def run_episode(env, ik, max_steps=650):
     obs = env.reset()
     rescale_scene_to_reach(env)
     sim = env.env.sim
@@ -232,6 +234,7 @@ def run_episode(env, ik, max_steps=450):
         (n for n in domain.objects_dict if "basket" not in n.lower()), None
     )
     obj_bid = body_id(sim, domain.objects_dict[obj_name].root_body) if obj_name else -1
+    obj_z0 = float(np.array(sim.data.xpos[obj_bid])[2]) if obj_bid >= 0 else 0.0
 
     obs_list, act_list = [], []
     success_streak = 0
@@ -257,6 +260,10 @@ def run_episode(env, ik, max_steps=450):
             label = checkpoints[step_idx + 1]
             p_obj = np.array(sim.data.xpos[obj_bid])
             print(f"    [{label}@{step_idx + 1}] obj_pos={np.round(p_obj, 3)}")
+            # grasp verification: after lifting, the object must come up with us
+            if label == "lift" and p_obj[2] < obj_z0 + 0.03:
+                print("    [grasp-failed] object not lifted; aborting trial")
+                return False, len(act_list), total_reward, obs_list, act_list
         if done or success_streak >= 10:
             break
 
@@ -344,7 +351,7 @@ def main():
             camera_heights=RENDER_HW[0],
             camera_widths=RENDER_HW[1],
             control_freq=FPS,
-            horizon=450,
+            horizon=700,
         )
         try:
             ik = ArmIK(env.env.sim)
