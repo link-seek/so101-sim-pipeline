@@ -96,22 +96,60 @@ class ArmIK:
         z_axis = np.array(self.d.xmat[self.eef_bid]).reshape(3, 3)[:, 2]
         return pos, z_axis
 
-    def solve(self, target_xyz, q_init, iters=200, damping=0.08, tol=0.004, ori_w=0.6):
-        q = np.array(q_init, dtype=np.float64)
-        for _ in range(iters):
+    def _jls(self, target_xyz, q0, iters, damping, tol, ori_w, ori_w_ramp=True):
+        """Single-start damped least squares. Position first, orientation ramps in."""
+        q = np.array(q0, dtype=np.float64)
+        m, d = self.m, self.d
+        for i in range(iters):
             pos, z_axis = self._fk(q)
             e_pos = target_xyz - pos
-            w = np.cross(z_axis, self.DOWN)  # rotation that brings z -> down
-            err = np.concatenate([e_pos, ori_w * w[:2]])
+            w = np.cross(z_axis, self.DOWN)
+            ow = ori_w if not ori_w_ramp else ori_w * min(1.0, i / max(1, iters // 2))
+            err = np.concatenate([e_pos, ow * w[:2]])
             if np.linalg.norm(e_pos) < tol and np.linalg.norm(w) < 0.05:
                 break
-            jac_pos = np.zeros((3, self.m.nv))
-            jac_rot = np.zeros((3, self.m.nv))
-            self.mujoco.mj_jacBody(self.m, self.d, jac_pos, jac_rot, self.eef_bid)
-            J = np.vstack([jac_pos[:, self.arm_dofadr], jac_rot[:2, self.arm_dofadr] * ori_w])
+            jac_pos = np.zeros((3, m.nv))
+            jac_rot = np.zeros((3, m.nv))
+            self.mujoco.mj_jacBody(m, d, jac_pos, jac_rot, self.eef_bid)
+            J = np.vstack([jac_pos[:, self.arm_dofadr], jac_rot[:2, self.arm_dofadr] * ow])
             dq = J.T @ np.linalg.solve(J @ J.T + damping * np.eye(5), err)
             q = np.clip(q + dq, SO101_JOINT_LO, SO101_JOINT_HI)
         return q
+
+    def solve(self, target_xyz, q_init, tol=0.006):
+        """Multi-start JLS: tries the seed plus perturbed/fallback postures,
+        returns the solution with the lowest weighted error."""
+        rng = np.random.default_rng(0)
+        seeds = [np.array(q_init, dtype=np.float64)]
+        # standard grasp-ish postures (shoulder pitched forward, elbow bent)
+        seeds.append(np.radians([0.0, -50.0, 60.0, -10.0, 0.0]))
+        seeds.append(np.radians([0.0, -70.0, 80.0, 10.0, 0.0]))
+        seeds.append(np.radians([0.0, -30.0, 40.0, -10.0, 0.0]))
+        for _ in range(6):
+            seeds.append(
+                np.clip(
+                    np.radians(rng.uniform(-60, 60, size=5))
+                    + np.array([0.0, -50.0, 50.0, 0.0, 0.0]),
+                    SO101_JOINT_LO,
+                    SO101_JOINT_HI,
+                )
+            )
+
+        best_q, best_cost = None, np.inf
+        for q0 in seeds:
+            # phase 1: position only
+            q = self._jls(target_xyz, q0, iters=500, damping=0.05, tol=tol, ori_w=0.0)
+            # phase 2: orientation refinement
+            q = self._jls(target_xyz, q, iters=300, damping=0.05, tol=tol, ori_w=0.6)
+            pos, z_axis = self._fk(q)
+            e = np.linalg.norm(target_xyz - pos) + 0.3 * np.linalg.norm(
+                np.cross(z_axis, self.DOWN)
+            )
+            if e < best_cost:
+                best_q, best_cost = q, e
+            if e < tol:
+                break
+        return best_q
 
 
 def plan_actions(domain, sim, ik, q_start_rad):
