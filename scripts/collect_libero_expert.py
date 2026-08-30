@@ -83,16 +83,17 @@ class ArmIK:
         self.pos_bid = body_id(sim, "right_moving_jaw")
         self.rot_bid = body_id(sim, "right_hand")
         self.eef_bid = self.pos_bid
-        self.arm_qadr, self.arm_dofadr = [], []
+        self.arm_qadr, self.arm_dofadr, self.arm_jids = [], [], []
         for j in range(self.m.njnt):
             name = self.mujoco.mj_id2name(self.m, self.mujoco.mjtObj.mjOBJ_JOINT, j)
             if name and name.startswith("robot0_joint") and int(self.m.jnt_type[j]) == 3:
                 self.arm_qadr.append(int(self.m.jnt_qposadr[j]))
                 self.arm_dofadr.append(int(self.m.jnt_dofadr[j]))
+                self.arm_jids.append(j)
         if len(self.arm_qadr) != 5:
             raise RuntimeError(f"expected 5 arm joints, got {len(self.arm_qadr)}")
-        self.LO = self.m.jnt_range[:, 0].copy()
-        self.HI = self.m.jnt_range[:, 1].copy()
+        self.LO = self.m.jnt_range[self.arm_jids, 0].copy()
+        self.HI = self.m.jnt_range[self.arm_jids, 1].copy()
         rng = np.random.default_rng(0)
         self.samples = rng.uniform(self.LO, self.HI, size=(40000, 5))
         self.rng = rng
