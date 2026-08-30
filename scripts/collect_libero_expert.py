@@ -213,16 +213,16 @@ def plan_actions(domain, sim, ik, q_start_rad):
     # coordinates relative to the object/basket centers
     waypoints = [
         ("move", p_obj + np.array([0.0, 0.0, 0.10]), 1.0, 1.5),
-        ("approach", p_obj + np.array([0.0, 0.0, 0.045]), 1.0, 0.8),
-        ("grip", p_obj + np.array([0.0, 0.0, 0.035]), 0.0, 1.5),
-        ("lift", p_obj + np.array([0.0, 0.0, 0.20]), 0.0, 1.5),
+        ("approach", p_obj + np.array([0.0, 0.0, 0.035]), 1.0, 0.8),
+        ("grip", p_obj + np.array([0.0, 0.0, 0.02]), 0.0, 1.5),
+        ("lift", p_obj + np.array([0.0, 0.0, 0.20]), 0.0, 0.8),
         ("move", p_basket + np.array([0.0, 0.0, 0.22]), 0.0, 1.5),
         ("move", p_basket + np.array([0.0, 0.0, 0.10]), 0.0, 1.5),
         ("release", p_basket + np.array([0.0, 0.0, 0.10]), 1.0, 1.5),
         ("move", p_basket + np.array([0.0, 0.0, 0.28]), 1.0, 1.5),
     ]
 
-    HOLD, GRIP_HOLD = 10, 20
+    HOLD, GRIP_HOLD = 10, 30
     q = np.array(q_start_rad, dtype=np.float64)
     actions = []
     checkpoints = {}
