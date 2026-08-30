@@ -6,7 +6,45 @@
 
 ---
 
-## 1. VLA 模型 vs PPO
+## 1. VLA 模型全景
+
+在深入 SmolVLA 之前，先了解 VLA 领域的主要模型：
+
+### 1.1 主流 VLA 模型对比
+
+| 模型 | 参数量 | 动作输出 | 硬件需求 | 推理速度 | 特点 |
+|------|--------|----------|----------|----------|------|
+| **SmolVLA** | 450M | 连续 chunk (50步) | 1x V100 16GB | 50ms/step | LeRobot 原生，轻量 |
+| **Octo** | 93M | Diffusion | 1x RTX 3090 | 10-40 Hz | 最小，Diffusion Policy |
+| **OpenVLA** | 7.5B | 离散 token | 2x A100 80GB | 3-8 Hz | 通用，需要大数据 |
+| **RT-2** | 55B | 离散 token | TPU/H100 | ~1 Hz | Google，最大 |
+
+### 1.2 架构差异
+
+```
+SmolVLA:
+  图像 + 语言 → SmolVLM (视觉-语言) → Action Head → 50 步连续动作
+
+RT-2/OpenVLA:
+  图像 → Vision Encoder
+  语言 → Language Encoder
+  → 融合 → 离散化 → 逐步生成动作 token
+```
+
+### 1.3 为什么选 SmolVLA
+
+| 约束 | SmolVLA 优势 |
+|------|-------------|
+| **V100 16GB** | 450M 参数刚好装下 |
+| **LeRobot 生态** | 原生支持，无需适配 |
+| **社区验证** | 多个 SO101 项目成功 (86-90%) |
+| **训练速度** | 10-14 小时可完成 |
+
+其他模型要么太大（OpenVLA 7B, RT-2 55B），要么不在 LeRobot 生态内。
+
+---
+
+## 2. VLA 模型 vs PPO
 
 | | PPO (Ch2) | SmolVLA (本章) |
 |--|-----------|----------------|
@@ -21,7 +59,7 @@ VLA 的核心优势是**有视觉**——可以看到物体、理解场景，因
 
 ---
 
-## 2. SmolVLA 架构
+## 3. SmolVLA 架构
 
 ```
 ┌─────────────────────────────────────┐
@@ -38,11 +76,11 @@ VLA 的核心优势是**有视觉**——可以看到物体、理解场景，因
 └─────────────────────────────────────┘
 ```
 
-### 2.1 SmolVLM Base
+### 7.1 SmolVLM Base
 
 预训练的视觉-语言模型，理解图像内容和语言指令。我们用 `lerobot/smolvla_base` 作为初始权重，在自己的数据上 fine-tune。
 
-### 2.2 Action Head
+### 7.2 Action Head
 
 将 SmolVLM 的隐状态映射到 6 维动作 (5 关节 + 1 gripper)：
 
@@ -52,7 +90,7 @@ action = action_head(hidden_state)  # shape: (batch, 50, 6)
 
 输出 50 个未来 step 的 action（action chunking），每次推理后逐步执行。
 
-### 2.3 Action Chunking
+### 7.3 Action Chunking
 
 Action Chunking 是 SmolVLA 的核心特性：
 
@@ -66,9 +104,9 @@ Action Chunking 是 SmolVLA 的核心特性：
 
 ---
 
-## 3. LeRobot 数据格式
+## 4. LeRobot 数据格式
 
-### 3.1 v3.0 格式
+### 7.1 v3.0 格式
 
 ```
 dataset/
@@ -94,7 +132,7 @@ dataset/
 }
 ```
 
-### 3.2 rename_map
+### 7.2 rename_map
 
 数据集的相机名可能和模型期望不一致，需要映射：
 
@@ -109,11 +147,11 @@ dataset/
 
 ---
 
-## 4. 数据集选择
+## 5. 数据集选择
 
 我们尝试了 3 个数据集，每个都有不同的教训：
 
-### 4.1 数据集对比
+### 7.1 数据集对比
 
 | 数据集 | 来源 | Episodes | 相机 | 视觉域 | 结果 |
 |--------|------|----------|------|--------|------|
@@ -121,7 +159,7 @@ dataset/
 | `ataghof/so101nexus-cube500-binary` | **仿真** scripted expert | 500 | cam0+cam1 (2) | 仿真≠评测环境 | 5 轮失败，终止 |
 | `dobri420/pick-cube-so101-sim` | **仿真** sim twin | - | camera1/2/3 (3) | 仿真=评测环境 | ✅ 47% |
 
-### 4.2 第一个数据集：shattori（真机）
+### 7.2 第一个数据集：shattori（真机）
 
 ```yaml
 # vla-pipeline.yml
@@ -136,7 +174,7 @@ env:
 
 **发现 P1**：训练数据是真机照片，评测是 MuJoCo 渲染。视觉域不匹配，模型在真机图片上学到的特征在仿真中失效。
 
-### 4.3 第二个数据集：ataghof（仿真，500 eps）
+### 7.3 第二个数据集：ataghof（仿真，500 eps）
 
 ```yaml
 env:
@@ -149,7 +187,7 @@ env:
 
 **结果**：5 轮训练 + 3 个 bug 修复后仍 Success=False。根因是数据采集环境 ≠ 评测环境。（详见 Ch4）
 
-### 4.4 第三个数据集：dobri420（仿真 sim twin）
+### 7.4 第三个数据集：dobri420（仿真 sim twin）
 
 ```yaml
 # so101-mujoco-pipeline.yml
@@ -164,9 +202,9 @@ env:
 
 ---
 
-## 5. 训练流程
+## 6. 训练流程
 
-### 5.1 lerobot-train 命令
+### 7.1 lerobot-train 命令
 
 ```bash
 docker run --rm --gpus all --shm-size=8g \
@@ -184,7 +222,7 @@ docker run --rm --gpus all --shm-size=8g \
     --env_eval_freq=2000
 ```
 
-### 5.2 训练脚本核心
+### 7.2 训练脚本核心
 
 ```python
 # scripts/train_smolvla.py（简化）
@@ -214,7 +252,7 @@ def train(args):
             save_checkpoint(policy, f"/data/checkpoints/{step}")
 ```
 
-### 5.3 训练 Loss 曲线
+### 7.3 训练 Loss 曲线
 
 以 ataghof 数据集 20K steps 为例：
 
@@ -233,9 +271,9 @@ Loss 持续下降，但 0.046 远高于社区成功案例的 0.005-0.018。这�
 
 ---
 
-## 6. 仿真回放
+## 7. 仿真回放
 
-### 6.1 回放流程
+### 7.1 回放流程
 
 ```python
 # scripts/replay_demo.py（简化）
@@ -271,7 +309,7 @@ def replay(checkpoint_path, env_id="MuJoCoPickAndPlace-v1"):
     return {"prediction_errors": errors, "success": info["success"]}
 ```
 
-### 6.2 回放结果
+### 7.2 回放结果
 
 | 阶段 | Prediction Errors | Success | Reward |
 |------|-------------------|---------|--------|
