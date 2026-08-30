@@ -42,20 +42,19 @@ def mj_raw(sim):
     return m, d
 
 
-def body_id(sim, name, verbose=False):
+def body_id(sim, name, contains_fallback=("jaw", "grip", "hand")):
     import mujoco
 
-    m = mj_raw(sim)[0] if isinstance(mj_raw(sim), tuple) else mj_raw(sim)
+    m, _ = mj_raw(sim)
     for candidate in (name, f"robot0_{name}"):
         bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, candidate)
         if bid >= 0:
             return bid
-    if verbose:
-        names = [
-            mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) for b in range(m.nbody)
-        ]
-        print(f"    [debug] bodies containing hand/grip/wrist: "
-              f"{[n for n in names if n and any(k in n.lower() for k in ('hand', 'grip', 'wrist', 'eef'))]}")
+    # robosuite renames gripper bodies when composing the full scene
+    for b in range(m.nbody):
+        bn = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b)
+        if bn and any(k in bn.lower() for k in contains_fallback):
+            return b
     raise RuntimeError(f"body {name} not found")
 
 
