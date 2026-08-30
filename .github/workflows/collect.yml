@@ -61,6 +61,17 @@ jobs:
           LOGIN_KEY=$(printf "${{ secrets.OBS_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.OBS_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
           docker login -u "cn-north-4@${{ secrets.OBS_AK }}" -p "$LOGIN_KEY" swr.cn-north-4.myhuaweicloud.com
 
+      - name: Cleanup docker (ECS disk fills with old layers)
+        run: |
+          docker system df || true
+          docker container prune -f || true
+          docker image prune -af --filter "until=24h" || true
+          docker builder prune -af || true
+          df -h / || true
+
+      - name: Pull latest image
+        run: docker pull ${{ env.EVAL_IMAGE }}
+
       - name: Collect expert demonstrations (GPU ${{ matrix.gpu }})
         run: |
           TASKS="${{ inputs.tasks }}"
