@@ -73,9 +73,11 @@ class MountedSO101(ManipulatorModel):
         return {
             "bins": (-0.5, -0.1, 0),
             "empty": (-0.6, 0, 0),
+            # tabletop branch takes z from this lambda: free-standing base sits
+            # on the table surface (0.90m); floor branch uses the fixed tuple
             "table": _DualInterfaceOffset(
-                fixed=(-0.16, 0, 0),
-                dynamic=lambda table_length: (-0.16 - table_length / 2, 0, 0),
+                fixed=(-0.13, 0.05, 0),
+                dynamic=lambda table_length: (-0.30, 0, 0.90),
             ),
         }
 

@@ -80,6 +80,31 @@ def register_so101():
                 "table": (-0.13, 0.05, 0),
             }
             print("Patched Libero_Floor_Manipulation.robot_base_xpos_offset")
+
+        # tabletop problem classes place the base at Panda's working distance
+        # (x=-0.66); SO101's short reach needs it much closer to the table center
+        for name in (
+            "libero_tabletop_manipulation",
+            "libero_study_tabletop_manipulation",
+            "libero_kitchen_tabletop_manipulation",
+            "libero_living_room_tabletop_manipulation",
+            "libero_coffee_table_manipulation",
+        ):
+            prob_cls = TASK_MAPPING.get(name)
+            if prob_cls is None or not hasattr(prob_cls, "robot_base_xpos_offset"):
+                continue
+            if not getattr(prob_cls, "_so101_base_patched", False):
+                orig = prob_cls.robot_base_xpos_offset
+
+                def _so101_table_offset(table_length):
+                    return (-0.30, 0, 0.90)
+
+                prob_cls.robot_base_xpos_offset = {
+                    **{k: v for k, v in orig.items() if k != "table"},
+                    "table": _so101_table_offset,
+                }
+                prob_cls._so101_base_patched = True
+        print("Patched tabletop robot_base_xpos_offset for SO101")
     except ImportError:
         pass
 
