@@ -65,21 +65,23 @@ def body_pos(sim, name):
 
 
 class ArmIK:
-    """Damped-least-squares IK for the 5 arm joints: 3 position + 2 orientation
-    (end-effector z-axis aligned straight down), matching MimicGen-style
-    scripted grasp policies for low-DoF arms."""
+    """SO101 arm IK: c-space sampling (claw-down filter) + JLS position
+    refinement. Controls the moving-jaw tip directly.
+
+    NOTE: SO101's claw extends along hand's +z_local, and a valid grasp
+    requires wrist-roll (j5) far from zero -- uniform sampling with a
+    claw-down filter is essential; plain JLS from q=0 points the claw
+    upward and just sweeps objects away.
+    """
+
+    TIP = 0.075  # claw tip distance from right_hand origin along +z_local
 
     def __init__(self, sim):
         import mujoco
 
         self.mujoco = mujoco
         self.m, self.d = mj_raw(sim)
-        # position is tracked at the moving-jaw body (the actual grasp point);
-        # orientation keeps the hand frame's z-axis pointing straight down
-        try:
-            self.pos_bid = body_id(sim, "right_moving_jaw")
-        except RuntimeError:
-            self.pos_bid = body_id(sim, "right_hand")
+        self.pos_bid = body_id(sim, "right_moving_jaw")
         self.rot_bid = body_id(sim, "right_hand")
         self.eef_bid = self.pos_bid
         self.arm_qadr, self.arm_dofadr = [], []
@@ -90,71 +92,95 @@ class ArmIK:
                 self.arm_dofadr.append(int(self.m.jnt_dofadr[j]))
         if len(self.arm_qadr) != 5:
             raise RuntimeError(f"expected 5 arm joints, got {len(self.arm_qadr)}")
-        self.DOWN = np.array([0.0, 0.0, -1.0])
+        self.LO = self.m.jnt_range[:, 0].copy()
+        self.HI = self.m.jnt_range[:, 1].copy()
+        rng = np.random.default_rng(0)
+        self.samples = rng.uniform(self.LO, self.HI, size=(40000, 5))
+        self.rng = rng
 
-    def _fk(self, q):
+    def _set_q(self, q):
         for a, v in zip(self.arm_qadr, q):
             self.d.qpos[a] = v
         self.mujoco.mj_forward(self.m, self.d)
+
+    def _fk(self, q):
+        self._set_q(q)
         pos = np.array(self.d.xpos[self.pos_bid])
-        z_axis = np.array(self.d.xmat[self.rot_bid]).reshape(3, 3)[:, 2]
-        return pos, z_axis
+        zax = np.array(self.d.xmat[self.rot_bid]).reshape(3, 3)[:, 2]
+        tip = pos + self.TIP * zax
+        return pos, zax, tip
 
-    def _jls(self, target_xyz, q0, iters, damping, tol, ori_w, ori_w_ramp=True):
-        """Single-start damped least squares. Position first, orientation ramps in."""
-        q = np.array(q0, dtype=np.float64)
-        m, d = self.m, self.d
-        for i in range(iters):
-            pos, z_axis = self._fk(q)
-            e_pos = target_xyz - pos
-            w = np.cross(z_axis, self.DOWN)
-            ow = ori_w if not ori_w_ramp else ori_w * min(1.0, i / max(1, iters // 2))
-            err = np.concatenate([e_pos, ow * w[:2]])
-            if np.linalg.norm(e_pos) < tol and np.linalg.norm(w) < 0.05:
-                break
-            jac_pos = np.zeros((3, m.nv))
-            jac_rot = np.zeros((3, m.nv))
-            self.mujoco.mj_jacBody(m, d, jac_pos, None, self.pos_bid)
-            self.mujoco.mj_jacBody(m, d, None, jac_rot, self.rot_bid)
-            J = np.vstack([jac_pos[:, self.arm_dofadr], jac_rot[:2, self.arm_dofadr] * ow])
-            dq = J.T @ np.linalg.solve(J @ J.T + damping * np.eye(5), err)
-            q = np.clip(q + dq, SO101_JOINT_LO, SO101_JOINT_HI)
-        return q
-
-    def solve(self, target_xyz, q_init, tol=0.006):
-        """Multi-start JLS: tries the seed plus perturbed/fallback postures,
-        returns the solution with the lowest weighted error."""
-        rng = np.random.default_rng(0)
-        seeds = [np.array(q_init, dtype=np.float64)]
-        # standard grasp-ish postures (shoulder pitched forward, elbow bent)
-        seeds.append(np.radians([0.0, -50.0, 60.0, -10.0, 0.0]))
-        seeds.append(np.radians([0.0, -70.0, 80.0, 10.0, 0.0]))
-        seeds.append(np.radians([0.0, -30.0, 40.0, -10.0, 0.0]))
-        for _ in range(6):
-            seeds.append(
-                np.clip(
-                    np.radians(rng.uniform(-60, 60, size=5))
-                    + np.array([0.0, -50.0, 50.0, 0.0, 0.0]),
-                    SO101_JOINT_LO,
-                    SO101_JOINT_HI,
-                )
+    def solve(self, target, q_hint=None):
+        """Return joint angles (rad) putting the claw tip at target, claw down."""
+        rng = self.rng
+        n_glob, n_near = 8000, 14000
+        glob_idx = rng.choice(len(self.samples), size=n_glob, replace=False)
+        cands = []
+        for i in glob_idx:
+            q = self.samples[i].copy()
+            self._set_q(q)
+            zax = np.array(self.d.xmat[self.rot_bid]).reshape(3, 3)[:, 2]
+            if zax[2] > -0.5:
+                continue
+            p = np.array(self.d.xpos[self.pos_bid])
+            e = np.linalg.norm(p + self.TIP * zax - target)
+            cands.append((e, q))
+        if q_hint is not None:
+            near = self.rng.uniform(
+                np.maximum(q_hint - 0.9, self.LO),
+                np.minimum(q_hint + 0.9, self.HI),
+                size=(n_near, 5),
             )
+            for q in near:
+                self._set_q(q)
+                zax = np.array(self.d.xmat[self.rot_bid]).reshape(3, 3)[:, 2]
+                if zax[2] > -0.5:
+                    continue
+                p = np.array(self.d.xpos[self.pos_bid])
+                e = np.linalg.norm(p + self.TIP * zax - target)
+                cands.append((e, q))
+        cands.sort(key=lambda c: c[0])
 
-        best_q, best_cost = None, np.inf
-        for q0 in seeds:
-            # phase 1: position only
-            q = self._jls(target_xyz, q0, iters=500, damping=0.05, tol=tol, ori_w=0.0)
-            # phase 2: orientation refinement
-            q = self._jls(target_xyz, q, iters=300, damping=0.05, tol=tol, ori_w=0.6)
-            pos, z_axis = self._fk(q)
-            e = np.linalg.norm(target_xyz - pos) + 0.3 * np.linalg.norm(
-                np.cross(z_axis, self.DOWN)
-            )
-            if e < best_cost:
-                best_q, best_cost = q, e
-            if e < tol:
-                break
-        return best_q
+        best, bc = None, np.inf
+        for _, q0 in cands[:5]:
+            q = np.array(q0, dtype=np.float64)
+            for _ in range(200):
+                self._set_q(q)
+                pos = np.array(self.d.xpos[self.pos_bid])
+                zax = np.array(self.d.xmat[self.rot_bid]).reshape(3, 3)[:, 2]
+                err = target - (pos + self.TIP * zax)
+                if np.linalg.norm(err) < 0.004:
+                    break
+                jp = np.zeros((3, self.m.nv))
+                self.mujoco.mj_jacBody(self.m, self.d, jp, None, self.pos_bid)
+                J = jp[:, self.arm_dofadr]
+                dq = J.T @ np.linalg.solve(J @ J.T + 0.1 * np.eye(3), err)
+                q = np.clip(q + dq, self.LO, self.HI)
+            pos, zax, tip = self._fk(q)
+            e = np.linalg.norm(tip - target)
+            if zax[2] > -0.4:
+                e += 1.0
+            if e < bc:
+                best, bc = q.copy(), e
+        return best
+
+
+def aim_base_at(sim, target_xy):
+    """Rotate the free-standing base so SO101's front (-y local) faces target."""
+    import mujoco
+
+    m, d = mj_raw(sim)
+    base_bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "base")
+    if base_bid < 0:
+        return
+    base_pos = np.array(d.xpos[base_bid])[:2]
+    dir_xy = np.asarray(target_xy) - base_pos
+    # front = -y_local; after R(z,θ) front becomes (sinθ, -cosθ)
+    theta = np.arctan2(dir_xy[0], -dir_xy[1])
+    half = theta / 2.0
+    m.body_quat[base_bid] = [np.cos(half), 0.0, 0.0, np.sin(half)]
+    mujoco.mj_forward(m, d)
+    print(f"    base aimed at {np.round(target_xy, 3)} (yaw {np.degrees(theta):.0f} deg)")
 
 
 def plan_actions(domain, sim, ik, q_start_rad):
@@ -178,6 +204,10 @@ def plan_actions(domain, sim, ik, q_start_rad):
     p_obj = body_pos(sim, domain.objects_dict[obj_name].root_body)
     p_basket = body_pos(sim, domain.objects_dict[basket_name].root_body)
     print(f"    plan: obj={obj_name}@{np.round(p_obj, 3)} goal={basket_name}@{np.round(p_basket, 3)}")
+
+    # SO101's home orientation faces -y (unlike Panda's +x); rotate the base
+    # so its front (-y local) points at the grasp target
+    aim_base_at(sim, p_obj[:2])
 
     # IK controls the moving-jaw body directly, so targets are in jaw-center
     # coordinates relative to the object/basket centers
