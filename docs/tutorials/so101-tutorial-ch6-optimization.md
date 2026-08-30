@@ -120,7 +120,7 @@ xml_path = so_arm101_mj_description.mjcf_path
 
 **关键适配点**：
 - RoboSuite 期望 `<compiler>` 标签的 `meshdir` 指向 `meshes/` 子目录
-- 关节命名需遵循 RoboSuite 约定：`joint0` ~ `joint5`（6 DoF arm）
+- 关节命名需遵循 RoboSuite 约定：`joint0` ~ `joint4`（5 DoF arm）
 - `<actuator>` 需映射到关节 + gripper
 
 ### 3.3 步骤 2：SO101 夹爪
@@ -167,7 +167,7 @@ from robosuite.models.robots.manipulators import ManipulatorModel
 from robosuite.utils.mjcf_utils import xml_path_completion
 
 class MountedSO101(ManipulatorModel):
-    """SO101 机器人，6 DoF arm + parallel gripper"""
+    """SO101 机器人，5 DoF arm + parallel gripper"""
 
     def __init__(self, idn=0):
         super().__init__(xml_path_completion("robots/so101/robot.xml"), idn=idn)
@@ -186,8 +186,8 @@ class MountedSO101(ManipulatorModel):
 
     @property
     def init_qpos(self):
-        # SO101 初始关节位置（6 DoF arm + 1 gripper）
-        return np.array([0.0, -0.5, 0.0, -1.2, 0.0, 0.5, 0.0])
+        # SO101 初始关节位置（5 DoF arm + 1 gripper）
+        return np.array([0.0, -0.5, 0.0, -1.2, 0.0, 0.5])
 
     @property
     def base_xpos_offset(self):
@@ -195,9 +195,9 @@ class MountedSO101(ManipulatorModel):
 ```
 
 **与 Panda 的关键区别**：
-- 6 DoF arm（Panda 是 7 DoF）
+- 5 DoF arm（Panda 是 7 DoF）
 - `JOINT_POSITION` 控制器（Panda 用 `OSC_POSE` 操作空间控制）
-- `init_qpos` 是 7 维（6 arm + 1 gripper），Panda 是 8 维（7 arm + 1 gripper）
+- `init_qpos` 是 6 维（5 arm + 1 gripper），Panda 是 8 维（7 arm + 1 gripper）
 
 ### 3.5 步骤 4：控制器配置
 
@@ -258,7 +258,7 @@ def test_so101_spawn():
     """验证 SO101 能在 LIBERO 中加载"""
     env = libero.get_env("libero_spatial", task_id=0, robot="so101")
     obs = env.reset()
-    assert obs["robot0_joint_pos"].shape == (7,)  # 6 arm + 1 gripper
+    assert obs["robot0_joint_pos"].shape == (6,)  # 5 arm + 1 gripper
 
 def test_so101_reach():
     """验证 SO101 能到达工作空间内的点"""
@@ -417,7 +417,7 @@ python scripts/eval_vla.py \
 # .github/workflows/evaluate.yml — 添加 SO101 LIBERO 评测
 evaluate-so101-libero:
   needs: [build-eval-image]
-  runs-on: [self-hosted, gpu]
+  runs-on: [self-hosted, Linux, X64, V100]
   steps:
     - uses: actions/checkout@v4
     - name: Run SO101 LIBERO evaluation
@@ -490,7 +490,7 @@ gh pr edit --add-label eval-libero
 | 风险 | 影响 | 缓解措施 |
 |------|------|----------|
 | SO101 工作空间 < Panda，部分 BDDL 任务物体不可达 | 评测失败 | 调整 BDDL 区域坐标，缩小放置范围（×0.7） |
-| SO101 6 DoF vs Panda 7 DoF，部分任务需 7 自由度 | 某些任务不可解 | 跳过不可解任务或放宽位姿约束 |
+| SO101 5 DoF arm vs Panda 7 DoF，部分任务需 7 自由度 | 某些任务不可解 | 跳过不可解任务或放宽位姿约束 |
 | RoboSuite 版本兼容性 | 集成失败 | 在 Docker 镜像中固定版本 |
 | Zero-shot 性能极低 | 结果无参考价值 | 预期的——这正是泛化差距的量化，有 baseline 价值 |
 | vla-eval harness 需适配 SO101 | 评测脚本报错 | 修改 benchmark config 指定 `robot: so101` |

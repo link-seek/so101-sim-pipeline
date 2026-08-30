@@ -44,7 +44,7 @@ VLA 的核心优势是**有视觉**——可以看到物体、理解场景，因
 
 ### 2.2 Action Head
 
-将 SmolVLM 的隐状态映射到 6-DOF 关节角度：
+将 SmolVLM 的隐状态映射到 6 维动作 (5 关节 + 1 gripper)：
 
 ```python
 action = action_head(hidden_state)  # shape: (batch, 50, 6)

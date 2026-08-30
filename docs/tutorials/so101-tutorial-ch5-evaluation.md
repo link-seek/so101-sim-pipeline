@@ -188,7 +188,7 @@ LIBERO 评测的是 **VLA 策略**（Vision-Language-Action Policy）——接�
   l_instruction ∈ String    — 语言指令 ("pick up the black bowl and place it on the plate")
 
 输出:
-  a ∈ R^{d_action}           — 机器人动作 (7 维: 6 关节 + 1 gripper)
+  a ∈ R^{d_action}           — 机器人动作 (6 维: 5 关节 + 1 gripper)
 ```
 
 **评测的 VLA 模型类型**（LIBERO 论文中评测的）：

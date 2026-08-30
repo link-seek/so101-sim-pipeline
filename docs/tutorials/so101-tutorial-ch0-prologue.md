@@ -82,11 +82,11 @@ NVIDIA 在 SO-101 Workshop 中给出过一组数据：
 
 ### 3.2 SO-101 在仿真中的建模
 
-SO-101 是一个 6-DOF 机械臂，在 MuJoCo 中通过 URDF/MJCF 描述：
+SO-101 是一个 6-DOF 机械臂（5 个臂关节 + 1 个夹爪），在 MuJoCo 中通过 URDF/MJCF 描述：
 
 ```
 机器人模型 (so101_nexus)
-├── 6 个旋转关节 (shoulder_pan, shoulder_lift, elbow, wrist_1, wrist_2, wrist_3)
+├── 5 个旋转关节 (shoulder_pan, shoulder_lift, elbow, wrist_1, wrist_2)
 ├── 1 个夹爪 (gripper, 范围 0-45)
 ├── 桌面 (1m × 0.5m)
 ├── 目标物体 (红色方块, 3cm³)
@@ -191,7 +191,7 @@ env.step(action_1) → ... → env.step(action_N) → 成功 (done=True) 或超�
 | 训练环境 | 仿真 (on-policy) | 数据集 (off-policy) |
 | 能迁移真机 | ❌ 无视觉 | ✅ 有视觉 |
 | 成功率 | 100% | 47% |
-| 训练时间 | 86 min | ~60 min |
+| 训练时间 | 86 min | ~10h |
 
 **为什么两种都用了？** PPO 验证基础设施和环境可学性，VLA 验证视觉方案可行性。它们验证的东西不同，互为补充。
 
@@ -200,13 +200,13 @@ env.step(action_1) → ... → env.step(action_N) → 成功 (done=True) 或超�
 | 路线 | 方法 | 成功率 | 状态 |
 |------|------|--------|------|
 | A（PPO） | WarpPickLift-v1, 30M steps | **98-100%** | ✅ 完成 |
-| B（VLA） | pick-cube-so101-sim, 15k steps | **47%** | ✅ 首次成功 |
+| B（VLA） | pick-cube-so101-sim, 20k steps | **47%** | ✅ 首次成功 |
 
 PPO 路线快速成功（86 分钟训练），验证了基础设施可用。VLA 路线经历了 5 轮失败迭代，最终通过 sim twin 数据集实现首次成功。
 
 ---
 
-## 5. SO101 项目背景
+## 5. SO101 技术生态
 
 ### LeRobot 生态
 
@@ -231,46 +231,19 @@ PPO 路线快速成功（86 分钟训练），验证了基础设施可用。VLA 
 SmolVLA 是 LeRobot 的轻量 VLA 模型：
 
 - 基于 SmolVLM（视觉-语言基础模型）
-- Action Head 输出 6-DOF 关节角度
+- Action Head 输出 6 维动作 (5 关节 + 1 gripper)
 - Action Chunking：每次推理预测 50 个未来 action
 - 预训练 base 模型可 fine-tune
 
 ### 我们的流水线
 
-`so101-sim-pipeline` 把上述组件串成 CI/CD：
-
-```
-GitHub Actions 触发 → 华为云 V100 ECS 启动 → Docker 训练 → MuJoCo 评估 → OBS 归档 → ECS 停止
-```
+`so101-sim-pipeline` 把上述组件串成多条 CI/CD 流水线（PPO / VLA / MuJoCo Sim Twin），统一遵循 `start-ecs → 训练/评估 → stop-ecs` 模式。各流水线细节见后续章节。
 
 ---
 
-## 6. 本教程的承诺
+## 6. 教程结构
 
-这不是一篇理论综述，而是一个**真实项目的完整实战记录**。
-
-你将看到：
-
-1. **PPO 从 0 到 100%**：86 分钟训练，50 episodes 全部成功
-2. **VLA 从 0% 到 47%**：5 轮失败迭代，3 个 bug 诊断，1 次方案终止，最终 sim twin 成功
-3. **真实的踩坑过程**：相机不匹配、gripper 转换 bug、action chunking 误解、数据-环境不匹配
-4. **可复现的代码**：所有 workflow、脚本、Dockerfile 都在公开仓库中
-
-### 如何使用本教程
-
-```bash
-# 克隆实战项目
-git clone https://github.com/link-seek/so101-sim-pipeline
-cd so101-sim-pipeline
-
-# 浏览 4 个 Discussion 了解项目演进
-gh api graphql -f query='query { repository(owner: "link-seek", name: "so101-sim-pipeline") { discussions(first: 10) { nodes { number title } } } }'
-
-# 查看流水线运行历史
-gh run list --limit 20
-```
-
-### 教程结构
+本教程基于真实项目的完整实战记录整理，涵盖从 PPO baseline 到 VLA sim-to-sim 的全流程踩坑与优化。
 
 | 章节 | 主题 | 核心实战 |
 |------|------|----------|

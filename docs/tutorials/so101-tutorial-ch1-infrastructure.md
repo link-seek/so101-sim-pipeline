@@ -39,37 +39,40 @@
 
 ### 1.1 数据流
 
-训练和评估是两个独立阶段，通过 checkpoint 连接：
+训练和评估是两个阶段，通过 checkpoint 连接，在同一条流水线内顺序执行。PPO 和 MuJoCo 流水线均使用单镜像完成训练+评估：
 
 ```
 阶段 1: 训练
   数据集 (HF Hub) ──→ Docker 容器 ──→ 训练脚本 ──→ checkpoint
-  dobri420/pick-cube    so101-train     train_smolvla    /data/ckpt/15000
+  dobri420/pick-cube    so101-mujoco    train_smolvla_sim  /data/ckpt/20000
 
 阶段 2: 评估
   checkpoint ──→ Docker 容器 ──→ 评估脚本 ──→ 评估结果
-  /data/ckpt/     so101-mujoco    eval_mujoco     eval_result.json
-                                  grid_sweep      eval_video.mp4
+  /data/ckpt/     so101-mujoco    eval_mujoco_policy  eval_result.json
+                                   grid_sweep          eval_video.mp4
 
 阶段 3: 归档
   checkpoint + eval_result + eval_video ──→ OBS (长期存储)
 ```
 
-### 1.2 7 个 Workflow 职责矩阵
+### 1.2 8 个 Workflow 职责矩阵
 
 | Workflow | 触发方式 | 做什么 | 用哪个镜像 |
 |----------|---------|--------|-----------|
 | `ci.yml` | push/PR | 代码检查 + 格式化 | 无 (ubuntu-latest) |
 | `docker-build.yml` | push to main | 构建 5 个 Docker 镜像 | 无 (docker buildx) |
-| `train.yml` | 手动 | 通用训练入口 | so101-train |
-| `evaluate.yml` | 手动 | 通用评估入口 | so101-eval |
+| `train.yml` | 手动 | 推送到 Kaggle 训练（非 Docker） | 无 (Kaggle) |
+| `evaluate.yml` | 手动 | 启动 ECS + SSH 远程评估 | 无 (SSH) |
+| `collect.yml` | 手动 | 采集 LIBERO 专家数据 | so101-eval |
 | `ppo-pipeline.yml` | 手动 | **PPO 完整流水线** | so101-ppo |
-| `so101-mujoco-pipeline.yml` | 手动 | **VLA MuJoCo 完整流水线** | so101-train + so101-mujoco |
-| `vla-pipeline.yml` | 手动 | VLA 训练+回放 (旧版) | so101-train |
+| `so101-mujoco-pipeline.yml` | 手动 | **VLA MuJoCo 完整流水线** | so101-mujoco |
+| `vla-pipeline.yml` | 手动 | VLA 训练+回放 (调试中) | so101-train + so101-eval + so101-model-server |
 
-**你最常用的是这两个**：
-- `ppo-pipeline.yml` — PPO 训练 + 评估 + 归档
-- `so101-mujoco-pipeline.yml` — VLA 训练 + grid sweep 评估 + 归档
+**活跃使用的流水线**：
+- `so101-mujoco-pipeline.yml` — VLA 训练 + grid sweep 评估 + 归档（已验证，8 次运行）
+- `ppo-pipeline.yml` — PPO 训练 + 评估 + 归档（已验证，3 次运行）
+- `evaluate.yml` — 通用评估入口（最活跃，61 次运行）
+- `collect.yml` — 采集专家数据（活跃，20 次运行）
 
 ### 1.3 设计决策
 
@@ -98,13 +101,13 @@ jobs:
     steps:
       - name: Start ECS
         run: |
-          # 安装华为云 CLI
-          pip install hcloud
+          # 下载华为云 CLI
+          curl -sSL https://hc.obs.cn-north-4.myhuaweicloud.com/hcloud/hcloud_linux.tar.gz | tar xz
           # 配置认证
-          export HC_ACCESS_KEY=${{ secrets.HC_ACCESS_KEY }}
-          export HC_SECRET_KEY=${{ secrets.HC_SECRET_KEY }}
+          export OBS_AK=${{ secrets.OBS_AK }}
+          export OBS_SK=${{ secrets.OBS_SK }}
           # 启动服务器
-          hcloud ECS BatchStartServers \
+          ./hcloud ECS BatchStartServers \
             --region cn-north-4 \
             --server-id 7f39cb83-1a5c-4792-b65e-e578d7ddb88d
           # 等待 GPU 驱动就绪
@@ -150,89 +153,26 @@ Status: online
 
 ## 3. Docker 镜像矩阵
 
-我们维护了 5 个 Docker 镜像，各有职责：
+我们维护了 5 个 Docker 镜像，各有职责（为什么分镜像？见 §7.4）：
 
-| 镜像 | Dockerfile | 基础 | 关键依赖 | 用途 |
-|------|-----------|------|----------|------|
-| `so101-train` | Dockerfile.train | cuda:12.6.3 | torch cu126 + lerobot[smolvla] 0.6.1 + so101_nexus | VLA 训练 + 回放 |
-| `so101-ppo` | Dockerfile.ppo | cuda:12.6.3 | torch cu126 + so101_nexus[warp,train] | PPO 训练 + 评估 |
-| `so101-mujoco` | Dockerfile.mujoco | cuda:12.6.3 | robot_descriptions + mujoco_env | Sim twin 训练 + grid sweep |
-| `so101-eval` | Dockerfile.eval | cuda:12.6.3 | vla-eval + SQLite | LIBERO benchmark 评估（已构建，已运行：首次 LIBERO 评测 0%，详见 Ch5 §4.8） |
-| `so101-model-server` | Dockerfile.model-server | cuda:12.6.3 | 模型推理服务 | HTTP/ZMQ 推理 |
+| 镜像 | Dockerfile | 关键依赖 | 用途 | 状态 |
+|------|-----------|----------|------|------|
+| `so101-eval` | Dockerfile.eval | vla-eval + mujoco + SQLite | LIBERO 评估 + 采集专家数据 | ✅ 活跃（collect/evaluate 频繁使用） |
+| `so101-mujoco` | Dockerfile.mujoco | lerobot[training] + vla-eval + mujoco + grid sweep | Sim twin 训练 + 评估一体 | ✅ 已验证（8/19 跑通，grid sweep 任务成功率 47%，流水线成功率 83%） |
+| `so101-ppo` | Dockerfile.ppo | so101_nexus[warp,train] + mujoco-warp | PPO 训练 + 评估一体 | ✅ 已验证（8/14 跑通，任务成功率 100%，流水线成功率 67%） |
+| `so101-train` | Dockerfile.train | lerobot[smolvla] + so101_nexus + vla-eval | VLA 训练 + 回放（旧版） | 🔧 调试中（vla-pipeline 43 次运行多次失败，最近一次 8/20 成功） |
+| `so101-model-server` | Dockerfile.model-server | 模型推理服务 | HTTP/ZMQ 推理 | ⏳ 未验证（无运行记录） |
 
-### 3.1 为什么不用一个大镜像
+### 3.1 各镜像职责详解
 
-| 方案 | 大而全 | 分离镜像 |
-|------|--------|----------|
-| 镜像大小 | ~15GB | 每个 5-8GB |
-| 拉取时间 | ~5min | ~2min |
-| 依赖冲突 | so101_nexus vs robot_descriptions 可能冲突 | 隔离 |
-| 构建时间 | 改一行全量重建 | 只重建受影响的 |
+下面把每个镜像到底在跑什么、被谁调用、输入输出是什么逐一拆开，方便你点 Run 之前就知道屏幕上会发生什么。
 
-### 3.2 Dockerfile.ppo 示例
+#### `so101-train` — VLA 训练与回放（调试中）
 
-```dockerfile
-FROM nvidia/cuda:12.6.3-runtime-ubuntu22.04
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    software-properties-common git wget curl build-essential cmake \
-    libegl1 libgles2 libgl1-mesa-glx libvulkan1 mesa-vulkan-drivers ffmpeg \
-    && add-apt-repository ppa:deadsnakes/ppa \
-    && apt-get update && apt-get install -y python3.12 python3.12-venv python3.12-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN python3.12 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# PyTorch with CUDA 12.6 (supports V100 sm_70)
-RUN pip install --no-cache-dir torch==2.11.0 torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cu126
-
-# so101_nexus with Warp GPU parallel env
-RUN pip install --no-cache-dir "so101_nexus[warp,train]" tyro \
-    "imageio[ffmpeg]" opencv-python
-
-# Fix: mujoco-warp sensor NVRTC bug
-RUN pip install --no-cache-dir "mujoco-warp>=3.10.0.1,<3.12"
-
-ENV MUJOCO_GL=egl
-ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
-WORKDIR /workspace
-COPY scripts/ /workspace/scripts/
-```
-
-### 3.3 镜像构建流水线
-
-```yaml
-# .github/workflows/docker-build.yml
-# push to main 自动触发，GHCR + SWR 双写
-jobs:
-  build-ppo:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: docker/Dockerfile.ppo
-          push: true
-          tags: |
-            ghcr.io/link-seek/so101-ppo:latest
-            swr.cn-north-4.myhuaweicloud.com/link-seek/so101-ppo:latest
-```
-
-### 3.4 各镜像职责详解
-
-上面那张矩阵表只列了「用途」一句话。这里把每个镜像到底在跑什么、被谁调用、输入输出是什么逐一拆开，方便你点 Run 之前就知道屏幕上会发生什么。
-
-#### `so101-train` — VLA 训练与回放
-
-这是 SmolVLA 这条路线的核心镜像，几乎所有与「训练一个模仿学习模型」相关的事情都在它里面完成。
+> ⚠️ 此镜像当前仅被 `vla-pipeline.yml` 使用，该流水线在 smolvla-fresh 分支上调试中（43 次运行，多次失败/cancelled）。如果只是想跑 VLA 训练，建议用 `so101-mujoco` 镜像的 sim twin 方案。
 
 - **职责**：在 LeRobot 格式数据集上微调 SmolVLA（行为克隆 / SFT），并负责训练后的「回放验证」——把模型加载进仿真跑一遍，确认动作能驱动机器人。
-- **被谁调用**：`vla-pipeline.yml`（旧版训练+回放）、`so101-mujoco-pipeline.yml`（sim twin 训练阶段）。
+- **被谁调用**：`vla-pipeline.yml`（旧版训练+回放，调试中）。
 - **关键脚本**：`train_smolvla.py`（训练）、`replay_demo.py`（回放验证）。
 - **输入**：LeRobot 数据集（parquet）、SmolVLA base 权重、可选 `rename_map` 修正相机键名。
 - **输出**：`/data/ckpt/<steps>/` 下的 checkpoint（上传 OBS）、回放视频 mp4。
@@ -286,7 +226,7 @@ Sim twin 路线专属：它在 MuJoCo 里**训练一个 SO101 仿真孪生模型
 - **典型场景**：真机 SO101 实时控制、Web 可视化演示、或作为其他系统的策略后端。
 - **与训练镜像的关系**：训练产出的 checkpoint 在这里被加载为常驻服务；它复用 `vla-eval` 推理栈（与 `so101-eval` 共享 lerobot[smolvla] + vla-eval 依赖），单独成镜像是为了把「服务部署」与「训练/评测」解耦。
 
-> **一句话总结**：`train` 和 `ppo` 负责「造模型」，`mujoco` 和 `eval` 负责「测模型」，`model-server` 负责「用模型」。训练与评估分离是刻意的——依赖不同、镜像更小、构建更快（见 §3.1）。
+> **一句话总结**：`train` 和 `ppo` 负责「造模型」，`mujoco` 和 `eval` 负责「测模型」，`model-server` 负责「用模型」。当前 PPO 和 MuJoCo 流水线都是单镜像完成训练+评估闭环；旧版 vla-pipeline 才分 train/eval 两镜像（依赖不同、镜像更小，见 §3.1）。
 
 ---
 
@@ -328,7 +268,7 @@ Sim twin 路线专属：它在 MuJoCo 里**训练一个 SO101 仿真孪生模型
 - GitHub 仓库已配置 self-hosted runner
 - Docker 镜像已推送到 SWR
 - OBS bucket 已创建
-- Secrets 已配置：`HC_ACCESS_KEY`, `HC_SECRET_KEY`, `SWR_PASSWORD`, `OBS_AK`, `OBS_SK`
+- Secrets 已配置：`OBS_AK`, `OBS_SK`, `SWR_PASSWORD`
 
 ### 触发 PPO 流水线
 
@@ -384,31 +324,30 @@ T+94min    流水线完成
 你点击 "Run workflow"
   │
   ├─ Step 1: start-ecs (ubuntu-latest, ~2min)
-  │   ├─ 安装华为云 CLI (pip install hcloud)
+  │   ├─ 下载华为云 CLI (curl 二进制)
   │   ├─ 调用 hcloud API 启动 ECS 7f39cb83
   │   ├─ sleep 120s 等待 GPU 驱动就绪
   │   └─ ECS 启动, runner ecs-0002 自动注册到 GitHub
   │
-  ├─ Step 2: pipeline (self-hosted V100, ~90min)
+  ├─ Step 2: pipeline (self-hosted V100, ~10h)
   │   ├─ 2a. 拉取 Docker 镜像 (~2min)
-  │   │   docker pull swr.cn-north-4.myhuaweicloud.com/link-seek/so101-train:latest
   │   │   docker pull swr.cn-north-4.myhuaweicloud.com/link-seek/so101-mujoco:latest
   │   │
-  │   ├─ 2b. 训练阶段 (~60min)
-  │   │   ├─ 启动训练容器: docker run --gpus all so101-train ...
+  │   ├─ 2b. 训练阶段 (~7h)
+  │   │   ├─ 启动训练容器: docker run --gpus all so101-mujoco ...
   │   │   ├─ 从 HF Hub 下载数据集 (dobri420/pick-cube-so101-sim)
   │   │   ├─ 加载预训练模型 (lerobot/smolvla_base)
-  │   │   ├─ 训练循环 (15K steps):
-  │   │   │   for step in range(15000):
+  │   │   ├─ 训练循环 (20K steps):
+  │   │   │   for step in range(20000):
   │   │   │       batch = sample_batch(dataset)        # 采样
   │   │   │       pred = policy(batch.obs, batch.lang)  # 前向
   │   │   │       loss = mse(pred, batch.action)        # 损失
   │   │   │       loss.backward(); optimizer.step()     # 反向
   │   │   │       if step % 5000 == 0: save_checkpoint()# 存盘
-  │   │   └─ 输出: /data/checkpoints/15000/ (模型权重)
+  │   │   └─ 输出: /data/checkpoints/20000/ (模型权重)
   │   │
   │   ├─ 2c. 评估阶段 (~30min)
-  │   │   ├─ 启动评估容器: docker run --gpus all so101-mujoco ...
+  │   │   ├─ 同一容器内继续: so101-mujoco
   │   │   ├─ 加载 checkpoint, 创建 MuJoCo 评估环境
   │   │   ├─ Grid Sweep (325 episodes):
   │   │   │   for reach in [0.15, 0.18, 0.20, 0.22, 0.25]:    # 5 距离
@@ -424,9 +363,9 @@ T+94min    流水线完成
   │   │   └─ 输出: eval_result.json + eval_video.mp4 + heatmap.png
   │   │
   │   └─ 2d. OBS 归档 (~2min)
-  │       ├─ 上传 checkpoint → obs://so101-sim-pipeline/vla/checkpoints/
-  │       ├─ 上传 eval_result → obs://so101-sim-pipeline/vla/results/
-  │       └─ 上传 eval_video  → obs://so101-sim-pipeline/vla/results/
+  │       ├─ 上传 checkpoint → obs://so101-sim-pipeline/mujoco-checkpoints/
+  │       ├─ 上传 eval_result → obs://so101-sim-pipeline/mujoco-eval/
+  │       └─ 上传 eval_video  → obs://so101-sim-pipeline/mujoco-eval/
   │
   └─ Step 3: stop-ecs (ubuntu-latest, if:always(), ~1min)
       └─ 调用 hcloud API 关闭 ECS (无论成功失败都关)
@@ -440,12 +379,12 @@ PPO 流水线结构相同，但训练和评估逻辑不同：
 |------|-----------|-----------|
 | 训练输入 | 数据集 (图像+语言) | 环境 (reward 信号) |
 | 训练循环 | BC: 采样→前向→MSE→反向 | RL: rollout→GAE→clip→更新 |
-| 训练步数 | 15K steps | 30M steps (1024 envs 并行) |
-| 训练时间 | ~60 min | ~86 min |
+| 训练步数 | 20K steps | 30M steps (1024 envs 并行) |
+| 训练时间 | ~7h (20K steps) | ~86 min |
 | 评估方式 | Grid sweep 325 episodes | 确定性 50 episodes |
 | 评估时间 | ~30 min | ~14 sec |
-| Docker 镜像 | so101-train + so101-mujoco | so101-ppo (单镜像) |
-| 总时间 | ~95 min | ~90 min |
+| Docker 镜像 | so101-mujoco (单镜像) | so101-ppo (单镜像) |
+| 总时间 | ~10h | ~90 min |
 
 ### 6.3 时间线总结
 
@@ -453,12 +392,12 @@ PPO 流水线结构相同，但训练和评估逻辑不同：
 T+0min    ── 你点击 Run
 T+2min    ── ECS 启动完成, runner 上线
 T+4min    ── Docker 镜像拉取完成, 训练开始
-T+64min   ── 训练结束, checkpoint 保存
-T+64min   ── 评估开始
-T+94min   ── 评估结束, 47% success_rate
-T+96min   ── OBS 归档完成
-T+97min   ── ECS 关闭, 流水线完成
-T+97min   ── 你收到 GitHub Actions 通知
+T+424min  ── 训练结束 (~7h), checkpoint 保存
+T+424min  ── 评估开始
+T+454min  ── 评估结束, 47% success_rate
+T+456min  ── OBS 归档完成
+T+457min  ── ECS 关闭, 流水线完成
+T+457min  ── 你收到 GitHub Actions 通知
 ```
 
 ---
@@ -502,17 +441,17 @@ T+97min   ── 你收到 GitHub Actions 通知
 
 **核心价值**：V100 按需开关机，成本只有 GitHub 托管 runner 的 1/2，且独占不排队。
 
-### 7.4 为什么训练和评估用不同的 Docker 镜像？
+### 7.4 为什么有 5 个 Docker 镜像？
 
 ```
-训练镜像 (so101-train)              评估镜像 (so101-mujoco)
-├── lerobot 0.6.1                   ├── robot_descriptions
-├── smolvla                         ├── mujoco_env
-├── so101_nexus                     ├── 无训练依赖
-└── 无 grid sweep 评估              └── 有 grid sweep 评估
+so101-ppo        so101-mujoco          so101-train      so101-eval        so101-model-server
+├ so101_nexus    ├ lerobot[training]   ├ lerobot[training]  ├ vla-eval    ├ HTTP/ZMQ 推理
+├ mujoco-warp   ├ vla-eval            ├ so101_nexus       ├ mujoco       └ 模型加载
+└ PPO 训练+评估  ├ mujoco + grid sweep └ 无 grid sweep     └ SQLite       ← 推理服务，不训练不评估
+                └ 训练+评估一体        ← 仅训练（旧版）     ← 仅评估
 ```
 
-**原因**：训练需要 lerobot + smolvla（模型训练框架），评估需要 mujoco_env + grid sweep（评估工具链）。两者依赖不同，合在一起会冲突或镜像过大。
+**为什么不全合成一个镜像？** 训练依赖（lerobot[training]、so101_nexus[warp]）和评估依赖（vla-eval、mujoco、grid sweep）有差异，合在一起会冲突或镜像过大。PPO 和 MuJoCo 流水线各自把所需依赖打包成一个镜像完成训练+评估闭环；旧版 vla-pipeline 才拆成 train + eval 两个镜像。
 
 ### 7.5 为什么用 OBS 而不是 HF Hub 存评估结果？
 
