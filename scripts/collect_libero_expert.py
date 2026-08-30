@@ -46,14 +46,16 @@ def body_id(sim, name, contains_fallback=("jaw", "grip", "hand")):
     import mujoco
 
     m, _ = mj_raw(sim)
-    for candidate in (name, f"robot0_{name}"):
+    cands = [name, f"robot0_{name}", f"{name}_main", f"robot0_{name}_main"]
+    for candidate in cands:
         bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, candidate)
         if bid >= 0:
             return bid
-    # robosuite renames gripper bodies when composing the full scene
+    # last resort: fuzzy match but SKIP robot-prefixed bodies
     for b in range(m.nbody):
         bn = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b)
-        if bn and any(k in bn.lower() for k in contains_fallback):
+        if bn and not bn.startswith("robot0") and any(k in bn.lower() for k in contains_fallback):
+            print(f"    [body-fallback] {name} -> {bn}")
             return b
     raise RuntimeError(f"body {name} not found")
 
@@ -291,7 +293,20 @@ def run_episode(env, ik, max_steps=900):
     obj_name = next(
         (n for n in domain.objects_dict if "basket" not in n.lower()), None
     )
-    obj_bid = body_id(sim, domain.objects_dict[obj_name].root_body) if obj_name else -1
+    obj_bid = -1
+    if obj_name:
+        import mujoco as _mj
+        m_raw, _ = mj_raw(sim)
+        rb = domain.objects_dict[obj_name].root_body
+        for cand in (rb, f"{rb}_main", rb.replace("_main", "")):
+            bid = _mj.mj_name2id(m_raw, _mj.mjtObj.mjOBJ_BODY, cand)
+            if bid >= 0:
+                obj_bid = bid
+                break
+        if obj_bid < 0:
+            names = [_mj.mj_id2name(m_raw, _mj.mjtObj.mjOBJ_BODY, b) for b in range(m_raw.nbody)]
+            print(f"    [debug] no body for {rb}; candidates: "
+                  f"{[n for n in names if n and obj_name.split('_')[0] in n.lower()]}")
     obj_z0 = float(np.array(sim.data.xpos[obj_bid])[2]) if obj_bid >= 0 else 0.0
 
     obs_list, act_list = [], []
