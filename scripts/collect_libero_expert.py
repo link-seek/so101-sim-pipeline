@@ -227,12 +227,14 @@ def plan_actions(domain, sim, ik, q_start_rad):
     actions = []
     checkpoints = {}
     for phase, tgt, grip_open, max_step_deg in waypoints:
-        q_sol = ik.solve(tgt, q)
-        _, z_axis = ik._fk(q_sol)
-        pos_reached = np.array(ik.d.xpos[ik.pos_bid])
+        q_sol = ik.solve(tgt, q_hint=q)
+        if q_sol is None:
+            print(f"    [ik:{phase}] NO SOLUTION; aborting plan")
+            return None, None
+        pos, zax, tip = ik._fk(q_sol)
         print(
-            f"    [ik:{phase}] err={np.linalg.norm(tgt - pos_reached):.4f}m "
-            f"reached={np.round(pos_reached, 3)} z_axis={np.round(z_axis, 2)}"
+            f"    [ik:{phase}] tip_err={np.linalg.norm(tgt - tip):.4f}m "
+            f"tip={np.round(tip, 3)} z_axis={np.round(zax, 2)}"
         )
         tgt_deg = np.degrees(q_sol) - SO101_CALIB_OFFSETS
         cur_deg = np.degrees(q) - SO101_CALIB_OFFSETS
@@ -273,6 +275,8 @@ def run_episode(env, ik, max_steps=900):
     qpos_snapshot = np.array(sim.data.qpos).copy()
     qvel_snapshot = np.array(sim.data.qvel).copy()
     actions, checkpoints = plan_actions(domain, sim, ik, q_start)
+    if actions is None:
+        return False, 0, 0.0, [], []
     sim.data.qpos[:] = qpos_snapshot
     sim.data.qvel[:] = qvel_snapshot
     import mujoco
