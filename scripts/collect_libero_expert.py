@@ -220,6 +220,13 @@ def plan_actions(domain, sim, ik, q_start_rad):
     return actions, checkpoints
 
 
+def _has_body(sim, name):
+    import mujoco
+
+    m = mj_raw(sim)[0]
+    return mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, name) >= 0
+
+
 def run_episode(env, ik, max_steps=900):
     obs = env.reset()
     rescale_scene_to_reach(env)
@@ -227,6 +234,10 @@ def run_episode(env, ik, max_steps=900):
     domain = env.env
 
     q_start = np.array([sim.data.qpos[a] for a in ik.arm_qadr], dtype=np.float64)
+    base_bid = body_id(sim, "base_link") if _has_body(sim, "base_link") else (
+        body_id(sim, "right_hand")
+    )
+    print(f"    base/right_hand pos={np.round(np.array(sim.data.xpos[base_bid]), 3)}")
 
     # Planning: IK solvers write sim state, so snapshot & restore afterwards
     qpos_snapshot = np.array(sim.data.qpos).copy()
