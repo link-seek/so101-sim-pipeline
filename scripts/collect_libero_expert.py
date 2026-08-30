@@ -113,14 +113,14 @@ class ArmIK:
     def solve(self, target, q_hint=None):
         """Return joint angles (rad) putting the claw tip at target, claw down."""
         rng = self.rng
-        n_glob, n_near = 8000, 14000
+        n_glob, n_near = 20000, 25000
         glob_idx = rng.choice(len(self.samples), size=n_glob, replace=False)
         cands = []
         for i in glob_idx:
             q = self.samples[i].copy()
             self._set_q(q)
             zax = np.array(self.d.xmat[self.rot_bid]).reshape(3, 3)[:, 2]
-            if zax[2] > -0.5:
+            if zax[2] > -0.85:
                 continue
             p = np.array(self.d.xpos[self.pos_bid])
             e = np.linalg.norm(p + self.TIP * zax - target)
@@ -214,7 +214,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
     waypoints = [
         ("move", p_obj + np.array([0.0, 0.0, 0.10]), 1.0, 1.5),
         ("approach", p_obj + np.array([0.0, 0.0, 0.035]), 1.0, 0.8),
-        ("grip", p_obj + np.array([0.0, 0.0, 0.02]), 0.0, 1.5),
+        ("grip", p_obj + np.array([0.0, 0.0, 0.035]), 0.0, 1.5),
         ("lift", p_obj + np.array([0.0, 0.0, 0.20]), 0.0, 0.8),
         ("move", p_basket + np.array([0.0, 0.0, 0.22]), 0.0, 1.5),
         ("move", p_basket + np.array([0.0, 0.0, 0.10]), 0.0, 1.5),
