@@ -12,37 +12,45 @@
 
 本章就来搞清楚：**社区是怎么评测机器人策略的，我们的脚本和这些框架是什么关系。**
 
-机器人策略评测不是我们发明的——社区已有成熟框架。我们的项目站在它们肩膀上：
+机器人策略评测不是我们发明的——社区已有成熟框架。我们的项目站在它们肩膀上。评测涉及两个维度：**评测方法**（怎么评）和**环境来源**（在哪评）：
 
 ```
-评测框架层次:
+评测方法:
 
-  Gymnasium (环境 API 标准)
+  Gymnasium (环境 API 标准，所有评测的底层接口)
     │
     ├── LeRobot lerobot-eval (VLA 通用评测)
-    │     └── 我们的 replay_demo.py 遵循其推理管线
+    │     └── 我们的 replay_demo.py 用其推理管线做回放验证
     │
-    ├── LIBERO (VLA 标准 benchmark, 2.2k stars)
-    │     └── LIBERO-PRO (鲁棒性扩展, 423 stars)
-    │           └── 我们的 eval_vla.py 调用 vla-eval harness
+    ├── LIBERO / LIBERO-PRO (VLA 标准 benchmark + 鲁棒性扩展)
+    │     └── 我们的 eval_vla.py 通过 vla-eval harness 调用
     │
     ├── CleanRL (RL 评测范式)
     │     └── 我们的 eval_ppo.py 遵循其确定性评估模式
     │
-    └── so101-mujoco (社区 sim twin)
-          └── 我们的 eval_mujoco_policy.py 封装其 grid sweep
+    └── Grid Sweep (多初始条件评测，社区常用方法)
+          └── 我们的 eval_mujoco_policy.py 实现 5×13×5 sweep
+
+环境来源:
+
+  MuJoCo (物理仿真引擎)
+    ├── so101_nexus —— Ch4 回放验证用的环境
+    ├── so101-mujoco (社区 sim twin) —— Grid Sweep 用的环境
+    └── LIBERO 仿真环境 —— eval_vla.py 用的环境
 ```
 
 ### 各框架对比
 
-| 框架 | 用途 | 核心指标 | 我们的使用方式 |
-|------|------|----------|---------------|
-| **Gymnasium** | 环境 API 标准 | `info["success"]`, `reward` | 所有 eval 脚本的底层 API |
-| **LeRobot `lerobot-eval`** | VLA 通用评测 | `pc_success`, `avg_sum_reward`, `avg_max_reward` | `replay_demo.py` 用其推理管线 |
-| **LIBERO** | VLA benchmark | task success rate × 10 tasks | `eval_vla.py` 通过 vla-eval harness |
-| **LIBERO-PRO** | VLA 鲁棒性 | 5 个扰动维度 | `eval_vla.py` 的 libero_pro_* benchmarks |
-| **CleanRL** | RL 评估范式 | `success_rate`, `ep_return` | `eval_ppo.py` 的确定性评估 |
-| **so101-mujoco** | SO101 sim twin | grid sweep success rate | `eval_mujoco_policy.py` 封装 |
+| 框架 | 类型 | 用途 | 核心指标 | 我们的使用方式 |
+|------|------|------|----------|---------------|
+| **Gymnasium** | API 标准 | 环境接口 | `info["success"]`, `reward` | 所有 eval 脚本的底层 API |
+| **LeRobot lerobot-eval** | 评测方法 | VLA 通用评测 | `pc_success`, `avg_sum_reward` | `replay_demo.py` 用其推理管线 |
+| **LIBERO** | 评测方法 | VLA benchmark | task success rate × 10 tasks | `eval_vla.py` 通过 vla-eval harness |
+| **LIBERO-PRO** | 评测方法 | VLA 鲁棒性 | 5 个扰动维度 | `eval_vla.py` 的 libero_pro_* benchmarks |
+| **CleanRL** | 评测方法 | RL 评估范式 | `success_rate`, `ep_return` | `eval_ppo.py` 的确定性评估 |
+| **Grid Sweep** | 评测方法 | 多初始条件评测 | success rate across grid | `eval_mujoco_policy.py` 实现 |
+| **so101_nexus** | 环境 | MuJoCo 仿真 | — | Ch4 回放验证 |
+| **so101-mujoco** | 环境 | MuJoCo sim twin | — | `eval_mujoco_policy.py` 的环境 |
 
 ---
 
