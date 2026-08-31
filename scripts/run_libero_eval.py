@@ -323,6 +323,10 @@ class SnapGraspController:
         )
         if self.tip_bid < 0:
             raise RuntimeError("snap-grasp: gripper tip body not found")
+        # TCP: if we resolved a hand body (origin at the wrist, not the claw
+        # tip), the tip sits 7.5cm further along the hand's +z_local axis
+        tip_name = self.mujoco.mj_id2name(self.m, self.mujoco.mjtObj.mjOBJ_BODY, self.tip_bid)
+        self.tcp = 0.075 if (tip_name and "hand" in tip_name.lower()) else 0.0
 
     def _find_body(self, name, extra_candidates=(), fuzzy=()):
         cands = [name, f"robot0_{name}", *extra_candidates]
@@ -338,7 +342,9 @@ class SnapGraspController:
         return -1
 
     def tip_position(self):
-        return np.array(self.d.xpos[self.tip_bid])
+        pos = np.array(self.d.xpos[self.tip_bid])
+        zax = np.array(self.d.xmat[self.tip_bid]).reshape(3, 3)[:, 2]
+        return pos + self.tcp * zax
 
     def object_position(self):
         return np.array(self.d.xpos[self.obj_bid])
