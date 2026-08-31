@@ -497,4 +497,8 @@ SUCCESS 153/325 = 47%
 
 ---
 
+**本章小结**：我们用 `replay_demo.py` 和 `eval_mujoco_policy.py` 完成了从 0% 到 47% 的调试。但这两个评测脚本是怎么设计的？社区的标准评测框架长什么样？下一章我们系统介绍评测方法论。
+
+---
+
 > **上一章**：[Ch3 VLA 入门](so101-tutorial-ch3-vla-intro.md) | **下一章**：[Ch5 评测方法论](so101-tutorial-ch5-evaluation.md)
