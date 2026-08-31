@@ -292,7 +292,7 @@ class SnapGraspController:
         ctrl.detach()             # gripper opened: release with zero velocity
     """
 
-    ATTACH_DIST = 0.06  # generous: tip must be within 6cm of object center
+    ATTACH_DIST = 0.09  # generous: tip must be within 9cm of object center
 
     def __init__(self, sim, obj_body_name):
         import mujoco
@@ -354,7 +354,12 @@ class SnapGraspController:
             return False
         tip = self.tip_position()
         obj = self.object_position()
-        if np.linalg.norm(tip - obj) > self.ATTACH_DIST:
+        dist = float(np.linalg.norm(tip - obj))
+        if dist > self.ATTACH_DIST:
+            print(
+                f"    [snap-grasp] attach fail: dist={dist * 1000:.1f}mm "
+                f"tip={np.round(tip, 3)} obj={np.round(obj, 3)} tcp={self.tcp}"
+            )
             return False
         # capture constant offset and orientation at the attach moment
         self._offset = obj - tip
