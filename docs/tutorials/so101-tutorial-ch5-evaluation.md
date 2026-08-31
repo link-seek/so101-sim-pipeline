@@ -33,10 +33,18 @@
 
 环境来源:
 
-  MuJoCo (物理仿真引擎)
-    ├── so101_nexus —— Ch4 回放验证用的环境
-    ├── so101-mujoco (社区 sim twin) —— Grid Sweep 用的环境
-    └── LIBERO 仿真环境 —— eval_vla.py 用的环境
+  仿真环境 (Simulation)
+    ├── MuJoCo 系列
+    │     ├── so101_nexus —— Ch4 回放验证用的环境
+    │     ├── so101-mujoco (社区 sim twin) —— Grid Sweep 用的环境
+    │     └── Gym ALOHA —— ALOHA 双臂机器人仿真
+    ├── RoboTwin —— 双臂操作 benchmark 仿真
+    ├── LIBERO 仿真环境 —— eval_vla.py 用的环境
+    └── Isaac Sim / Habitat —— 大规模仿真（本项目未用）
+
+  真实机器人 (Real Robot)
+    ├── SO101 实机 —— ataghof 数据采集用
+    └── ALOHA / Viper / Franka —— 其他真实平台（本项目未用）
 ```
 
 ### 各框架对比
@@ -49,8 +57,10 @@
 | **LIBERO-PRO** | 评测方法 | VLA 鲁棒性 | 5 个扰动维度 | `eval_vla.py` 的 libero_pro_* benchmarks |
 | **CleanRL** | 评测方法 | RL 评估范式 | `success_rate`, `ep_return` | `eval_ppo.py` 的确定性评估 |
 | **Grid Sweep** | 评测方法 | 多初始条件评测 | success rate across grid | `eval_mujoco_policy.py` 实现 |
-| **so101_nexus** | 环境 | MuJoCo 仿真 | — | Ch4 回放验证 |
-| **so101-mujoco** | 环境 | MuJoCo sim twin | — | `eval_mujoco_policy.py` 的环境 |
+| **so101_nexus** | 仿真环境 | MuJoCo 仿真 | — | Ch4 回放验证 |
+| **so101-mujoco** | 仿真环境 | MuJoCo sim twin | — | `eval_mujoco_policy.py` 的环境 |
+| **RoboTwin** | 仿真环境 | 双臂操作 benchmark | — | 本项目未用 |
+| **SO101 实机** | 真实机器人 | 数据采集 | — | ataghof 数据集来源 |
 
 ---
 
