@@ -318,6 +318,7 @@ def run_episode(env, ik, max_steps=900):
         ctrl = None
 
     obs_list, act_list = [], []
+    success = False
     success_streak = 0
     total_reward = 0.0
     for step_idx, act6 in enumerate(actions):
