@@ -479,40 +479,25 @@ LIBERO 和 LIBERO-PRO 在**对训练信息的依赖**上有本质区别：
 
 ### 4.7 我们的 `eval_vla.py` 如何使用
 
-```python
-# scripts/eval_vla.py — 通过 vla-eval harness 运行 LIBERO
-LIBERO_BENCHMARKS = ["libero_spatial", "libero_object", "libero_goal"]
-LIBERO_PRO_BENCHMARKS = ["libero_pro_swap", "libero_pro_object", 
-                          "libero_pro_lan", "libero_pro_task", "libero_pro_env"]
+**如何运行**：通过 GitHub Actions 流水线 `evaluate.yml` 触发（在 V100 ECS 上运行）。在 Actions 页面选择 "Evaluate"，点击 "Run workflow"：
 
-# 1. 启动模型推理服务
-server_proc = start_model_server("smolvla_so101.yaml", checkpoint)
-
-# 2. 逐 benchmark 运行
-for name in benchmarks:
-    run_benchmark(name)    # vla-eval run --config configs/benchmarks/{name}.yaml
-    merge_results(name)    # vla-eval merge → merged.json
-
-# 3. 汇总
-summary = {
-    "benchmarks": {
-        "libero_spatial": {"success_rate": 0.72, "num_episodes": 500, "num_tasks": 10},
-        ...
-    }
-}
+```
+Actions → Evaluate → Run workflow
+  ├── model_repo: xieyucheng123/so101-act（HuggingFace 模型仓库）
+  ├── dataset_repo: xieyucheng123/so101-dataset（HuggingFace 数据集仓库）
+  └── num_episodes: 10（每个 benchmark 的 episode 数）
 ```
 
-benchmark 配置（`configs/benchmarks/libero_spatial.yaml`）：
-```yaml
-benchmarks:
-  - benchmark: "vla_eval.benchmarks.libero.benchmark:LibEROBenchmark"
-    subname: libero_spatial
-    episodes_per_task: 50      # 每个任务 50 episodes
-    params:
-      suite: libero_spatial
-      seed: 7
-      num_steps_wait: 10
-```
+流水线自动完成：启动 V100 ECS → 下载模型+数据 → 运行 8 个 LIBERO/LIBERO-PRO benchmark → 下载结果+视频 → 上传到 OBS → 关闭 ECS。
+
+**Benchmark 配置**：
+
+| Benchmark | 类型 | Episodes | 用途 |
+|-----------|------|----------|------|
+| `libero_spatial` | LIBERO | 500 (10 tasks × 50) | 空间泛化 |
+| `libero_object` | LIBERO | 500 | 物体泛化 |
+| `libero_goal` | LIBERO | 500 | 目标泛化 |
+| `libero_pro_*` (5个) | LIBERO-PRO | 各 100 | 鲁棒性评测 |
 
 **关键区别**：LIBERO 评测的是**跨任务泛化能力**，grid sweep 评测的是**单任务工作空间覆盖**。两者互补。
 
@@ -543,7 +528,16 @@ benchmarks:
 
 ### 5.1 回放验证：快速 smoke test
 
-每次训练后快速验证模型能否正常推理——用 LeRobot 推理管线跑 1 个 episode（300 步），~30 秒出结果。详见 Ch4 的 `replay_demo.py` 实战。
+每次训练后快速验证模型能否正常推理——跑 1 个 episode（300 步），~30 秒出结果。
+
+**如何运行**：`replay_demo.py` 目前仅支持本地运行（无 GitHub Actions 流水线）。训练后在本地执行：
+
+```bash
+python scripts/replay_demo.py \
+  --checkpoint /path/to/checkpoint \
+  --dataset xieyucheng123/so101-dataset \
+  --num-episodes 1
+```
 
 **回放指标解读**：
 
@@ -558,35 +552,33 @@ benchmarks:
 
 [CleanRL](https://github.com/vwxyzjn/cleanrl) 确立了 RL 评测的标准做法：固定 seed + 确定性策略 + 足够多的 episodes。
 
-我们的 `eval_ppo.py` 遵循这一范式：
+**如何运行**：通过 GitHub Actions 流水线 `ppo-pipeline.yml` 触发。在 Actions 页面选择 "PPO Pipeline"，点击 "Run workflow"，填写参数即可：
 
-```python
-# scripts/eval_ppo.py — CleanRL 风格确定性评估
-agent.eval()  # 关闭 dropout/batchnorm
-
-for ep in range(50):
-    obs, _ = env.reset(seed=12345 + ep)        # 固定 seed
-    while not done:
-        a = agent.actor_mean(norm(obs))         # 确定性策略 (用 mean, 不采样)
-        obs, r, term, trunc, info = env.step(a)
-        ever_succ = ever_succ or info.get("success", False)
+```
+Actions → PPO Pipeline → Run workflow
+  ├── steps: 20000（训练步数）
+  ├── batch_size: 32
+  └── checkpoint:（留空=训练+评测，填路径=只评测）
 ```
 
-**为什么用 `actor_mean` 而不是采样**：评估时要看策略的"真实水平"，不是"运气好时的水平"。训练时用 `mean + std * noise` 探索，评估时只用 `mean`。
+流水线自动完成：启动 V100 ECS → 训练 PPO → 评测 50 episodes → 上传结果 → 关闭 ECS。
 
 ### 5.3 Grid Sweep：单任务工作空间扫描
 
-Grid sweep 不是标准 RL 评测方法，而是机器人仿真社区（如 [dyordan1/so101-mujoco](https://github.com/dyordan1/so101-mujoco)）的实践——系统扫描工作空间初始条件：
+Grid sweep 不是标准 RL 评测方法，而是机器人仿真社区的实践——系统扫描工作空间初始条件（5 个距离 × 13 个角度 × 5 次 = 325 episodes）。
 
-```python
-# scripts/eval_mujoco_policy.py 封装 dyordan1/so101-mujoco 的 --sweep
-reach_values = [0.15, 0.18, 0.20, 0.22, 0.25]      # 5 个距离
-azimuth_values = range(-90, 91, 15)                  # 13 个角度
-trials = 5                                           # 每个条件 5 次
-# 总计 5 × 13 × 5 = 325 episodes
+**如何运行**：通过 GitHub Actions 流水线 `so101-mujoco-pipeline.yml` 触发。在 Actions 页面选择 "SO101 MuJoCo Pipeline"，点击 "Run workflow"：
+
+```
+Actions → SO101 MuJoCo Pipeline → Run workflow
+  ├── steps: 20000（训练步数）
+  ├── batch_size: 32
+  ├── skip_train: false（true=跳过训练，用已有 checkpoint）
+  ├── checkpoint:（留空=自动找最新，填路径=指定）
+  └── mode: sweep（sweep=grid搜索，record=录像）
 ```
 
-**与 Gymnasium 标准评测的关系**：Grid sweep 本质上是 `n_episodes=325` 的评测，只是 episode 的初始条件不是随机采样而是网格采样。每个 episode 仍然遵循 `reset → step × N → check success` 的标准循环。
+流水线自动完成：启动 V100 ECS → 下载数据+模型 → 训练 SmolVLA → Grid Sweep 评测 → 上传结果到 OBS → 关闭 ECS。
 
 #### 热力图
 
