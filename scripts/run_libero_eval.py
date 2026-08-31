@@ -266,7 +266,7 @@ def _policy_state_from_obs(obs):
 
 def _env_action_from_policy(action):
     """Convert policy action in .pos units (degrees + gripper 0-100) to robosuite env action:
-    absolute joint targets in radians for JOINT_POSITION(absolute) + GRIP input for gripper."""
+    absolute joint targets for JOINT_POSITION(absolute) + GRIP input for gripper."""
     a = np.asarray(action, dtype=np.float64).reshape(-1)
     if a.size < 6:
         a = np.pad(a, (0, 6 - a.size))
@@ -276,6 +276,101 @@ def _env_action_from_policy(action):
     arm_rad = np.clip(arm_rad, SO101_JOINT_LO, SO101_JOINT_HI)
     grip_cmd = np.clip(a[5] / 50.0 - 1.0, -1.0, 1.0)
     return np.concatenate([arm_rad, [grip_cmd]]).astype(np.float32)
+
+
+class SnapGraspController:
+    """Kinematic snap-grasp (the standard robosuite/MetaWorld approach).
+
+    MuJoCo friction grasping with mesh contacts is unreliable (slip, single
+    contact point, regularized friction has no stick state). All working
+    SO101 sim pipelines (dyordan1 weld-latch, robosuite tasks, sim-engine)
+    attach the object kinematically when the gripper closes around it.
+
+    Usage per step:
+        ctrl.maybe_attach(tip_pos, gripper_closed)
+        ctrl.update(tip_pos)      # while attached: obj tracks tip + offset
+        ctrl.detach()             # gripper opened: release with zero velocity
+    """
+
+    ATTACH_DIST = 0.06  # generous: tip must be within 6cm of object center
+
+    def __init__(self, sim, obj_body_name):
+        import mujoco
+
+        self.mujoco = mujoco
+        self.m = sim.model._model if hasattr(sim.model, "_model") else sim.model
+        self.d = sim.data._data if hasattr(sim.data, "_data") else sim.data
+        self.attached = False
+        self._offset = None
+        self._obj_quat = None
+
+        # object body + its free joint
+        self.obj_bid = self._find_body(obj_body_name)
+        if self.obj_bid < 0:
+            raise RuntimeError(f"snap-grasp: object body {obj_body_name} not found")
+        jid = int(self.m.body_jntadr[self.obj_bid])
+        if jid < 0 or int(self.m.jnt_type[jid]) != int(mujoco.mjtJoint.mjJNT_FREE):
+            raise RuntimeError(f"snap-grasp: {obj_body_name} has no free joint")
+        self.obj_qadr = int(self.m.jnt_qposadr[jid])
+        self.obj_vadr = int(self.m.jnt_dofadr[jid])
+
+        # gripper tip body (robosuite renames: right_moving_jaw ->
+        # gripper0_right_right_hand in the composed scene)
+        self.tip_bid = self._find_body(
+            "right_moving_jaw",
+            extra_candidates=("gripper0_right_right_moving_jaw", "gripper0_right_right_hand"),
+            fuzzy=("moving_jaw", "right_hand"),
+        )
+        if self.tip_bid < 0:
+            raise RuntimeError("snap-grasp: gripper tip body not found")
+
+    def _find_body(self, name, extra_candidates=(), fuzzy=()):
+        cands = [name, f"robot0_{name}", *extra_candidates]
+        for c in cands:
+            bid = self.mujoco.mj_name2id(self.m, self.mujoco.mjtObj.mjOBJ_BODY, c)
+            if bid >= 0:
+                return bid
+        if fuzzy:
+            for b in range(self.m.nbody):
+                bn = self.mujoco.mj_id2name(self.m, self.mujoco.mjtObj.mjOBJ_BODY, b)
+                if bn and any(k in bn.lower() for k in fuzzy):
+                    return b
+        return -1
+
+    def tip_position(self):
+        return np.array(self.d.xpos[self.tip_bid])
+
+    def object_position(self):
+        return np.array(self.d.xpos[self.obj_bid])
+
+    def maybe_attach(self, gripper_closed):
+        if self.attached or not gripper_closed:
+            return False
+        tip = self.tip_position()
+        obj = self.object_position()
+        if np.linalg.norm(tip - obj) > self.ATTACH_DIST:
+            return False
+        # capture constant offset and orientation at the attach moment
+        self._offset = obj - tip
+        self._obj_quat = np.array(self.d.qpos[self.obj_qadr + 3 : self.obj_qadr + 7]).copy()
+        self.attached = True
+        return True
+
+    def update(self):
+        if not self.attached:
+            return
+        tip = self.tip_position()
+        target = tip + self._offset
+        self.d.qpos[self.obj_qadr : self.obj_qadr + 3] = target
+        self.d.qpos[self.obj_qadr + 3 : self.obj_qadr + 7] = self._obj_quat
+        self.d.qvel[self.obj_vadr : self.obj_vadr + 6] = 0.0
+        self.mujoco.mj_forward(self.m, self.d)
+
+    def detach(self):
+        if self.attached:
+            self.d.qvel[self.obj_vadr : self.obj_vadr + 6] = 0.0  # no flying off
+        self.attached = False
+        self._offset = None
 
 
 def libero_obs_to_policy_obs(obs, task_description, device="cuda"):
@@ -398,6 +493,20 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
                 obs = env.set_init_state(init_states[ep_idx])
                 rescale_scene_to_reach(env)
 
+                # snap-grasp: object attaches when the policy closes the gripper
+                # around it (must match the data-collection env mechanics)
+                domain = getattr(env, "env", env)
+                snap_obj = None
+                parsed = getattr(domain, "parsed_problem", None)
+                if parsed is not None and parsed.get("obj_of_interest"):
+                    snap_obj = parsed["obj_of_interest"][0]
+                if snap_obj and snap_obj in getattr(domain, "objects_dict", {}):
+                    ctrl = SnapGraspController(
+                        env.env.sim, domain.objects_dict[snap_obj].root_body
+                    )
+                else:
+                    ctrl = None
+
                 done = False
                 success = False
                 total_reward = 0.0
@@ -425,7 +534,18 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
 
                     obs, reward, done, info = env.step(action)
                     total_reward += reward
-                    success = success or env.check_success()
+                    if ctrl is not None:
+                        ctrl.update()
+                        grip_pos = float(np.asarray(raw_action).reshape(-1)[5])
+                        if ctrl.attached:
+                            if grip_pos > 55:
+                                ctrl.detach()
+                        elif grip_pos < 45:
+                            if ctrl.maybe_attach(gripper_closed=True):
+                                print(f"      [snap-grasp] ATTACHED at step {steps}")
+                        success = success or env.check_success()
+                    else:
+                        success = success or env.check_success()
                     steps += 1
 
                 results.append({

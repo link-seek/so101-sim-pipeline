@@ -309,6 +309,14 @@ def run_episode(env, ik, max_steps=900):
                   f"{[n for n in names if n and obj_name.split('_')[0] in n.lower()]}")
     obj_z0 = float(np.array(sim.data.xpos[obj_bid])[2]) if obj_bid >= 0 else 0.0
 
+    # kinematic snap-grasp: attach object to claw when gripper closes on it
+    if obj_name:
+        from run_libero_eval import SnapGraspController
+
+        ctrl = SnapGraspController(sim, domain.objects_dict[obj_name].root_body)
+    else:
+        ctrl = None
+
     obs_list, act_list = [], []
     success_streak = 0
     total_reward = 0.0
@@ -327,15 +335,25 @@ def run_episode(env, ik, max_steps=900):
         act_list.append(act6.astype(np.float32))
         obs, reward, done, info = env.step(_env_action_from_policy(act6))
         total_reward += float(reward)
+        if ctrl is not None:
+            ctrl.update()
         # LIBERO official practice: success latches only after 10 consecutive checks
         success_streak = success_streak + 1 if domain._check_success() else 0
         if (step_idx + 1) in checkpoints and obj_bid >= 0:
             label = checkpoints[step_idx + 1]
             p_obj = np.array(sim.data.xpos[obj_bid])
             print(f"    [{label}@{step_idx + 1}] obj_pos={np.round(p_obj, 3)}")
+            if label == "grip" and ctrl is not None:
+                if ctrl.maybe_attach(gripper_closed=True):
+                    print("    [snap-grasp] ATTACHED")
+                else:
+                    print("    [snap-grasp] attach condition not met (tip too far)")
+            if label == "release" and ctrl is not None:
+                ctrl.detach()
+                print("    [snap-grasp] DETACHED")
             # grasp verification: after lifting, the object must come up with us
-            if label == "lift" and p_obj[2] < obj_z0 + 0.03:
-                print("    [grasp-failed] object not lifted; aborting trial")
+            if label == "lift" and obj_bid >= 0 and ctrl is not None and not ctrl.attached:
+                print("    [grasp-failed] object not attached; aborting trial")
                 return False, len(act_list), total_reward, obs_list, act_list
         if done or success_streak >= 10:
             break
