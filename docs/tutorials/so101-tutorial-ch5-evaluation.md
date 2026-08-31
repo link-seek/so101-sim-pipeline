@@ -571,6 +571,23 @@ Actions → SO101 MuJoCo Pipeline → Run workflow
 
 流水线自动完成：启动 V100 ECS → 下载数据+模型 → 训练 SmolVLA → Grid Sweep 评测 → 上传结果到 OBS → 关闭 ECS。
 
+### 5.4 LIBERO 评测：跨任务泛化
+
+LIBERO 是 VLA 领域的标准 benchmark（CoRL 2023，2.2k stars），评测模型跨任务泛化能力。
+
+**如何运行**：通过 GitHub Actions 流水线 `evaluate.yml` 触发（在 V100 ECS 上运行）。在 Actions 页面选择 "Evaluate"，点击 "Run workflow"：
+
+```
+Actions → Evaluate → Run workflow
+  ├── model_repo: xieyucheng123/so101-act（HuggingFace 模型仓库）
+  ├── dataset_repo: xieyucheng123/so101-dataset（HuggingFace 数据集仓库）
+  └── num_episodes: 10（每个 benchmark 的 episode 数）
+```
+
+流水线自动完成：启动 V100 ECS → 下载模型+数据 → 运行 8 个 LIBERO/LIBERO-PRO benchmark → 下载结果+视频 → 上传到 OBS → 关闭 ECS。
+
+> **注意**：`evaluate.yml` 评测的是 **HuggingFace 上预训练的 VLA 模型**，不是我们自己训练的模型。我们要在 LIBERO 上评测自己的模型，需要先在 LIBERO 中添加 SO101 机器人（详见 Ch6）。
+
 #### 热力图
 
 ```
@@ -590,7 +607,7 @@ SUCCESS 153/325 = 47%
 - **边缘区域（±90 azimuth）**：成功率接近 0% — 物体在机器人侧面极限位置，训练数据很少覆盖
 - **结论**：47% 是 325 个不同初始条件的平均，不是单一条件。中心区域已经可用，边缘需要更多数据覆盖
 
-### 5.4 三种方法对比
+### 5.5 四种方法对比
 
 | 方法 | 回放 (replay) | Grid Sweep | PPO 确定性评估 | LIBERO |
 |------|---------------|------------|----------------|--------|
