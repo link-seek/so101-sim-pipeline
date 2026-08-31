@@ -162,7 +162,7 @@ dataset/
 ### 7.2 第一个数据集：shattori（真机）
 
 ```yaml
-# vla-pipeline.yml
+# 训练配置：shattori 数据集
 env:
   DATASET_REPO: shattori/so101_pick_place_thor
   RENAME_MAP: '{"wrist":"camera1", "overhead":"camera2"}'
@@ -190,7 +190,7 @@ env:
 ### 7.4 第三个数据集：dobri420（仿真 sim twin）
 
 ```yaml
-# so101-mujoco-pipeline.yml
+# 训练配置：dobri420 sim twin 数据集
 env:
   SIM_DATASET: dobri420/pick-cube-so101-sim
   # 无需 rename_map，3 相机原生匹配

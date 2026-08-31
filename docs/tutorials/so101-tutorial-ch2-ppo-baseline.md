@@ -115,21 +115,30 @@ V100 上 1024 并行环境的 SPS（steps per second）≈ 5784，意味着每�
 
 ## 4. 实战：端到端运行
 
-### 4.1 触发流水线
+### 4.1 拉取镜像
 
 ```bash
-gh workflow run ppo-pipeline.yml \
-  -f env_id=WarpPickLift-v1 \
-  -f total_timesteps=30000000 \
-  -f num_envs=1024 \
-  -f seed=1
+docker pull swr.cn-north-4.myhuaweicloud.com/link-seek/so101-ppo:latest
 ```
 
-### 4.2 训练过程
+### 4.2 启动训练
+
+```bash
+docker run --gpus all \
+  -v /data:/data \
+  swr.cn-north-4.myhuaweicloud.com/link-seek/so101-ppo:latest \
+  python train_ppo.py \
+    --env_id WarpPickLift-v1 \
+    --total_timesteps 30000000 \
+    --num_envs 1024 \
+    --seed 1
+```
+
+### 4.3 训练过程
 
 ```bash
 # 查看训练日志
-gh run view <run_id> --log | grep -E "(success|SPS|iter)"
+docker logs <container_id> -f | grep -E "(success|SPS|iter)"
 ```
 
 典型训练曲线：
@@ -189,11 +198,14 @@ v1 的 `lift_threshold=0.05`（5cm）太低——策略学会微抬 5cm 就判�
 ### 修改
 
 ```bash
-# 添加 --lift-threshold CLI 参数
-gh workflow run ppo-pipeline.yml \
-  -f env_id=WarpPickLift-v1 \
-  -f total_timesteps=30000000 \
-  -f lift_threshold=0.15  # 15cm 明显抬起
+# 添加 --lift-threshold 参数
+docker run --gpus all \
+  -v /data:/data \
+  swr.cn-north-4.myhuaweicloud.com/link-seek/so101-ppo:latest \
+  python train_ppo.py \
+    --env_id WarpPickLift-v1 \
+    --total_timesteps 30000000 \
+    --lift_threshold 0.15
 ```
 
 ### 结果对比

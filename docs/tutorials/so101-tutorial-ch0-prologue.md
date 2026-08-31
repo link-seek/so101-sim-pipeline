@@ -235,9 +235,18 @@ SmolVLA 是 LeRobot 的轻量 VLA 模型：
 - Action Chunking：每次推理预测 50 个未来 action
 - 预训练 base 模型可 fine-tune
 
-### 我们的流水线
+### 我们的 Docker 镜像
 
-`so101-sim-pipeline` 把上述组件串成多条 CI/CD 流水线（PPO / VLA / MuJoCo Sim Twin），统一遵循 `start-ecs → 训练/评估 → stop-ecs` 模式。各流水线细节见后续章节。
+`so101-sim-pipeline` 仓库提供 4 个 Docker 镜像，封装了完整的训练和评估环境：
+
+| 镜像 | 用途 |
+|------|------|
+| `so101-ppo` | PPO 训练 + 评估（MuJoCo + Warp GPU） |
+| `so101-mujoco` | SmolVLA 训练 + Grid Sweep 评测 |
+| `so101-eval` | LIBERO 评测 + 数据采集 |
+| `so101-train` | SmolVLA 训练 + 回放验证 |
+
+每个镜像都预装了所有依赖，`docker run` 一条命令即可运行。各镜像细节见 Ch1。
 
 ---
 
@@ -248,7 +257,7 @@ SmolVLA 是 LeRobot 的轻量 VLA 模型：
 | 章节 | 主题 | 核心实战 |
 |------|------|----------|
 | 序章 | 为什么仿真训练 | （本文） |
-| Ch1 | 基础设施搭建 | ECS + Docker + Runner + 流水线详解 |
+| Ch1 | 基础设施搭建 | Docker 镜像 + 云服务器 + 一条命令跑训练 |
 | Ch2 | PPO 纯仿真 Baseline | 100% 成功的最简路径 |
 | Ch3 | SmolVLA 仿真训练 | 数据集选择 + 训练 + 回放 |
 | Ch4 | Debug 实战 | 从 0% 到 47% 的完整调试旅程 |

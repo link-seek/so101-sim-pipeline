@@ -166,12 +166,12 @@ info = {
 
 ### 3.4 我们的脚本如何使用社区框架
 
-| 脚本 | 遵循的框架 | 推理管线 | 状态 |
-|------|-----------|---------|------|
-| `replay_demo.py` | LeRobot | `prepare_observation_for_inference` → `preprocess` → `select_action` → `postprocess` | 本地运行（Ch4） |
-| `eval_ppo.py` | CleanRL | `agent.actor_mean(norm(obs))` 确定性评估 | GitHub Actions（3 次） |
-| `eval_vla.py` | vla-eval harness | `run_benchmark()` → `merge_results()` | GitHub Actions（10 次，V100 ECS） |
-| `eval_mujoco_policy.py` | so101-mujoco | `--sweep` grid search | GitHub Actions（6 次） |
+| 脚本 | 遵循的框架 | 推理管线 | Docker 镜像 |
+|------|-----------|---------|------------|
+| `replay_demo.py` | LeRobot | `prepare_observation_for_inference` → `preprocess` → `select_action` → `postprocess` | so101-train |
+| `eval_ppo.py` | CleanRL | `agent.actor_mean(norm(obs))` 确定性评估 | so101-ppo |
+| `eval_vla.py` | vla-eval harness | `run_benchmark()` → `merge_results()` | so101-eval |
+| `eval_mujoco_policy.py` | so101-mujoco | `--sweep` grid search | so101-mujoco |
 
 ---
 
@@ -481,19 +481,19 @@ LIBERO 和 LIBERO-PRO 在**对训练信息的依赖**上有本质区别：
 
 **为什么选 LIBERO**：LIBERO 是 VLA 领域公认的标准 benchmark（CoRL 2023，2.2k stars），提供 3 个 suite × 10 tasks 的多任务泛化评测。如果一个 VLA 模型能在 LIBERO 上拿到高分，说明它具备跨任务泛化能力——这是衡量 VLA 质量的金标准。
 
-**我们的实现**：仓库已设计完整 LIBERO 评测管线——`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` Docker 镜像。通过 GitHub Actions `evaluate.yml` 在 V100 ECS 上运行。
+**我们的实现**：仓库已设计完整 LIBERO 评测管线——`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` Docker 镜像。用 `docker run` 一条命令即可运行。
 
 **模型和数据来源**：评测用的模型和数据集都存放在 [HuggingFace Hub](https://huggingface.co)——一个模型和数据集的托管平台（类似 GitHub，但专为 AI 模型设计）。
 
-数据采集是独立于评测流水线的步骤：
+数据采集是独立于评测的步骤：
 - **真机数据**：人工在 SO101 实机上操作录制（如 ataghof 数据集）
 - **仿真数据**：在 MuJoCo 仿真环境中录制（如 dobri420 数据集）
-- **LIBERO 专家数据**：可通过 `collect.yml` 流水线自动采集
+- **LIBERO 专家数据**：可通过 `so101-eval` 镜像的采集脚本获取
 
 采集完成后上传到 HF，后续流程：
 
 ```
-上传数据集到 HF → 训练 → 上传模型到 HF → 评测流水线从 HF 下载模型+数据 → ECS 运行评测
+上传数据集到 HF → 训练 → 上传模型到 HF → 评测从 HF 下载模型+数据 → 运行评测
 ```
 
 **注意：我们同时使用 OBS 和 HF（见 Ch1 §7.5）**：
@@ -530,12 +530,12 @@ LIBERO 和 LIBERO-PRO 在**对训练信息的依赖**上有本质区别：
 
 **评测进展总览**：
 
-| 评测方法 | 流水线 | 状态 | 结果 |
-|----------|--------|------|------|
-| 回放验证 | 本地运行 | ✅ 已执行 | 方案 A 失败，方案 B 成功 |
-| Grid Sweep | so101-mujoco-pipeline.yml | ✅ 已执行 | 153/325 = 47% |
-| PPO 确定性评估 | ppo-pipeline.yml | ✅ 已执行 | v1: 100%, v2: 98% |
-| LIBERO | evaluate.yml | ✅ 已执行 | 120 episodes / 0%（模型-环境不兼容） |
+| 评测方法 | Docker 镜像 | 状态 | 结果 |
+|----------|------------|------|------|
+| 回放验证 | so101-train | ✅ 已执行 | 方案 A 失败，方案 B 成功 |
+| Grid Sweep | so101-mujoco | ✅ 已执行 | 153/325 = 47% |
+| PPO 确定性评估 | so101-ppo | ✅ 已执行 | v1: 100%, v2: 98% |
+| LIBERO | so101-eval | ✅ 已执行 | 120 episodes / 0%（模型-环境不兼容） |
 | LIBERO-PRO | — | ⬜ 已设计未执行 | 依赖 LIBERO 先出正分 |
 | SO-101 Bench | — | ⬜ 硬件不支持 | V100 无法运行 |
 
@@ -545,7 +545,7 @@ LIBERO 和 LIBERO-PRO 在**对训练信息的依赖**上有本质区别：
 
 每次训练后快速验证模型能否正常推理——跑 1 个 episode（300 步），~30 秒出结果。
 
-**如何运行**：`replay_demo.py` 目前仅支持本地运行（无 GitHub Actions 流水线）。训练后在本地执行：
+**如何运行**：`replay_demo.py` 支持本地运行。训练后执行：
 
 ```bash
 python scripts/replay_demo.py \
@@ -567,33 +567,31 @@ python scripts/replay_demo.py \
 
 [CleanRL](https://github.com/vwxyzjn/cleanrl) 确立了 RL 评测的标准做法：固定 seed + 确定性策略 + 足够多的 episodes。
 
-**如何运行**：通过 GitHub Actions 流水线 `ppo-pipeline.yml` 触发。在 Actions 页面选择 "PPO Pipeline"，点击 "Run workflow"，填写参数即可：
+**如何运行**：用 Docker 镜像 `so101-ppo`，一条命令完成训练+评估：
 
-```
-Actions → PPO Pipeline → Run workflow
-  ├── steps: 20000（训练步数）
-  ├── batch_size: 32
-  └── checkpoint:（留空=训练+评测，填路径=只评测）
+```bash
+docker run --gpus all \
+  -v /data:/data \
+  swr.cn-north-4.myhuaweicloud.com/link-seek/so101-ppo:latest \
+  bash -c "python train_ppo.py --env_id WarpPickLift-v1 --total_timesteps 30000000 --seed 1 && python eval_ppo.py --num_episodes 50"
 ```
 
-流水线自动完成：启动 V100 ECS → 训练 PPO → 评测 50 episodes → 上传结果 → 关闭 ECS。
+训练完成后自动触发评估，输出 `eval_result.json`。
 
 ### 5.3 Grid Sweep：单任务工作空间扫描
 
 Grid sweep 不是标准 RL 评测方法，而是机器人仿真社区的实践——系统扫描工作空间初始条件（5 个距离 × 13 个角度 × 5 次 = 325 episodes）。
 
-**如何运行**：通过 GitHub Actions 流水线 `so101-mujoco-pipeline.yml` 触发。在 Actions 页面选择 "SO101 MuJoCo Pipeline"，点击 "Run workflow"：
+**如何运行**：用 Docker 镜像 `so101-mujoco`，一条命令完成训练+Grid Sweep：
 
-```
-Actions → SO101 MuJoCo Pipeline → Run workflow
-  ├── steps: 20000（训练步数）
-  ├── batch_size: 32
-  ├── skip_train: false（true=跳过训练，用已有 checkpoint）
-  ├── checkpoint:（留空=自动找最新，填路径=指定）
-  └── mode: sweep（sweep=grid搜索，record=录像）
+```bash
+docker run --gpus all \
+  -v /data:/data \
+  swr.cn-north-4.myhuaweicloud.com/link-seek/so101-mujoco:latest \
+  bash -c "python train_smolvla_sim.py --steps 20000 && python eval_mujoco_policy.py --mode sweep"
 ```
 
-流水线自动完成：启动 V100 ECS → 下载数据+模型 → 训练 SmolVLA → Grid Sweep 评测 → 上传结果到 OBS → 关闭 ECS。
+训练完成后自动执行 Grid Sweep（325 episodes），输出成功率矩阵和热力图。
 
 #### 热力图
 
@@ -618,16 +616,19 @@ SUCCESS 153/325 = 47%
 
 LIBERO 是 VLA 领域的标准 benchmark（CoRL 2023，2.2k stars），评测模型跨任务泛化能力。
 
-**如何运行**：通过 GitHub Actions 流水线 `evaluate.yml` 触发（在 V100 ECS 上运行）。在 Actions 页面选择 "Evaluate"，点击 "Run workflow"：
+**如何运行**：用 Docker 镜像 `so101-eval`，一条命令完成 LIBERO 评测：
 
-```
-Actions → Evaluate → Run workflow
-  ├── model_repo: xieyucheng123/so101-act（HuggingFace 模型仓库）
-  ├── dataset_repo: xieyucheng123/so101-dataset（HuggingFace 数据集仓库）
-  └── num_episodes: 10（每个 benchmark 的 episode 数）
+```bash
+docker run --gpus all \
+  -v /data:/data \
+  swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest \
+  python eval_vla.py \
+    --model_repo xieyucheng123/so101-act \
+    --dataset_repo xieyucheng123/so101-dataset \
+    --num_episodes 10
 ```
 
-流水线自动完成：启动 V100 ECS → 下载模型+数据 → 运行 8 个 LIBERO/LIBERO-PRO benchmark → 下载结果+视频 → 上传到 OBS → 关闭 ECS。
+自动运行 8 个 LIBERO/LIBERO-PRO benchmark，输出每任务 success_rate。
 
 > **注意**：`evaluate.yml` 可以评测 HuggingFace 上的任意模型（包括我们自己的）。我们用它评测了 LIBERO，结果是 0%——因为 LIBERO 只支持 Franka Panda，而我们的模型是在 SO101 上训练的。要让 LIBERO 出正分，需要先在 LIBERO 中添加 SO101 机器人（详见 Ch6）。
 

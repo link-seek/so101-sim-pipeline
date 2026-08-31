@@ -61,60 +61,45 @@ export HC_SECRET_KEY=...
 
 ## B. 常用命令
 
-### B.1 触发流水线
+### B.1 Docker 运行
 
 ```bash
-# PPO 流水线
-gh workflow run ppo-pipeline.yml \
-  -f env_id=WarpPickLift-v1 \
-  -f total_timesteps=30000000 \
-  -f num_envs=1024 \
-  -f seed=1
+# PPO 训练 + 评估
+docker run --gpus all \
+  -v /data:/data \
+  swr.cn-north-4.myhuaweicloud.com/link-seek/so101-ppo:latest \
+  bash -c "python train_ppo.py --env_id WarpPickLift-v1 --total_timesteps 30000000 --seed 1 && python eval_ppo.py --num_episodes 50"
 
-# MuJoCo VLA 流水线
-gh workflow run so101-mujoco-pipeline.yml \
-  -f steps=20000 \
-  -f batch_size=32
+# SmolVLA 仿真训练 + Grid Sweep
+docker run --gpus all \
+  -v /data:/data \
+  swr.cn-north-4.myhuaweicloud.com/link-seek/so101-mujoco:latest \
+  bash -c "python train_smolvla_sim.py --steps 20000 && python eval_mujoco_policy.py --mode sweep"
 
-# VLA 流水线（ataghof，已终止）
-gh workflow run vla-pipeline.yml \
-  -f steps=20000 \
-  -f batch_size=32
-
-# Docker 构建
-gh workflow run docker-build.yml
+# LIBERO 评测
+docker run --gpus all \
+  -v /data:/data \
+  swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest \
+  python eval_vla.py \
+    --model_repo xieyucheng123/so101-act \
+    --dataset_repo xieyucheng123/so101-dataset \
+    --num_episodes 10
 ```
 
-### B.2 监控运行
+### B.2 Docker 监控
 
 ```bash
-# 查看所有运行
-gh run list --limit 20
+# 查看运行中的容器
+docker ps
 
-# 查看特定流水线
-gh run list --workflow=ppo-pipeline.yml --limit 5
+# 查看容器日志
+docker logs <container_id> -f
 
-# 实时监控
-gh run watch
+# 搜索关键信息
+docker logs <container_id> 2>&1 | grep -E "(success|reward|SPS|Error|loss)"
 
-# 查看日志
-gh run view <run_id> --log
-
-# 查看失败日志
-gh run view <run_id> --log-failed
-
-# 搜索日志中的关键信息
-gh run view <run_id> --log | grep -E "(success|reward|SPS|Error|loss)"
-```
-
-### B.3 Runner 管理
-
-```bash
-# 查看 runner 状态
-gh api repos/link-seek/so101-sim-pipeline/actions/runners
-
-# 查看 runner 详情
-gh api repos/link-seek/so101-sim-pipeline/actions/runners --jq '.runners[] | {name, status, busy, labels: [.labels[].name]}'
+# 进入运行中的容器
+docker exec -it <container_id> bash
 ```
 
 ### B.4 Discussion 管理
