@@ -374,7 +374,7 @@ def run_episode(env, ik, max_steps=900):
 
 def save_dataset(episodes, out_dir, task_name):
     """Save episodes as a LeRobot v3 dataset (one dataset per suite run)."""
-    from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
     features = {
         "observation.images.camera1": {"dtype": "video", "shape": [*RENDER_HW, 3], "names": None},
