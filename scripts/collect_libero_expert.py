@@ -358,7 +358,16 @@ def run_episode(env, ik, max_steps=900):
         if done or success_streak >= 10:
             break
 
-    success = success_streak >= 10
+    # done=True with reward>=1 means the env registered success on the final
+    # step (before our 10-step latch could fill); also re-check final state
+    if not success:
+        if done and total_reward >= 1.0:
+            success = True
+        else:
+            try:
+                success = bool(domain._check_success())
+            except Exception:
+                pass
     return success, len(act_list), total_reward, obs_list, act_list
 
 
