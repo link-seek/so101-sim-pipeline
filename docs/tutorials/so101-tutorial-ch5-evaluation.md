@@ -169,9 +169,9 @@ info = {
 | 脚本 | 遵循的框架 | 推理管线 | 状态 |
 |------|-----------|---------|------|
 | `replay_demo.py` | LeRobot | `prepare_observation_for_inference` → `preprocess` → `select_action` → `postprocess` | 本地运行（Ch4） |
-| `eval_ppo.py` | CleanRL | `agent.actor_mean(norm(obs))` 确定性评估 | GitHub Actions 运行 |
-| `eval_vla.py` | vla-eval harness | `run_benchmark()` → `merge_results()` | GitHub Actions 运行（V100 ECS） |
-| `eval_mujoco_policy.py` | so101-mujoco | `--sweep` grid search | 本地运行（Ch4） |
+| `eval_ppo.py` | CleanRL | `agent.actor_mean(norm(obs))` 确定性评估 | GitHub Actions（3 次） |
+| `eval_vla.py` | vla-eval harness | `run_benchmark()` → `merge_results()` | GitHub Actions（10 次，V100 ECS） |
+| `eval_mujoco_policy.py` | so101-mujoco | `--sweep` grid search | GitHub Actions（6 次） |
 
 ---
 
@@ -576,9 +576,17 @@ for ep in range(50):
 
 ### 5.3 Grid Sweep：单任务工作空间扫描
 
-Grid sweep 不是标准 RL 评测方法，而是机器人仿真社区的实践——系统扫描工作空间初始条件。详见 Ch4 的 `eval_mujoco_policy.py` 实战（5 reach × 13 azimuth × 5 seed = 325 episodes，47% 成功率）。
+Grid sweep 不是标准 RL 评测方法，而是机器人仿真社区（如 [dyordan1/so101-mujoco](https://github.com/dyordan1/so101-mujoco)）的实践——系统扫描工作空间初始条件：
 
-**与 Gymnasium 标准评测的关系**：Grid sweep 本质上是 `n_episodes=325` 的评测，只是 episode 的初始条件不是随机采样而是网格采样。
+```python
+# scripts/eval_mujoco_policy.py 封装 dyordan1/so101-mujoco 的 --sweep
+reach_values = [0.15, 0.18, 0.20, 0.22, 0.25]      # 5 个距离
+azimuth_values = range(-90, 91, 15)                  # 13 个角度
+trials = 5                                           # 每个条件 5 次
+# 总计 5 × 13 × 5 = 325 episodes
+```
+
+**与 Gymnasium 标准评测的关系**：Grid sweep 本质上是 `n_episodes=325` 的评测，只是 episode 的初始条件不是随机采样而是网格采样。每个 episode 仍然遵循 `reset → step × N → check success` 的标准循环。
 
 #### 热力图
 
