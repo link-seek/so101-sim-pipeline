@@ -210,7 +210,7 @@ LIBERO 评测的是 **VLA 策略**（Vision-Language-Action Policy）——接�
 | RT-1 | RT-1 | Transformer, 大规模 |
 | SimpleVLA | SimpleVLA | 轻量 VLA |
 
-我们的 SmolVLA 也属于 VLA 策略，理论上可以作为评测对象——但需要机器人匹配（详见 §4.8）。
+我们的 SmolVLA 也属于 VLA 策略，理论上可以作为评测对象——但需要机器人匹配（详见 §4.7）。
 
 ### 4.3 任务定义机制：BDDL
 
@@ -483,6 +483,30 @@ LIBERO 和 LIBERO-PRO 在**对训练信息的依赖**上有本质区别：
 
 **我们的实现**：仓库已设计完整 LIBERO 评测管线——`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` Docker 镜像。通过 GitHub Actions `evaluate.yml` 在 V100 ECS 上运行。
 
+**模型和数据来源**：评测用的模型和数据集都存放在 [HuggingFace Hub](https://huggingface.co)——一个模型和数据集的托管平台（类似 GitHub，但专为 AI 模型设计）。
+
+数据采集是独立于评测流水线的步骤：
+- **真机数据**：人工在 SO101 实机上操作录制（如 ataghof 数据集）
+- **仿真数据**：在 MuJoCo 仿真环境中录制（如 dobri420 数据集）
+- **LIBERO 专家数据**：可通过 `collect.yml` 流水线自动采集
+
+采集完成后上传到 HF，后续流程：
+
+```
+上传数据集到 HF → 训练 → 上传模型到 HF → 评测流水线从 HF 下载模型+数据 → ECS 运行评测
+```
+
+**注意：我们同时使用 OBS 和 HF（见 Ch1 §7.5）**：
+- **HuggingFace**：存模型和数据集（用于分享、下载、复现）
+- **OBS（华为云）**：存评估结果（JSON、视频、图片）——上传快、成本低
+
+我们上传了：
+- **数据集**：`xieyucheng123/so101-dataset` — SO101 仿真采集的演示数据
+- **模型**：`xieyucheng123/so101-act` — ACT 策略（行为克隆）
+- **模型**：`xieyucheng123/so101-smolvla` — SmolVLA 策略（视觉-语言-动作）
+
+也可以评测别人发布的模型和数据集，只要指定 HF 仓库名即可。HF 只负责存储，不提供算力——计算在我们自己的华为云 V100 ECS 上完成。
+
 **实战结果**（2026-08-27，run 33053613547）：
 
 | Benchmark | Episodes | 结果 | 说明 |
@@ -605,7 +629,7 @@ Actions → Evaluate → Run workflow
 
 流水线自动完成：启动 V100 ECS → 下载模型+数据 → 运行 8 个 LIBERO/LIBERO-PRO benchmark → 下载结果+视频 → 上传到 OBS → 关闭 ECS。
 
-> **注意**：`evaluate.yml` 评测的是 **HuggingFace 上预训练的 VLA 模型**，不是我们自己训练的模型。我们要在 LIBERO 上评测自己的模型，需要先在 LIBERO 中添加 SO101 机器人（详见 Ch6）。
+> **注意**：`evaluate.yml` 可以评测 HuggingFace 上的任意模型（包括我们自己的）。我们用它评测了 LIBERO，结果是 0%——因为 LIBERO 只支持 Franka Panda，而我们的模型是在 SO101 上训练的。要让 LIBERO 出正分，需要先在 LIBERO 中添加 SO101 机器人（详见 Ch6）。
 
 ### 5.5 四种方法对比
 
@@ -629,9 +653,9 @@ Actions → Evaluate → Run workflow
 
 ---
 
-## 6. 评测方法论：为什么这样做
+## 6. 评测方法论：踩坑驱动的原则
 
-### 6.1 训练指标 vs 评估指标
+### 6.1 训练指标 ≠ 评估指标
 
 这是 RL/BC 社区的共识（参见 [Spinning Up](https://spinningup.openai.com/) 的评测章节）：
 
@@ -642,19 +666,11 @@ Actions → Evaluate → Run workflow
 | **用途** | 监控收敛 | 判断任务完成能力 |
 | **陷阱** | Loss 低 ≠ 性能好 (BC) | — |
 
-我们在 ataghof 方案中的教训：
-
-| 训练阶段 | Loss | 回放 Success |
-|----------|------|-------------|
-| 5K steps | 0.119 | False |
-| 20K steps | 0.046 | False |
-| 社区成功案例 | 0.005-0.018 | True |
-
-Loss 0.046 看起来"还行"，但和社区 0.005 差 10 倍。**Loss 只衡量 action 预测精度，不衡量任务完成度**——这是 BC 评测的核心原则。
+> **踩坑**：ataghof 方案中 Loss 0.046 看起来"还行"，但社区成功案例是 0.005，差 10 倍。Loss 只衡量 action 预测精度，不衡量任务完成度——这是 BC 评测的核心原则。必须做仿真评估，不能只看 Loss。
 
 ### 6.2 统计显著性：多少 episodes 才够
 
-这是评测理论中常被忽略的问题。给定成功率 p，N 个 episodes 的标准误差：
+给定成功率 p，N 个 episodes 的标准误差：
 
 ```
 SE = sqrt(p * (1-p) / N)
@@ -694,7 +710,7 @@ success = info["success"]  # 环境作者已经定义了什么是"完成"
 success = reward > threshold  # 策略可能学会刷 reward
 ```
 
-我们在 PPO 中就遇到这个问题：`lift_threshold=0.05` 时 `info["success"]` 返回 True，但视频里物体几乎没动。修复方式是修改环境的 `lift_threshold` 参数，不是自己定义 success。
+> **踩坑**：PPO v1 的 `lift_threshold=0.05` 太低（5cm 就算"抬起"），导致 success_rate=100% 但视频里物体几乎没动。修复：修改环境参数 `lift_threshold=0.15`，success_rate 降至 98%，但视频中有明显抬起动作。教训：评测前要理解环境的成功判定逻辑。
 
 #### 原则 2：覆盖足够的初始条件（统计显著性）
 
@@ -724,35 +740,9 @@ LeRobot `lerobot-eval` 默认 `seed=1000`，我们的 `eval_ppo.py` 用 `seed=12
 }
 ```
 
----
+### 6.4 Grid Sweep 暴露训练数据偏置
 
-## 7. 踩坑复盘
-
-### 坑 1：只看 Loss 误判性能
-
-**现象**：Loss 0.046，以为"还不错"。
-
-**实际**：社区 0.005，差 10x。Loss 掩盖了数据-环境不匹配的问题。
-
-**教训**：Loss 只衡量 action 预测精度，不衡量任务完成度。必须做仿真评估。这是 BC 评测的核心原则，LeRobot 的 `lerobot-eval` 也是先跑 rollout 再算 `pc_success`，不只看 loss。
-
-### 坑 2：lift_threshold 影响成功率
-
-**现象**：PPO v1 success_rate=100%，但视频里物体几乎没动。
-
-**根因**：`lift_threshold=0.05` 太低，5cm 就算"抬起"。环境的 `info["success"]` 判定标准太宽松。
-
-**修复**：修改环境参数 `lift_threshold=0.15`，success_rate 降至 98%，但视频中有明显抬起动作。
-
-**教训**：评测指标要和任务语义对齐。Gymnasium 的 `info["success"]` 依赖环境配置，评测前要理解环境的成功判定逻辑。
-
-### 坑 3：Grid Sweep 暴露训练数据偏置
-
-**现象**：VLA 47% 成功率，但中心区域 60-100%，边缘 ~0%。
-
-**分析**：训练数据集中在工作区中心，边缘覆盖不足。
-
-**教训**：Grid Sweep 能发现训练数据的覆盖盲区，单一指标（如 LIBERO 的 `pc_success`）会掩盖这个问题。两种评测方法互补。
+> **踩坑**：VLA 47% 成功率，但中心区域 60-100%，边缘 ~0%。训练数据集中在工作区中心，边缘覆盖不足。Grid Sweep 能发现训练数据的覆盖盲区，单一指标（如 LIBERO 的 `pc_success`）会掩盖这个问题。两种评测方法互补。
 
 ---
 
