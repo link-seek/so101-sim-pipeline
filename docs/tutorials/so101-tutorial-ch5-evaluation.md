@@ -164,26 +164,14 @@ info = {
 
 **我们的 `eval_ppo.py` 遵循了同样的指标设计**，只是命名不同。`avg_max_reward` 我们没追踪，因为 PPO 的 reward 语义和 VLA 不同。
 
-### 3.4 我们的 `replay_demo.py` 如何使用 LeRobot 推理管线
+### 3.4 我们的脚本如何使用社区框架
 
-```python
-# scripts/replay_demo.py — 使用 LeRobot 标准推理管线
-from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
-from lerobot.policies.factory import make_pre_post_processors
-from lerobot.policies.utils import prepare_observation_for_inference
-
-# 加载策略 + 预处理器（LeRobot 标准）
-policy = SmolVLAPolicy.from_pretrained(checkpoint)
-preprocess, postprocess = make_pre_post_processors(policy.config, checkpoint, ...)
-
-# 推理循环（遵循 LeRobot 管线）
-frame = prepare_observation_for_inference(frame, device, task=task_description)
-frame = preprocess(frame)
-action = policy.select_action(frame)      # LeRobot 标准推理
-action = postprocess(action)               # 后处理
-```
-
-这不是我们自己写的推理逻辑——是 LeRobot 的标准管线。`prepare_observation_for_inference` → `preprocess` → `select_action` → `postprocess` 是 LeRobot 定义的推理协议。
+| 脚本 | 遵循的框架 | 推理管线 | 状态 |
+|------|-----------|---------|------|
+| `replay_demo.py` | LeRobot | `prepare_observation_for_inference` → `preprocess` → `select_action` → `postprocess` | 本地运行（Ch4） |
+| `eval_ppo.py` | CleanRL | `agent.actor_mean(norm(obs))` 确定性评估 | GitHub Actions 运行 |
+| `eval_vla.py` | vla-eval harness | `run_benchmark()` → `merge_results()` | GitHub Actions 运行（V100 ECS） |
+| `eval_mujoco_policy.py` | so101-mujoco | `--sweep` grid search | 本地运行（Ch4） |
 
 ---
 
@@ -555,28 +543,7 @@ benchmarks:
 
 ### 5.1 回放验证：快速 smoke test
 
-每次训练后快速验证模型能否正常推理——用 LeRobot 推理管线跑 1 个 episode（300 步），~30 秒出结果。
-
-```python
-# scripts/replay_demo.py — 使用 LeRobot 标准推理管线
-from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
-from lerobot.policies.factory import make_pre_post_processors
-from lerobot.policies.utils import prepare_observation_for_inference
-
-policy = SmolVLAPolicy.from_pretrained(checkpoint)
-preprocess, postprocess = make_pre_post_processors(policy.config, checkpoint)
-
-for step in range(300):
-    # LeRobot 标准推理管线
-    frame = prepare_observation_for_inference(frame, device, task=task_description)
-    frame = preprocess(frame)
-    action = policy.select_action(frame)      # SmolVLA 推理 (含 action chunking)
-    action = postprocess(action)
-    
-    # so101_nexus 官方单位转换
-    action_rad = dataset_row_to_sim_qpos(action)  # 数据集 → 仿真
-    obs, reward, _, _, info = env.step(action_rad)
-```
+每次训练后快速验证模型能否正常推理——用 LeRobot 推理管线跑 1 个 episode（300 步），~30 秒出结果。详见 Ch4 的 `replay_demo.py` 实战。
 
 **回放指标解读**：
 
@@ -609,17 +576,9 @@ for ep in range(50):
 
 ### 5.3 Grid Sweep：单任务工作空间扫描
 
-Grid sweep 不是标准 RL 评测方法，而是机器人仿真社区（如 [dyordan1/so101-mujoco](https://github.com/dyordan1/so101-mujoco)）的实践——系统扫描工作空间初始条件：
+Grid sweep 不是标准 RL 评测方法，而是机器人仿真社区的实践——系统扫描工作空间初始条件。详见 Ch4 的 `eval_mujoco_policy.py` 实战（5 reach × 13 azimuth × 5 seed = 325 episodes，47% 成功率）。
 
-```python
-# scripts/eval_mujoco_policy.py 封装 dyordan1/so101-mujoco 的 --sweep
-reach_values = [0.15, 0.18, 0.20, 0.22, 0.25]      # 5 个距离
-azimuth_values = range(-90, 91, 15)                  # 13 个角度
-trials = 5                                           # 每个条件 5 次
-# 总计 5 × 13 × 5 = 325 episodes
-```
-
-**与 Gymnasium 标准评测的关系**：Grid sweep 本质上是 `n_episodes=325` 的评测，只是 episode 的初始条件不是随机采样而是网格采样。每个 episode 仍然遵循 `reset → step × N → check success` 的标准循环。
+**与 Gymnasium 标准评测的关系**：Grid sweep 本质上是 `n_episodes=325` 的评测，只是 episode 的初始条件不是随机采样而是网格采样。
 
 #### 热力图
 
