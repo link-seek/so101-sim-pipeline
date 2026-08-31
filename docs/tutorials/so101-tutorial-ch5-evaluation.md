@@ -477,54 +477,45 @@ LIBERO 和 LIBERO-PRO 在**对训练信息的依赖**上有本质区别：
 
 **对我们的意义**：我们的 SO101 SmolVLA 在 SO101 pick-cube 演示上训练，从没见过 LIBERO 物体/任务。跑 LIBERO 时所有任务都是"没见过的" → 测的是完全 zero-shot 泛化。跑 LIBERO-PRO 时不需要关心这个 → 直接拿 robustness gap。两种结果的解读都不依赖于"训练时见过什么"，因为对我们来说答案很简单：什么都没见过。
 
-### 4.7 我们的 `eval_vla.py` 如何使用
+### 4.7 我们的 LIBERO 实战：从设计到 0%
 
-**如何运行**：通过 GitHub Actions 流水线 `evaluate.yml` 触发（在 V100 ECS 上运行）。在 Actions 页面选择 "Evaluate"，点击 "Run workflow"：
+**为什么选 LIBERO**：LIBERO 是 VLA 领域公认的标准 benchmark（CoRL 2023，2.2k stars），提供 3 个 suite × 10 tasks 的多任务泛化评测。如果一个 VLA 模型能在 LIBERO 上拿到高分，说明它具备跨任务泛化能力——这是衡量 VLA 质量的金标准。
 
-```
-Actions → Evaluate → Run workflow
-  ├── model_repo: xieyucheng123/so101-act（HuggingFace 模型仓库）
-  ├── dataset_repo: xieyucheng123/so101-dataset（HuggingFace 数据集仓库）
-  └── num_episodes: 10（每个 benchmark 的 episode 数）
-```
+**我们的实现**：仓库已设计完整 LIBERO 评测管线——`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` Docker 镜像。通过 GitHub Actions `evaluate.yml` 在 V100 ECS 上运行。
 
-流水线自动完成：启动 V100 ECS → 下载模型+数据 → 运行 8 个 LIBERO/LIBERO-PRO benchmark → 下载结果+视频 → 上传到 OBS → 关闭 ECS。
+**实战结果**（2026-08-27，run 33053613547）：
 
-**Benchmark 配置**：
+| Benchmark | Episodes | 结果 | 说明 |
+|-----------|----------|------|------|
+| `libero_goal` | 100 | 0%，steps=0 | 环境初始化即失败 |
+| `libero_spatial` | 20 | 0%，跑满 230 步 | 能运行但任务未完成 |
+| **总计** | **120** | **0%** | **模型-环境不兼容** |
 
-| Benchmark | 类型 | Episodes | 用途 |
-|-----------|------|----------|------|
-| `libero_spatial` | LIBERO | 500 (10 tasks × 50) | 空间泛化 |
-| `libero_object` | LIBERO | 500 | 物体泛化 |
-| `libero_goal` | LIBERO | 500 | 目标泛化 |
-| `libero_pro_*` (5个) | LIBERO-PRO | 各 100 | 鲁棒性评测 |
+**为什么是 0%**：LIBERO 只支持 Franka Panda 7 DoF 机械臂，我们的模型是在 SO101 5 DoF 上训练的。关节定义、观测空间、动作语义全部不匹配——SO101 的模型根本无法驱动 Franka。
 
-**关键区别**：LIBERO 评测的是**跨任务泛化能力**，grid sweep 评测的是**单任务工作空间覆盖**。两者互补。
-
-### 4.8 当前状态：已实战（首次 LIBERO 评测 0%）
-
-> **结论**：我们的 LIBERO 评测管线已完整设计并实现代码（`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` Docker 镜像），并已于 2026-08-27 通过 `evaluate.yml` 实际运行（`smolvla-fresh` 分支，run 33053613547）。
->
-> **实战结果**：首次 LIBERO 评测共 120 episodes、0% 成功率。其中 `libero_goal` 100 episodes 全部 `steps=0`（环境初始化即失败），`libero_spatial` 20 episodes 跑满 230 步但 0% 成功。这**直接证实了模型-环境不兼容**——我们的 SO101 SmolVLA 无法驱动 LIBERO 的 Franka Panda（关节定义、观测空间、动作语义都不匹配）。LIBERO 只支持 Franka，社区无人做过 LIBERO + SO101 集成。SO-101 Bench 虽匹配 SO101 但需要 Isaac Lab（RTX GPU），V100 跑不了。
->
-> **当前可行路径**：MuJoCo Grid Sweep 仍是 V100 上唯一跑通的、有正结果的标准化评测路径（47%）。要让 LIBERO 出正分，仍需先按 Ch6 方案在 LIBERO 中添加 SO101 机器人。落地方案详见 [Discussion #9](https://github.com/link-seek/so101-sim-pipeline/discussions/9) 和 [Ch6 落地 LIBERO 评测实战](so101-tutorial-ch6-optimization.md)。
-
-**实际评测进展**（截至 2026-08-27）：
-
-| 评测方法 | 状态 | 结果 |
-|----------|------|------|
-| 回放验证（replay_demo.py） | ✅ 已执行 | 方案 A 失败，方案 B 成功 |
-| Grid Sweep（eval_mujoco_policy.py） | ✅ 已执行 | 153/325 = 47% |
-| PPO 确定性评估（eval_ppo.py） | ✅ 已执行 | v1: 100%, v2: 98% |
-| **LIBERO（eval_vla.py）** | **✅ 已执行（0%，模型-环境不兼容）** | **120 episodes / 0%：libero_goal 100×steps=0，libero_spatial 20×230 步仍 0%** |
-| **LIBERO-PRO** | **⬜ 已设计未执行** | **同上（依赖 LIBERO 先出正分）** |
-| **SO-101 Bench (Isaac Lab)** | **⬜ 硬件不支持** | **V100 无法运行** |
+**学到的教训**：
+1. **评测前先确认机器人兼容性**——不是所有 benchmark 都支持所有机器人
+2. **0% 也是有价值的结果**——直接证实了模型-环境不兼容，避免继续浪费时间
+3. **需要先做集成**——要让 LIBERO 出正分，必须先在 LIBERO 中添加 SO101 机器人（详见 Ch6）
 
 ---
 
 ## 5. 我们的评测实践
 
-前面介绍了社区框架（§1-4），现在看我们实际怎么用。从最简单到最全面，三种评测方法层层递进。
+前面介绍了社区框架（§1-4），现在看我们实际怎么用。
+
+**评测进展总览**：
+
+| 评测方法 | 流水线 | 状态 | 结果 |
+|----------|--------|------|------|
+| 回放验证 | 本地运行 | ✅ 已执行 | 方案 A 失败，方案 B 成功 |
+| Grid Sweep | so101-mujoco-pipeline.yml | ✅ 已执行 | 153/325 = 47% |
+| PPO 确定性评估 | ppo-pipeline.yml | ✅ 已执行 | v1: 100%, v2: 98% |
+| LIBERO | evaluate.yml | ✅ 已执行 | 120 episodes / 0%（模型-环境不兼容） |
+| LIBERO-PRO | — | ⬜ 已设计未执行 | 依赖 LIBERO 先出正分 |
+| SO-101 Bench | — | ⬜ 硬件不支持 | V100 无法运行 |
+
+从最简单到最全面，四种评测方法层层递进。
 
 ### 5.1 回放验证：快速 smoke test
 
