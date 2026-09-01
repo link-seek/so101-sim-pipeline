@@ -372,9 +372,29 @@ def run_episode(env, ik, max_steps=900):
     return success, len(act_list), total_reward, obs_list, act_list
 
 
+def _import_lerobot_dataset():
+    """Import LeRobotDataset, auto-installing the lerobot[dataset] extra on ImportError."""
+    try:
+        from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
+        return LeRobotDataset
+    except ImportError:
+        import subprocess
+        import sys
+
+        print("[save] missing lerobot dataset deps; pip installing lerobot[dataset] ...")
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-q", "lerobot[dataset]"],
+            check=True,
+        )
+        from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
+        return LeRobotDataset
+
+
 def save_dataset(episodes, out_dir, task_name):
     """Save episodes as a LeRobot v3 dataset (one dataset per suite run)."""
-    from lerobot.datasets.lerobot_dataset import LeRobotDataset
+    LeRobotDataset = _import_lerobot_dataset()
 
     features = {
         "observation.images.camera1": {"dtype": "video", "shape": [*RENDER_HW, 3], "names": None},
