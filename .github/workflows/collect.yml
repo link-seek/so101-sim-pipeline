@@ -90,9 +90,20 @@ jobs:
             MY=""
           fi
           rm -rf /data/datasets/libero_so101_expert/'${{ inputs.suite }}'
-          mkdir -p /data/datasets/libero_so101_expert
+          mkdir -p /data/datasets/libero_so101_expert /data/scripts
+          # Fetch the latest collection script so script fixes skip the 1.5h image sync.
+          # Fallback: extract the image-baked copy if the GitHub fetch fails.
+          if ! curl -sfL --max-time 60 -H "Authorization: token ${{ github.token }}" \
+            "https://api.github.com/repos/${{ github.repository }}/contents/scripts/collect_libero_expert.py?ref=smolvla-fresh" \
+            | python3 -c "import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)['content']).decode())" \
+            > /data/scripts/collect_libero_expert.py; then
+            echo "script fetch failed; using image-baked copy"
+            docker run --rm --entrypoint cat ${{ env.EVAL_IMAGE }} /workspace/scripts/collect_libero_expert.py > /data/scripts/collect_libero_expert.py
+          fi
+          wc -l /data/scripts/collect_libero_expert.py
           docker run --rm --gpus "device=${{ matrix.gpu }}" --shm-size=8g \
             -v /data:/data \
+            -v /data/scripts/collect_libero_expert.py:/workspace/scripts/collect_libero_expert.py:ro \
             -e CUDA_VISIBLE_DEVICES=0 \
             -e MUJOCO_GL=egl \
             -e HF_ENDPOINT=https://hf-mirror.com \
