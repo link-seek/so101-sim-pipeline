@@ -104,6 +104,7 @@ jobs:
           docker run --rm --gpus "device=${{ matrix.gpu }}" --shm-size=8g \
             -v /data:/data \
             -v /data/scripts/collect_libero_expert.py:/workspace/scripts/collect_libero_expert.py:ro \
+            -e MY="$MY" \
             -e CUDA_VISIBLE_DEVICES=0 \
             -e MUJOCO_GL=egl \
             -e HF_ENDPOINT=https://hf-mirror.com \
