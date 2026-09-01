@@ -89,6 +89,7 @@ jobs:
           else
             MY=""
           fi
+          rm -rf /data/datasets/libero_so101_expert/'${{ inputs.suite }}'
           mkdir -p /data/datasets/libero_so101_expert
           docker run --rm --gpus "device=${{ matrix.gpu }}" --shm-size=8g \
             -v /data:/data \
