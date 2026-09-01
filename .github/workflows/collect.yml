@@ -96,7 +96,7 @@ jobs:
             -e MUJOCO_GL=egl \
             -e HF_ENDPOINT=https://hf-mirror.com \
             ${{ env.EVAL_IMAGE }} \
-            bash -c 'pip install -q datasets pyarrow && python /workspace/scripts/collect_libero_expert.py \
+            bash -c 'pip install -q "lerobot[dataset]" && python /workspace/scripts/collect_libero_expert.py \
               --suite "${{ inputs.suite }}" \
               --tasks "$MY" \
               --episodes_per_task ${{ inputs.episodes_per_task }} \
