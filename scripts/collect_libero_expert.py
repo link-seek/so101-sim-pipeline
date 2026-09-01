@@ -463,8 +463,8 @@ def main():
 
     all_episodes = []
     out_dir = Path(args.output_dir)
-    out_root_suite = out_dir / args.suite
-    out_root_suite.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_root_suite = out_dir / args.suite  # created by LeRobotDataset.create
 
     for task_id in task_ids:
         task = task_suite.get_task(task_id)
