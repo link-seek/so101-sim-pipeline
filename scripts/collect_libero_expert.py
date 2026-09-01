@@ -394,7 +394,14 @@ def _import_lerobot_dataset():
 
 def save_dataset(episodes, out_dir, task_name):
     """Save episodes as a LeRobot v3 dataset (one dataset per suite run)."""
+    import shutil
+    from pathlib import Path
+
     LeRobotDataset = _import_lerobot_dataset()
+
+    if Path(out_dir).exists():
+        print(f"[save] removing stale dataset dir {out_dir}")
+        shutil.rmtree(out_dir)
 
     features = {
         "observation.images.camera1": {"dtype": "video", "shape": [*RENDER_HW, 3], "names": None},
