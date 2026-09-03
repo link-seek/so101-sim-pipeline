@@ -13,19 +13,22 @@ Checks:
 """
 import sys
 import os
+from pathlib import Path
+
 import numpy as np
 
 os.environ.setdefault("MUJOCO_GL", "egl")
 
-# Register SO101
+# Follow same import pattern as collect_libero_expert.py
 sys.path.insert(0, "/workspace/robosuite_so101")
-from robosuite_so101 import register_so101
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from run_libero_eval import register_so101, SnapGraspController  # noqa: E402
 
 register_so101()
 
-import robosuite
-from libero.libero import benchmark, get_bddl_root
-from libero.libero.envs import OffScreenRenderEnv
+from libero.libero import benchmark, get_bddl_root  # noqa: E402
+from libero.libero.envs import OffScreenRenderEnv  # noqa: E402
 
 print("=" * 60)
 print("SO101 + LIBERO Integration Verification")
@@ -71,7 +74,6 @@ for cam in ["eye_in_hand", "agentview", "birdview"]:
     else:
         print(f"    [WARN] Camera {cam} not in obs!")
 
-# Proprioception
 if "robot0_joint_pos" in obs:
     jp = obs["robot0_joint_pos"]
     print(f"    joint_pos: {jp} (len={len(jp)})")
@@ -86,18 +88,15 @@ if "robot0_gripper_qpos" in obs:
 # --- 5. Robot responds to actions ---
 print(f"\n[5] Testing action response...")
 init_jp = obs["robot0_joint_pos"].copy()
-# Send a small action (all zeros = hold position for JOINT_POSITION absolute)
 action = np.zeros(6)
 for _ in range(10):
     obs, reward, done, info = env.step(action)
 after_jp = obs["robot0_joint_pos"]
 jp_delta = np.abs(after_jp - init_jp).max()
 print(f"    After 10 zero-actions: max joint delta = {jp_delta:.6f} rad ({np.degrees(jp_delta):.4f} deg)")
-print(f"    Joint pos after: {after_jp}")
 
-# Send a small joint target change
 action2 = init_jp.copy()
-action2[0] += 0.1  # 0.1 rad on joint 0
+action2[0] += 0.1
 for _ in range(20):
     obs, reward, done, info = env.step(action2)
 moved_jp = obs["robot0_joint_pos"]
@@ -117,50 +116,49 @@ print(f"\n[7] ArmIK verification...")
 try:
     from collect_libero_expert import ArmIK
     ik = ArmIK(env)
-    # Try reaching a known target
     target = np.array([0.05, -0.1, 0.15])
-    q, info_ik = ik.solve(target)
-    if q is not None:
-        print(f"    Target {target}: solved q={q[:5]}, tip_err={info_ik.get('tip_err', 'N/A')}")
+    result = ik.solve(target)
+    if result is not None:
+        q, info_ik = result
+        print(f"    Target {target}: solved q={np.round(q[:5], 4)}")
         print(f"    [OK] ArmIK produces valid solutions")
     else:
-        print(f"    [WARN] ArmIK failed for target {target}")
+        print(f"    [WARN] ArmIK returned None for target {target}")
 except Exception as e:
     print(f"    [SKIP] ArmIK check: {e}")
 
 # --- 8. SnapGraspController verification ---
 print(f"\n[8] SnapGraspController verification...")
 try:
-    from run_libero_eval import SnapGraspController
-    sgc = SnapGraspController(env)
-    print(f"    Controller created: threshold={sgc.attach_threshold}")
-    print(f"    State: {sgc.state}")
-    # Test attach/detach state machine
-    sgc.state = "ATTACHED"
-    sgc.attached_obj_id = 0
-    sgc.update(env, action=np.zeros(6))
-    print(f"    After update in ATTACHED state: {sgc.state}")
-    sgc.detach(env)
-    print(f"    After detach: {sgc.state}")
-    print(f"    [OK] SnapGraspController works")
+    sim = env.sim
+    obj_body = None
+    for name in sim.model.body_names:
+        if "main" in name and not name.startswith("robot") and not name.startswith("table") and not name.startswith("floor"):
+            obj_body = name
+            break
+    if obj_body:
+        sgc = SnapGraspController(sim, obj_body)
+        print(f"    Controller created for object '{obj_body}', ATTACH_DIST={sgc.ATTACH_DIST}")
+        print(f"    attached={sgc.attached}")
+        tip = sgc.tip_position()
+        obj = sgc.object_position()
+        dist = np.linalg.norm(tip - obj)
+        print(f"    tip={np.round(tip, 3)}, obj={np.round(obj, 3)}, dist={dist*1000:.1f}mm")
+        print(f"    [OK] SnapGraspController instantiates and reports positions")
+    else:
+        print(f"    [WARN] No object body found for SnapGrasp test")
 except Exception as e:
     print(f"    [SKIP] SnapGrasp check: {e}")
 
 # --- 9. Scene setup ---
 print(f"\n[9] Scene setup:")
-if hasattr(env, 'sim') and hasattr(env.sim, 'model'):
-    sim = env.sim
-    # Check robot base position
-    robot_body = sim.model.body_name2id("base")
-    base_pos = sim.model.body_pos[robot_body]
-    print(f"    Robot base pos: {base_pos}")
-    # Check floor/table
-    for body_name in ["floor0", "table0"]:
-        try:
-            bid = sim.model.body_name2id(body_name)
-            print(f"    {body_name} pos: {sim.model.body_pos[bid]}")
-        except Exception:
-            pass
+sim = env.sim
+for body_name in ["base", "floor0", "table0"]:
+    try:
+        bid = sim.model.body_name2id(body_name)
+        print(f"    {body_name} pos: {sim.model.body_pos[bid]}")
+    except Exception:
+        pass
 
 env.close()
 print(f"\n{'=' * 60}")
