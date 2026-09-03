@@ -2,11 +2,12 @@ server:
   url: "ws://localhost:8000"
 docker:
   image: swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest
-  volumes:
-    - /data/scripts/robot_shim:/tmp/robot_shim:ro
-  env:
-    - PYTHONPATH=/tmp/robot_shim
-    - LIBERO_ROBOT=Sawyer
+# NOTE: eval_vla.py runs INSIDE the eval container, so vla-eval skips its own
+# docker launch and runs the benchmark in-process. The robot switch comes from
+# outer-container env set by robot-switch.yml:
+#   -e PYTHONPATH=/data/scripts/robot_shim -e LIBERO_ROBOT=Sawyer
+# (see scripts/robot_shim/sitecustomize.py). docker.image above is kept for
+# documentation / host-side runs.
 output_dir: "/data/eval/results/libero_spatial_sawyer"
 benchmarks:
   - benchmark: "vla_eval.benchmarks.libero.benchmark:LIBEROBenchmark"
