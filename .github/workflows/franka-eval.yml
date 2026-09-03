@@ -82,6 +82,7 @@ jobs:
             sed -i 's/episodes_per_task: [0-9]*/episodes_per_task: ${{ inputs.episodes_per_task }}/' "/data/scripts/bench_${b}.yaml"
             grep -n "episodes_per_task" "/data/scripts/bench_${b}.yaml"
           done
+          head -3 /data/scripts/robot_shim/sitecustomize.py
           wc -l /data/scripts/eval_vla.py /data/scripts/smolvla_franka.yaml
 
       - name: Run Franka baseline evaluation
@@ -133,6 +134,9 @@ jobs:
         env:
           HCLOUD_AGREE_PRIVACY: "true"
         run: |
+          # Let the self-hosted runner flush job logs before shutdown,
+          # otherwise the evaluate job's logs are lost ("log not found").
+          sleep 120
           echo "y" | hcloud ECS BatchStopServers \
             --cli-region="${{ env.ECS_REGION }}" \
             --cli-access-key="${{ secrets.OBS_AK }}" \
