@@ -38,8 +38,9 @@ def start_model_server(model_config, checkpoint=None):
     if checkpoint:
         cmd.extend(["--arg", f"checkpoint={checkpoint}"])
 
-    print(f"Starting model server: {' '.join(cmd)}")
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    print(f"Starting model server: {' '.join(cmd)}", flush=True)
+    server_log = open(RESULTS_DIR / "server.log", "ab")
+    proc = subprocess.Popen(cmd, stdout=server_log, stderr=subprocess.STDOUT, text=True)
 
     for _ in range(300):
         try:
@@ -51,8 +52,7 @@ def start_model_server(model_config, checkpoint=None):
             time.sleep(2)
 
     print("Model server failed to start within 600s")
-    stdout_data = proc.stdout.read() if proc.stdout else ""
-    print(f"Model server stdout:\n{stdout_data}")
+    server_log.flush()
     proc.kill()
     sys.exit(1)
 
