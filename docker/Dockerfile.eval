@@ -52,4 +52,17 @@ WORKDIR /workspace
 COPY scripts/ /workspace/scripts/
 COPY configs/ /workspace/configs/
 
+# `vla-eval serve` runs the server script via `uv run <script>`. Make uv reuse
+# this venv (not a fresh python) and stage the server script with its PEP 723
+# metadata stripped (upstream pins CPU torch + git lerobot, which would shadow
+# this image's CUDA venv; all deps are already installed here).
+ENV VIRTUAL_ENV=/opt/venv
+ENV UV_NO_PROJECT=1
+RUN SITE_PKGS=$(python -c "import site; print(site.getsitepackages()[0])") && \
+    mkdir -p /workspace/model_servers && \
+    sed '/^# \/\/\/ script/,/^# \/\/\/$/d' "$SITE_PKGS/vla_eval/model_servers/lerobot.py" \
+      > /workspace/model_servers/lerobot.py && \
+    grep -c "PEP 723\|/// script" /workspace/model_servers/lerobot.py || \
+      echo "server script staged OK (metadata stripped)"
+
 CMD ["python", "/workspace/scripts/eval_vla.py"]
