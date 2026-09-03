@@ -182,6 +182,22 @@ def main():
     print(f"[shim-check] sitecustomize in sys.modules: {'sitecustomize' in sys.modules}",
           flush=True)
 
+    # In-container probes: discriminate "shim not loaded in vla-eval proc"
+    # vs "env_wrapper never seen". All output lands in console.log.
+    probes = [
+        "import sys; print('[probe] child sitecustomize loaded:', 'sitecustomize' in sys.modules, flush=True)",
+        ("import sys; sys.stderr.write('[probe] child importing env_wrapper\\n'); "
+         "from libero.libero.envs import env_wrapper; "
+         "from robosuite.environments import base as b; "
+         "print('[probe] child MujocoEnv.seed callable:', callable(b.MujocoEnv.seed), flush=True)"),
+    ]
+    for p in probes:
+        r_ = subprocess.run([sys.executable, "-c", p], capture_output=True, text=True)
+        print(f"[probe] ---\n{r_.stdout.strip()}\n{r_.stderr.strip()}", flush=True)
+    r_ = subprocess.run(["bash", "-lc", "which vla-eval && head -1 $(which vla-eval)"],
+                        capture_output=True, text=True)
+    print(f"[probe] vla-eval launcher:\n{r_.stdout.strip()}", flush=True)
+
     server_proc = start_model_server(args.model_config, args.checkpoint)
 
     aggregates = {}
