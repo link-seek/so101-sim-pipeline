@@ -1,4 +1,4 @@
-script: "src/vla_eval/model_servers/lerobot.py"
+script: "/workspace/model_servers/lerobot.py"
 args:
   device: cuda
   port: 8000
