@@ -37,7 +37,8 @@ print("SO101 + LIBERO Integration Verification")
 print("=" * 60)
 
 # --- 1. Load benchmark ---
-suite = benchmark("libero_object")
+benchmark_dict = benchmark.get_benchmark_dict()
+suite = benchmark_dict["libero_object"]()
 task = suite.get_task(0)
 bddl_root = get_libero_path("bddl_files")
 bddl_file = os.path.join(bddl_root, task.problem_folder, task.bddl_file)
