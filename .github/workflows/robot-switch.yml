@@ -16,6 +16,10 @@ on:
         required: false
         default: "1"
 
+concurrency:
+  group: gpu-ecs-singleton
+  cancel-in-progress: false
+
 permissions:
   contents: write
   packages: read
