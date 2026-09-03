@@ -1,0 +1,10 @@
+script: "src/vla_eval/model_servers/lerobot.py"
+args:
+  device: cuda
+  port: 8000
+  policy_type: smolvla
+  checkpoint: lerobot/smolvla_libero
+  state_key: observation.state
+  chunk_size: 10
+  max_batch_size: 8
+  max_wait_time: 0.05
