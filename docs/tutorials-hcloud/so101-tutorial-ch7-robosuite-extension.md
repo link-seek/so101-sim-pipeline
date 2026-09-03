@@ -1,6 +1,7 @@
 # Ch7：RoboSuite 机器人扩展 — 改配置换机器人
 
 > SO101 仿真评测教程 · 第七章
+> 实战讨论：[Discussion #15 — Ch7: RoboSuite 机器人扩展 — 改配置换机器人](https://github.com/link-seek/so101-sim-pipeline/discussions/15)
 
 ---
 
