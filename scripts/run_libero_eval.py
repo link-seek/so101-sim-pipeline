@@ -477,8 +477,8 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
                 robots=["SO101"],
                 controller=_ctrl_path,
                 camera_names=["agentview", "birdview", "robot0_eye_in_hand"],
-                camera_heights=128,
-                camera_widths=128,
+                camera_heights=480,
+                camera_widths=640,
             )
             try:
                 env.seed(0)
