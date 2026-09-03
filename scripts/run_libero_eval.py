@@ -234,21 +234,26 @@ def rescale_scene_to_reach(env, factor=SCENE_SCALE_FACTOR):
         model.body_pos[bid][1] *= factor
         touched.append(root_body)
 
-    # Also move free-joint bodies whose current qpos placement differs from body_pos
+    # Also move free-joint bodies whose current qpos placement differs from body_pos.
+    # NOTE: do NOT skip bodies that were in `seen` — free-joint position is in qpos,
+    # not body_pos, so we must scale qpos regardless of whether body_pos was scaled.
+    seen_joints = set()
     for jadr in range(model.njnt):
         b = int(model.jnt_bodyid[jadr])
         try:
             name = model.body_id2name(b)
         except Exception:
             continue
-        if name is None or name in seen:
+        if name is None or name in seen_joints:
             continue
+        seen_joints.add(name)
         if any(k in name.lower() for k in ("table", "desk", "floor", "wall")):
             continue
         if int(model.jnt_type[jadr]) == int(mujoco.mjtJoint.mjJNT_FREE):
             qadr = int(model.jnt_qposadr[jadr])
             data.qpos[qadr] *= factor
             data.qpos[qadr + 1] *= factor
+            touched.append(name)
 
     sim.forward()
     print(f"    [scene-rescale x{factor}] moved {len(touched)} bodies: {touched[:6]}...")
