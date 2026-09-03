@@ -1,51 +1,76 @@
 """Robot-switch shim (loaded via sitecustomize on PYTHONPATH).
 
-CRITICAL: never write to stdout - subprocesses (e.g. glfw's version check)
-eval() captured stdout, so a single stray print breaks every episode.
-All diagnostics go to stderr.
+Design constraints (learned the hard way):
+- NEVER print to stdout: subprocesses (e.g. glfw's version check) eval()
+  captured stdout, one stray print breaks every episode. Diagnostics -> stderr.
+- NEVER import heavy libs (libero/robosuite/mujoco) at startup: every python
+  process pays it, pipe buffers flood, spawn storms multiply warnings.
+  Instead wrap __import__ and patch libero lazily on first use.
 
-- Seed compat (robosuite>=1.5 made ControlEnv.seed a non-callable attr):
-  applied unconditionally, required by Franka and Sawyer alike.
-- Robot override (LIBERO_ROBOT=Sawyer, ...): patch LIBERO's
-  OffScreenRenderEnv default robot list without rebuilding the image.
+Patches (applied once, in whichever process imports libero first):
+- seed compat (robosuite>=1.5 made ControlEnv.seed non-callable): always.
+- robot override (LIBERO_ROBOT=Sawyer, ...): only when the env var is set.
 """
+import builtins
 import os
 import sys
 
+_TARGET_MOD = "libero.libero.envs.env_wrapper"
+_PATCHED = "_eval_shim_patched"
+
+
 def _log(msg):
-    sys.stderr.write(f"[eval-shim] {msg}\n")
-    sys.stderr.flush()
+    try:
+        sys.stderr.write(f"[eval-shim] {msg}\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
 
-try:
-    from libero.libero.envs import env_wrapper
 
-    _orig_seed = getattr(env_wrapper.ControlEnv, "seed", None)
-    if not callable(_orig_seed):
+def _apply(mod):
+    if getattr(mod, _PATCHED, False):
+        return
+    try:
+        cls = mod.ControlEnv
+    except AttributeError:
+        return
+    if not callable(getattr(cls, "seed", None)):
         def _seed_compat(self, seed=None):
-            base = getattr(super(env_wrapper.ControlEnv, self), "seed", None)
+            base = getattr(super(cls, self), "seed", None)
             if callable(base):
                 return base(seed)
             return None
-        env_wrapper.ControlEnv.seed = _seed_compat
+        cls.seed = _seed_compat
         _log("seed compat installed")
-    else:
-        _log("native seed callable, no patch needed")
-
-    _target = os.environ.get("LIBERO_ROBOT", "").strip()
-    if _target:
+    target = os.environ.get("LIBERO_ROBOT", "").strip()
+    if target:
         import inspect
-        _orig_init = env_wrapper.ControlEnv.__init__
-        _sig = inspect.signature(_orig_init)
+        orig_init = cls.__init__
+        sig = inspect.signature(orig_init)
 
         def _patched_init(self, *args, **kwargs):
-            if "robots" in _sig.parameters and "robots" not in kwargs:
-                kwargs["robots"] = [_target]
-                _log(f"robots -> [{_target}]")
-            _orig_init(self, *args, **kwargs)
+            if "robots" in sig.parameters and "robots" not in kwargs:
+                kwargs["robots"] = [target]
+                _log(f"robots -> [{target}]")
+            orig_init(self, *args, **kwargs)
 
-        env_wrapper.ControlEnv.__init__ = _patched_init
-        _log(f"robot override active for {_target}")
-    else:
-        _log("passthrough (LIBERO_ROBOT unset)")
-except Exception as e:
-    _log(f"WARNING inactive ({e})")
+        cls.__init__ = _patched_init
+        _log(f"robot override active for {target}")
+    setattr(mod, _PATCHED, True)
+
+
+_real_import = builtins.__import__
+
+
+def _shim_import(name, globals=None, locals=None, fromlist=(), level=0):
+    mod = _real_import(name, globals, locals, fromlist, level)
+    try:
+        cand = sys.modules.get(_TARGET_MOD)
+        if cand is not None and not getattr(cand, _PATCHED, False):
+            _apply(cand)
+    except Exception as e:
+        _log(f"patch skipped ({e})")
+    return mod
+
+
+builtins.__import__ = _shim_import
