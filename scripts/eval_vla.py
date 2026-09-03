@@ -172,6 +172,16 @@ def main():
     if args.benchmarks:
         benchmarks = args.benchmarks
 
+    # Shim proof: visible in console.log even if the benchmark misbehaves.
+    try:
+        with open("/data/scripts/robot_shim/sitecustomize.py") as f:
+            head = f.readline().strip()
+        print(f"[shim-check] file present, first line: {head}", flush=True)
+    except Exception as e:
+        print(f"[shim-check] file MISSING ({e})", flush=True)
+    print(f"[shim-check] sitecustomize in sys.modules: {'sitecustomize' in sys.modules}",
+          flush=True)
+
     server_proc = start_model_server(args.model_config, args.checkpoint)
 
     aggregates = {}
