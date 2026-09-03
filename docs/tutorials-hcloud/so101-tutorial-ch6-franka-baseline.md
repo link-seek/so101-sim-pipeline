@@ -1,6 +1,7 @@
 # Ch6：Franka 评测能力盘点 — LIBERO 开箱即用实战
 
 > SO101 仿真评测教程 · 第六章
+> 实战讨论：[Discussion #14 — Ch6: Franka 评测能力盘点 — LIBERO 开箱即用实战](https://github.com/link-seek/so101-sim-pipeline/discussions/14)
 
 ---
 
