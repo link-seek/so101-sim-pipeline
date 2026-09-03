@@ -23,8 +23,9 @@ os.environ.setdefault("MUJOCO_GL", "egl")
 sys.path.insert(0, "/workspace/robosuite_so101")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from run_libero_eval import register_so101, SnapGraspController  # noqa: E402
+from run_libero_eval import register_so101, SnapGraspController, setup_libero_config  # noqa: E402
 
+setup_libero_config()
 register_so101()
 
 from libero.libero import benchmark, get_bddl_root  # noqa: E402
