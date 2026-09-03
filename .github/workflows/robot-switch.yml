@@ -63,6 +63,7 @@ jobs:
 
       - name: Fetch eval script, configs and robot shim
         run: |
+          rm -rf /data/eval/results
           mkdir -p /data/scripts/robot_shim /data/eval/results
           fetch_file() {
             local repo_path="$1" dest="$2"
