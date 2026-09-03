@@ -17,6 +17,7 @@ import sys
 
 _TARGET_MOD = "libero.libero.envs.env_wrapper"
 _PATCHED = "_eval_shim_patched"
+_PATCHING = False
 
 
 def _log(msg):
@@ -30,6 +31,10 @@ def _log(msg):
 def _apply(mod):
     if getattr(mod, _PATCHED, False):
         return
+    # Mark first: _apply imports robosuite, which re-enters the __import__
+    # wrapper below. Without the early mark + _PATCHING guard this recurses
+    # until RecursionError and the patch is skipped.
+    setattr(mod, _PATCHED, True)
     try:
         cls = mod.ControlEnv
     except AttributeError:
@@ -81,7 +86,6 @@ def _apply(mod):
 
         cls.__init__ = _patched_init
         _log(f"robot override active for {target}")
-    setattr(mod, _PATCHED, True)
 
 
 _real_import = builtins.__import__
@@ -89,10 +93,17 @@ _real_import = builtins.__import__
 
 def _shim_import(name, globals=None, locals=None, fromlist=(), level=0):
     mod = _real_import(name, globals, locals, fromlist, level)
+    global _PATCHING
+    if _PATCHING:
+        return mod
     try:
         cand = sys.modules.get(_TARGET_MOD)
         if cand is not None and not getattr(cand, _PATCHED, False):
-            _apply(cand)
+            _PATCHING = True
+            try:
+                _apply(cand)
+            finally:
+                _PATCHING = False
     except Exception as e:
         _log(f"patch skipped ({e})")
     return mod
