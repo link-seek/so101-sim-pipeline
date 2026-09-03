@@ -1,0 +1,18 @@
+server:
+  url: "ws://localhost:8000"
+docker:
+  image: swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest
+  volumes:
+    - /data/scripts/robot_shim:/tmp/robot_shim:ro
+  env:
+    - PYTHONPATH=/tmp/robot_shim
+    - LIBERO_ROBOT=Sawyer
+output_dir: "/data/eval/results/libero_spatial_sawyer"
+benchmarks:
+  - benchmark: "vla_eval.benchmarks.libero.benchmark:LibEROBenchmark"
+    subname: libero_spatial_sawyer
+    episodes_per_task: 1
+    params:
+      suite: libero_spatial
+      seed: 7
+      num_steps_wait: 10
