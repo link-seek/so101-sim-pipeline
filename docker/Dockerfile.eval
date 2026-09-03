@@ -44,6 +44,27 @@ RUN pip install --no-cache-dir \
     mujoco==3.3.2 \
     opencv-python
 
+# LIBERO benchmark stack (in-process: vla-eval skips its own docker launch when
+# already inside a container, so benchmark deps must live in THIS image).
+# Proven block from the SO101 direct-eval lineage (robosuite 1.5.2).
+RUN pip install --no-cache-dir \
+    "cmake==3.31.6" \
+    && pip install --no-cache-dir \
+    "mujoco==3.3.1" \
+    "robosuite==1.5.2" \
+    robot_descriptions
+
+ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
+RUN pip install --no-cache-dir --no-build-isolation egl_probe hf-egl-probe
+
+RUN pip install --no-cache-dir \
+    "bddl==1.0.1" easydict cloudpickle "gym==0.25.2" num2words future hydra-core einops \
+    matplotlib wandb robomimic thop && \
+    git clone --depth 1 --branch X-embodiment https://github.com/Lifelong-Robot-Learning/LIBERO.git /tmp/libero && \
+    touch /tmp/libero/libero/__init__.py && \
+    pip install --no-cache-dir -e /tmp/libero && \
+    rm -rf /tmp/libero/.git
+
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
