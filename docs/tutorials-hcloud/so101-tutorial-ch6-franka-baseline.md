@@ -14,7 +14,7 @@ Ch5 讲了评测方法论，但方法论需要落地。**谁的评测最容易�
 |------|--------|-------|
 | LIBERO 原生支持 | ✅ 12 种 RoboSuite 机器人之一 | ❌ 需要自行集成 |
 | 配置修改 | 零修改 | 需要改镜像 |
-| 模型兼容性 | HuggingFace 上大量预训练模型 | 只有我们自己训练的模型 |
+| 模型兼容性 | OBS 上有大量预训练模型 | 只有我们自己训练的模型 |
 | 社区基线 | 完善（LIBERO 论文原版结果） | 无 |
 
 **这一章的目标**：用 Franka 跑通 LIBERO 评测全流程，验证平台能力，建立基线。
@@ -67,21 +67,18 @@ docker pull swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest
 
 # 评测 libero_spatial（50 episodes/task × 10 tasks = 500 episodes）
 docker run --gpus all \
-  -e HF_ENDPOINT=https://hf-mirror.com \
   -e MUJOCO_GL=egl \
   swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest \
   vla-eval run --config /workspace/configs/benchmarks/libero_spatial.yaml
 
 # 评测 libero_object
 docker run --gpus all \
-  -e HF_ENDPOINT=https://hf-mirror.com \
   -e MUJOCO_GL=egl \
   swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest \
   vla-eval run --config /workspace/configs/benchmarks/libero_object.yaml
 
 # 评测 libero_goal
 docker run --gpus all \
-  -e HF_ENDPOINT=https://hf-mirror.com \
   -e MUJOCO_GL=egl \
   swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest \
   vla-eval run --config /workspace/configs/benchmarks/libero_goal.yaml
@@ -95,7 +92,6 @@ docker pull swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero-pro:lates
 
 # 评测 libero_pro_env（环境扰动）
 docker run --gpus all \
-  -e HF_ENDPOINT=https://hf-mirror.com \
   -e MUJOCO_GL=egl \
   swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero-pro:latest \
   vla-eval run --config /workspace/configs/benchmarks/libero_pro_env.yaml
@@ -168,7 +164,7 @@ Franka + LIBERO 的开箱即用体验展示了**评测平台的理想状态**：
 |------|-----------------|----------------|
 | 配置 | YAML 文件已存在 | 需要新建 |
 | 镜像 | vla-eval-libero 已构建 | 需要修改镜像 |
-| 模型 | HF 上有预训练模型 | 只有自己的模型 |
+| 模型 | OBS 上有预训练模型 | 只有自己的模型 |
 | 结果 | 有社区基线可对比 | 无基线 |
 
 ### 5.2 从 Franka 到 SO101 的路径

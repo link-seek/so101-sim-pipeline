@@ -16,7 +16,7 @@
 │     train_smolvla_sim.py --steps 20000            │
 │                                                   │
 │   ┌──────────┐    ┌──────────┐    ┌──────────┐  │
-│   │ HF 数据集 │──→│ 训练脚本  │──→│ checkpoint│  │
+│   │ OBS 数据集 │──→│ 训练脚本  │──→│ checkpoint│  │
 │   └──────────┘    └──────────┘    └─────┬────┘  │
 │                                         │        │
 │                                    ┌────▼────┐  │
@@ -37,7 +37,7 @@
 ### 1.1 数据流
 
 ```
-数据集 (HF Hub) ──→ Docker 容器 ──→ 训练脚本 ──→ checkpoint ──→ 评估脚本 ──→ 评估结果
+数据集 (OBS) ──→ Docker 容器 ──→ 训练脚本 ──→ checkpoint ──→ 评估脚本 ──→ 评估结果
 ```
 
 训练和评估在同一容器内顺序执行。一个镜像完成整个闭环。
@@ -114,7 +114,7 @@ so101-ppo        so101-mujoco          so101-train      so101-eval
 | GPU | V100 32GB（必须，SmolVLA 训练需要） |
 | 系统 | Ubuntu 20.04+ |
 | Docker | 安装 NVIDIA Container Toolkit |
-| 网络 | 能访问 HuggingFace Hub |
+| 网络 | 能访问 OBS (华为云对象存储) |
 
 ### 3.2 手动开关机
 
@@ -139,7 +139,7 @@ ssh root@<ECS公网IP>
 
 - 一台有 GPU 的云服务器（V100 32GB）
 - Docker + NVIDIA Container Toolkit 已安装
-- 能访问 HuggingFace Hub
+- 能访问 OBS
 
 ### 4.2 拉取镜像
 
@@ -242,15 +242,14 @@ tar xzf obsutil_linux.tar.gz
 
 **核心价值**：lerobot + so101_nexus + MuJoCo 依赖链复杂，Docker 保证所有人环境一致。
 
-### 6.2 为什么用 OBS 而不是 HF Hub 存评估结果？
+### 6.2 为什么用 OBS 存储？
 
-| 方案 | HF Hub | OBS |
-|------|--------|-----|
-| 适用 | 模型/数据集（结构化） | 任意文件（视频/JSON） |
-| 上传 | git LFS，慢 | obsutil，快 |
-| 成本 | 免费但有限额 | 按存储量计费，便宜 |
+| 内容 | 存储位置 |
+|------|----------|
+| 模型 + 数据集 | OBS（上传快、成本低、`obsutil` 一键上传） |
+| 评估结果（JSON + 视频 + 截图） | OBS |
 
-评估产物是 JSON + MP4 + PNG，不是模型权重，OBS 更适合。
+所有产物统一存放在 OBS，不依赖外部服务。
 
 ---
 

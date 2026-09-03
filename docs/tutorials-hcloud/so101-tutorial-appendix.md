@@ -46,11 +46,6 @@
 export MUJOCO_GL=egl
 export NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
 
-# HuggingFace 镜像（国内加速）
-export HF_ENDPOINT=https://hf-mirror.com
-export HF_HUB_DISABLE_XET=1
-export HF_LEROBOT_HOME=/data/datasets
-
 # 华为云认证
 export HC_ACCESS_KEY=...
 export HC_SECRET_KEY=...

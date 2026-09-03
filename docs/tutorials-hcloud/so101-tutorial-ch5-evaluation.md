@@ -482,29 +482,25 @@ LIBERO 和 LIBERO-PRO 在**对训练信息的依赖**上有本质区别：
 
 **我们的实现**：仓库已设计完整 LIBERO 评测管线——`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` Docker 镜像。用 `docker run` 一条命令即可运行。
 
-**模型和数据来源**：评测用的模型和数据集都存放在 [HuggingFace Hub](https://huggingface.co)——一个模型和数据集的托管平台（类似 GitHub，但专为 AI 模型设计）。
+**模型和数据来源**：评测用的模型和数据集都存放在 OBS（华为云对象存储）。
 
 数据采集是独立于评测的步骤：
 - **真机数据**：人工在 SO101 实机上操作录制（如 ataghof 数据集）
 - **仿真数据**：在 MuJoCo 仿真环境中录制（如 dobri420 数据集）
 - **LIBERO 专家数据**：可通过 `so101-eval` 镜像的采集脚本获取
 
-采集完成后上传到 HF，后续流程：
+采集完成后上传到 OBS，后续流程：
 
 ```
-上传数据集到 HF → 训练 → 上传模型到 HF → 评测从 HF 下载模型+数据 → 运行评测
+上传数据集到 OBS → 训练 → 上传模型到 OBS → 评测从 OBS 下载模型+数据 → 运行评测
 ```
-
-**注意：我们同时使用 OBS 和 HF（见 Ch1 §7.5）**：
-- **HuggingFace**：存模型和数据集（用于分享、下载、复现）
-- **OBS（华为云）**：存评估结果（JSON、视频、图片）——上传快、成本低
 
 我们上传了：
-- **数据集**：`xieyucheng123/so101-dataset` — SO101 仿真采集的演示数据
-- **模型**：`xieyucheng123/so101-act` — ACT 策略（行为克隆）
-- **模型**：`xieyucheng123/so101-smolvla` — SmolVLA 策略（视觉-语言-动作）
+- **数据集**：`obs://so101-sim-pipeline/datasets/so101-dataset` — SO101 仿真采集的演示数据
+- **模型**：`obs://so101-sim-pipeline/models/so101-act` — ACT 策略（行为克隆）
+- **模型**：`obs://so101-sim-pipeline/models/so101-smolvla` — SmolVLA 策略（视觉-语言-动作）
 
-也可以评测别人发布的模型和数据集，只要指定 HF 仓库名即可。HF 只负责存储，不提供算力——计算在我们自己的华为云 V100 ECS 上完成。
+也可以评测其他模型，只要指定 OBS 路径即可。计算在我们自己的华为云 V100 ECS 上完成。
 
 **实战结果**（2026-08-27，run 33053613547）：
 
@@ -629,7 +625,7 @@ docker run --gpus all \
 
 自动运行 8 个 LIBERO/LIBERO-PRO benchmark，输出每任务 success_rate。
 
-> **注意**：`evaluate.yml` 可以评测 HuggingFace 上的任意模型（包括我们自己的）。我们用它评测了 LIBERO，结果是 0%——因为 LIBERO 只支持 Franka Panda，而我们的模型是在 SO101 上训练的。要让 LIBERO 出正分，需要先在 LIBERO 中添加 SO101 机器人（详见 Ch6）。
+> **注意**：`evaluate.yml` 可以评测任意模型（包括我们自己的）。我们用它评测了 LIBERO，结果是 0%——因为 LIBERO 只支持 Franka Panda，而我们的模型是在 SO101 上训练的。要让 LIBERO 出正分，需要先在 LIBERO 中添加 SO101 机器人（详见 Ch8）。
 
 ### 5.5 四种方法对比
 

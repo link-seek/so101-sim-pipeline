@@ -208,8 +208,6 @@ env:
 docker run --rm --gpus all --shm-size=8g \
   -v /data/checkpoints:/data/checkpoints \
   -v /data/datasets:/data/datasets \
-  -e HF_ENDPOINT=https://hf-mirror.com \
-  -e HF_LEROBOT_HOME=/data/datasets \
   so101-train:latest \
   python /workspace/scripts/train_smolvla.py \
     --dataset.repo_id=dobri420/pick-cube-so101-sim \

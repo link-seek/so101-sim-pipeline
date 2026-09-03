@@ -66,7 +66,6 @@ benchmarks:
 ```bash
 # 用 Sawyer 评测 libero_spatial
 docker run --gpus all \
-  -e HF_ENDPOINT=https://hf-mirror.com \
   -e MUJOCO_GL=egl \
   swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest \
   vla-eval run --config /workspace/configs/benchmarks/libero_spatial_sawyer.yaml
@@ -80,7 +79,6 @@ for robot in panda sawyer ur5e; do
   for suite in libero_spatial libero_object libero_goal; do
     echo "Evaluating $robot on $suite..."
     docker run --gpus all \
-      -e HF_ENDPOINT=https://hf-mirror.com \
       -e MUJOCO_GL=egl \
       swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest \
       vla-eval run --config /workspace/configs/benchmarks/${suite}_${robot}.yaml
