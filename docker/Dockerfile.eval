@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.12 python3.12-venv python3.12-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# uv: required by `vla-eval serve` to spawn model servers
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 RUN cd /tmp && \
     wget -q https://www.sqlite.org/2024/sqlite-autoconf-3450000.tar.gz && \
     tar xzf sqlite-autoconf-3450000.tar.gz && \
