@@ -72,7 +72,11 @@ jobs:
               docker run --rm --entrypoint cat ${{ env.EVAL_IMAGE }} "/workspace/${repo_path}" > "$dest"
             fi
           }
+          rm -rf /data/eval/results
+          mkdir -p /data/scripts /data/eval/results
           fetch_file scripts/eval_vla.py /data/scripts/eval_vla.py
+          mkdir -p /data/scripts/robot_shim
+          fetch_file scripts/robot_shim/sitecustomize.py /data/scripts/robot_shim/sitecustomize.py
           fetch_file configs/model_servers/smolvla_franka.yaml /data/scripts/smolvla_franka.yaml
           for b in ${{ inputs.benchmarks }}; do
             fetch_file "configs/benchmarks/${b}.yaml" "/data/scripts/bench_${b}.yaml"
@@ -95,6 +99,7 @@ jobs:
             -e MUJOCO_GL=egl \
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_HUB_DISABLE_XET=1 \
+            -e PYTHONPATH=/data/scripts/robot_shim \
             ${{ env.EVAL_IMAGE }} \
             python /workspace/scripts/eval_vla.py \
               --model-config smolvla_franka.yaml \
