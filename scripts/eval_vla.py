@@ -41,7 +41,7 @@ def start_model_server(model_config, checkpoint=None):
     print(f"Starting model server: {' '.join(cmd)}")
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-    for _ in range(120):
+    for _ in range(300):
         try:
             import urllib.request
             urllib.request.urlopen("http://localhost:8000/health", timeout=2)
