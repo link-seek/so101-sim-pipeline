@@ -1,0 +1,149 @@
+name: Robot Switch Eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      robot:
+        description: "Robosuite robot (needs configs/benchmarks/<suite>_<robotlower>.yaml)"
+        required: false
+        default: "Sawyer"
+      benchmarks:
+        description: "Space-separated benchmark names"
+        required: false
+        default: "libero_spatial"
+      episodes_per_task:
+        description: "Episodes per task (smoke demo: 1)"
+        required: false
+        default: "1"
+
+permissions:
+  contents: write
+  packages: read
+
+env:
+  EVAL_IMAGE: swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest
+  ECS_SERVER_ID: 7f39cb83-1a5c-4792-b65e-e578d7ddb88d
+  ECS_REGION: cn-north-4
+  OBS_BUCKET: so101-sim-pipeline
+
+jobs:
+  start-ecs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Setup hcloud CLI
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+
+      - name: Start ECS
+        env:
+          HCLOUD_AGREE_PRIVACY: "true"
+        run: |
+          echo "y" | hcloud ECS BatchStartServers \
+            --cli-region="${{ env.ECS_REGION }}" \
+            --cli-access-key="${{ secrets.OBS_AK }}" \
+            --cli-secret-key="${{ secrets.OBS_SK }}" \
+            --os-start.servers.1.id="${{ env.ECS_SERVER_ID }}"
+          sleep 120
+
+  evaluate:
+    needs: start-ecs
+    runs-on: [self-hosted, Linux, X64, V100]
+    timeout-minutes: 120
+    steps:
+      - name: Login to SWR
+        run: |
+          LOGIN_KEY=$(printf "${{ secrets.OBS_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.OBS_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
+          docker login -u "cn-north-4@${{ secrets.OBS_AK }}" -p "$LOGIN_KEY" swr.cn-north-4.myhuaweicloud.com
+
+      - name: Pull latest image
+        run: docker pull ${{ env.EVAL_IMAGE }}
+
+      - name: Fetch eval script, configs and robot shim
+        run: |
+          mkdir -p /data/scripts/robot_shim /data/eval/results
+          fetch_file() {
+            local repo_path="$1" dest="$2"
+            if curl -sfL --max-time 60 -H "Authorization: token ${{ github.token }}" \
+              "https://api.github.com/repos/${{ github.repository }}/contents/${repo_path}?ref=main" \
+              | python3 -c "import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)['content']).decode())" \
+              > "$dest" 2>/dev/null; then
+              echo "fetched $repo_path"
+            else
+              echo "fetch failed for $repo_path; using image-baked copy"
+              docker run --rm --entrypoint cat ${{ env.EVAL_IMAGE }} "/workspace/${repo_path}" > "$dest"
+            fi
+          }
+          fetch_file scripts/eval_vla.py /data/scripts/eval_vla.py
+          fetch_file configs/model_servers/smolvla_franka.yaml /data/scripts/smolvla_franka.yaml
+          fetch_file scripts/robot_shim/sitecustomize.py /data/scripts/robot_shim/sitecustomize.py
+          ROBOT_LOWER=$(echo '${{ inputs.robot }}' | tr '[:upper:]' '[:lower:]')
+          BENCH_NAMES=""
+          for b in ${{ inputs.benchmarks }}; do
+            VARIANT="${b}_${ROBOT_LOWER}"
+            fetch_file "configs/benchmarks/${VARIANT}.yaml" "/data/scripts/${VARIANT}.yaml"
+            sed -i 's/episodes_per_task: [0-9]*/episodes_per_task: ${{ inputs.episodes_per_task }}/' "/data/scripts/${VARIANT}.yaml"
+            sed -i 's/LIBERO_ROBOT=.*/LIBERO_ROBOT=${{ inputs.robot }}/' "/data/scripts/${VARIANT}.yaml"
+            grep -nE "episodes_per_task|LIBERO_ROBOT" "/data/scripts/${VARIANT}.yaml"
+            BENCH_NAMES="$BENCH_NAMES $VARIANT"
+          done
+          echo "BENCH_NAMES=$BENCH_NAMES" >> $GITHUB_ENV
+          wc -l /data/scripts/eval_vla.py /data/scripts/robot_shim/sitecustomize.py
+
+      - name: Run robot-switch evaluation
+        run: |
+          MOUNT_ARGS=""
+          for v in $BENCH_NAMES; do
+            MOUNT_ARGS="$MOUNT_ARGS -v /data/scripts/${v}.yaml:/workspace/configs/benchmarks/${v}.yaml:ro"
+          done
+          docker run --rm --gpus all --shm-size=8g \
+            -v /data:/data \
+            -v /data/scripts/eval_vla.py:/workspace/scripts/eval_vla.py:ro \
+            -v /data/scripts/smolvla_franka.yaml:/workspace/configs/model_servers/smolvla_franka.yaml:ro \
+            $MOUNT_ARGS \
+            -e MUJOCO_GL=egl \
+            -e HF_ENDPOINT=https://hf-mirror.com \
+            -e HF_HUB_DISABLE_XET=1 \
+            ${{ env.EVAL_IMAGE }} \
+            python /workspace/scripts/eval_vla.py \
+              --model-config smolvla_franka.yaml \
+              --benchmarks $BENCH_NAMES
+          cat /data/eval/results/eval_summary.json
+
+      - name: Upload results to OBS
+        if: always()
+        run: |
+          obsutil cp /data/eval/results/ obs://${{ env.OBS_BUCKET }}/eval/robot_switch/ -f -r -flat || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: robot-switch-results
+          path: /data/eval/results/
+
+  stop-ecs:
+    needs: evaluate
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 10
+    steps:
+      - name: Setup hcloud CLI
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+
+      - name: Stop ECS
+        env:
+          HCLOUD_AGREE_PRIVACY: "true"
+        run: |
+          echo "y" | hcloud ECS BatchStopServers \
+            --cli-region="${{ env.ECS_REGION }}" \
+            --cli-access-key="${{ secrets.OBS_AK }}" \
+            --cli-secret-key="${{ secrets.OBS_SK }}" \
+            --os-stop.servers.1.id="${{ env.ECS_SERVER_ID }}"
+          sleep 60
+          exit 0
