@@ -28,7 +28,8 @@ from run_libero_eval import register_so101, SnapGraspController, setup_libero_co
 setup_libero_config()
 register_so101()
 
-from libero.libero import benchmark, get_bddl_root  # noqa: E402
+from libero.libero import benchmark  # noqa: E402
+from libero.libero.utils import get_libero_path  # noqa: E402
 from libero.libero.envs import OffScreenRenderEnv  # noqa: E402
 
 print("=" * 60)
@@ -38,7 +39,7 @@ print("=" * 60)
 # --- 1. Load benchmark ---
 suite = benchmark("libero_object")
 task = suite.get_task(0)
-bddl_root = get_bddl_root()
+bddl_root = get_libero_path("bddl_files")
 bddl_file = os.path.join(bddl_root, task.problem_folder, task.bddl_file)
 print(f"\n[1] Benchmark: libero_object, task 0: {task.name}")
 
