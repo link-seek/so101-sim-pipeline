@@ -1,42 +1,51 @@
 """Robot-switch shim (loaded via sitecustomize on PYTHONPATH).
 
-- Default (LIBERO_ROBOT unset, e.g. Franka/Panda baseline): pure no-op,
-  zero imports, zero behavior change vs. vanilla image.
-- Override (LIBERO_ROBOT=Sawyer, ...): patch LIBERO's OffScreenRenderEnv
-  default robot list + robosuite seed compat, without rebuilding the image.
+CRITICAL: never write to stdout - subprocesses (e.g. glfw's version check)
+eval() captured stdout, so a single stray print breaks every episode.
+All diagnostics go to stderr.
+
+- Seed compat (robosuite>=1.5 made ControlEnv.seed a non-callable attr):
+  applied unconditionally, required by Franka and Sawyer alike.
+- Robot override (LIBERO_ROBOT=Sawyer, ...): patch LIBERO's
+  OffScreenRenderEnv default robot list without rebuilding the image.
 """
 import os
+import sys
 
-_TARGET = os.environ.get("LIBERO_ROBOT", "").strip()
-if not _TARGET:
-    print("[eval-shim] passthrough (LIBERO_ROBOT unset)", flush=True)
-else:
-    try:
-        from libero.libero.envs import env_wrapper
-        import inspect
+def _log(msg):
+    sys.stderr.write(f"[eval-shim] {msg}\n")
+    sys.stderr.flush()
 
-        _orig_init = env_wrapper.ControlEnv.__init__
-        _sig = inspect.signature(_orig_init)
-        _target = _TARGET
+try:
+    from libero.libero.envs import env_wrapper
 
-        def _patched_init(self, *args, **kwargs):
-            if "robots" in _sig.parameters and "robots" not in kwargs:
-                kwargs["robots"] = [_target]
-                print(f"[eval-shim] robots -> [{_target}]", flush=True)
-            _orig_init(self, *args, **kwargs)
-
-        env_wrapper.ControlEnv.__init__ = _patched_init
-
+    _orig_seed = getattr(env_wrapper.ControlEnv, "seed", None)
+    if not callable(_orig_seed):
         def _seed_compat(self, seed=None):
             base = getattr(super(env_wrapper.ControlEnv, self), "seed", None)
             if callable(base):
                 return base(seed)
             return None
+        env_wrapper.ControlEnv.seed = _seed_compat
+        _log("seed compat installed")
+    else:
+        _log("native seed callable, no patch needed")
 
-        _orig_seed = getattr(env_wrapper.ControlEnv, "seed", None)
-        if not callable(_orig_seed):
-            env_wrapper.ControlEnv.seed = _seed_compat
-            print("[eval-shim] seed compat installed", flush=True)
-        print(f"[eval-shim] active for robot={_target}", flush=True)
-    except Exception as e:
-        print(f"[eval-shim] WARNING: override inactive ({e})", flush=True)
+    _target = os.environ.get("LIBERO_ROBOT", "").strip()
+    if _target:
+        import inspect
+        _orig_init = env_wrapper.ControlEnv.__init__
+        _sig = inspect.signature(_orig_init)
+
+        def _patched_init(self, *args, **kwargs):
+            if "robots" in _sig.parameters and "robots" not in kwargs:
+                kwargs["robots"] = [_target]
+                _log(f"robots -> [{_target}]")
+            _orig_init(self, *args, **kwargs)
+
+        env_wrapper.ControlEnv.__init__ = _patched_init
+        _log(f"robot override active for {_target}")
+    else:
+        _log("passthrough (LIBERO_ROBOT unset)")
+except Exception as e:
+    _log(f"WARNING inactive ({e})")
