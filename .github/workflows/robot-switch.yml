@@ -85,7 +85,6 @@ jobs:
             VARIANT="${b}_${ROBOT_LOWER}"
             fetch_file "configs/benchmarks/${VARIANT}.yaml" "/data/scripts/${VARIANT}.yaml"
             sed -i 's/episodes_per_task: [0-9]*/episodes_per_task: ${{ inputs.episodes_per_task }}/' "/data/scripts/${VARIANT}.yaml"
-            sed -i 's/LIBERO_ROBOT=.*/LIBERO_ROBOT=${{ inputs.robot }}/' "/data/scripts/${VARIANT}.yaml"
             grep -nE "episodes_per_task|LIBERO_ROBOT" "/data/scripts/${VARIANT}.yaml"
             BENCH_NAMES="$BENCH_NAMES $VARIANT"
           done
@@ -106,6 +105,8 @@ jobs:
             -e MUJOCO_GL=egl \
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_HUB_DISABLE_XET=1 \
+            -e PYTHONPATH=/data/scripts/robot_shim \
+            -e LIBERO_ROBOT='${{ inputs.robot }}' \
             ${{ env.EVAL_IMAGE }} \
             python /workspace/scripts/eval_vla.py \
               --model-config smolvla_franka.yaml \
