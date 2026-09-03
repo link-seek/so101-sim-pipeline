@@ -88,27 +88,60 @@ def merge_results(benchmark_name):
     cmd = ["vla-eval", "merge", "--config", str(cfg_path), "-o", str(output_path)]
     print(f"Merging results for {benchmark_name}...")
     subprocess.run(cmd, capture_output=True, text=True)
+    # vla-eval 0.4.0 actually writes LIBEROBenchmark_<bench>_aggregate.json
+    # next to the results dir; locate it for honest scoring.
+    cands = sorted((RESULTS_DIR / benchmark_name).glob("*_aggregate.json"))
+    if cands:
+        print(f"Aggregate found: {cands[0].name}")
+        return cands[0]
+    print(f"WARNING: no aggregate json under {RESULTS_DIR / benchmark_name}")
+    return None
 
 
-def generate_summary(all_benchmarks):
+def score_aggregate(agg_path):
+    """Score a LIBEROBenchmark_*_aggregate.json. Returns (ok, entry)."""
+    try:
+        with open(agg_path) as f:
+            data = json.load(f)
+    except Exception as e:
+        return False, {"success_rate": None, "error": f"aggregate unreadable: {e}"}
+    total, succ, errs = 0, 0, 0
+    per_task = {}
+    for t in data.get("tasks", []):
+        eps = t.get("episodes", [])
+        ts, te = 0, 0
+        for ep in eps:
+            total += 1
+            ts += 1
+            if ep.get("metrics", {}).get("success"):
+                succ += 1
+            elif ep.get("failure_reason"):
+                errs += 1
+                te += 1
+        per_task[t.get("task", "?")] = {"episodes": ts, "errors": te}
+    if total == 0:
+        return False, {"success_rate": None, "error": "aggregate has 0 episodes"}
+    entry = {"success_rate": succ / total, "num_episodes": total,
+             "num_success": succ, "num_errors": errs, "per_task": per_task}
+    # ok only when every episode actually ran (no harness exceptions)
+    return errs == 0, entry
+
+
+def generate_summary(all_benchmarks, aggregates):
     summary = {
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "benchmarks": {},
     }
-
+    all_ok = True
     for name in all_benchmarks:
-        result_file = RESULTS_DIR / name / "merged.json"
-        if result_file.exists():
-            with open(result_file) as f:
-                data = json.load(f)
-            success_rate = data.get("success_rate", 0.0)
-            summary["benchmarks"][name] = {
-                "success_rate": success_rate,
-                "num_episodes": data.get("num_episodes", 0),
-                "num_tasks": data.get("num_tasks", 0),
-            }
-        else:
+        agg = aggregates.get(name)
+        if agg is None:
             summary["benchmarks"][name] = {"success_rate": None, "error": "results not found"}
+            all_ok = False
+        else:
+            ok, entry = score_aggregate(agg)
+            summary["benchmarks"][name] = entry
+            all_ok = all_ok and ok
 
     summary_path = RESULTS_DIR / "eval_summary.json"
     with open(summary_path, "w") as f:
@@ -116,7 +149,7 @@ def generate_summary(all_benchmarks):
     print(f"\n=== Evaluation Summary ===")
     print(json.dumps(summary, indent=2))
     print(f"\nSummary saved to: {summary_path}")
-    return summary
+    return all_ok
 
 
 def main():
@@ -141,21 +174,21 @@ def main():
 
     server_proc = start_model_server(args.model_config, args.checkpoint)
 
-    results = {}
+    aggregates = {}
     try:
         for name in benchmarks:
-            results[name] = run_benchmark(name, args.num_shards)
-            merge_results(name)
+            run_benchmark(name, args.num_shards)
+            aggregates[name] = merge_results(name)
     finally:
         print("Shutting down model server...")
         server_proc.send_signal(signal.SIGTERM)
         server_proc.wait()
 
-    summary = generate_summary(benchmarks)
-
-    all_passed = all(v is True for v in results.values())
-    print(f"\nAll benchmarks passed: {all_passed}")
-    sys.exit(0 if all_passed else 1)
+    # NOTE: vla-eval exits 0 even with 100 errored episodes; the aggregate
+    # is the only honest gate.
+    all_ok = generate_summary(benchmarks, aggregates)
+    print(f"\nAll benchmarks clean: {all_ok}")
+    sys.exit(0 if all_ok else 1)
 
 
 if __name__ == "__main__":
