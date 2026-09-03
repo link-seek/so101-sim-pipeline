@@ -50,7 +50,7 @@ def start_model_server(model_config, checkpoint=None):
         except Exception:
             time.sleep(2)
 
-    print("Model server failed to start within 240s")
+    print("Model server failed to start within 600s")
     stdout_data = proc.stdout.read() if proc.stdout else ""
     print(f"Model server stdout:\n{stdout_data}")
     proc.kill()
