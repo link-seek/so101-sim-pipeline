@@ -112,8 +112,11 @@ jobs:
             ${{ env.EVAL_IMAGE }} \
             python /workspace/scripts/eval_vla.py \
               --model-config smolvla_franka.yaml \
-              --benchmarks $BENCH_NAMES
-          cat /data/eval/results/eval_summary.json
+              --benchmarks $BENCH_NAMES \
+            > /data/eval/results/console.log 2>&1; CODE=$?
+          tail -40 /data/eval/results/console.log 2>/dev/null || echo "(no console.log)"
+          cat /data/eval/results/eval_summary.json 2>/dev/null || echo "(no eval_summary.json)"
+          exit $CODE
 
       - name: Upload results to OBS
         if: always()
