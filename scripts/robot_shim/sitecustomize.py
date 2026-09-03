@@ -34,6 +34,8 @@ def _apply(mod):
         cls = mod.ControlEnv
     except AttributeError:
         return
+    # Level 1 (LIBERO wrapper): ControlEnv.seed is normally a bound method,
+    # keep this as a safety net only.
     if not callable(getattr(cls, "seed", None)):
         def _seed_compat(self, seed=None):
             base = getattr(super(cls, self), "seed", None)
@@ -41,7 +43,30 @@ def _apply(mod):
                 return base(seed)
             return None
         cls.seed = _seed_compat
-        _log("seed compat installed")
+        _log("seed compat installed (ControlEnv level)")
+    # Level 2 (robosuite>=1.5): MujocoEnv.seed is a None placeholder
+    # (era-appropriate robosuite<1.5 had a real seed() method). Patch the
+    # base class so LIBERO's self.env.seed(seed) works again.
+    try:
+        from robosuite.environments import base as _rb_base
+        _mj = _rb_base.MujocoEnv
+        if not callable(getattr(_mj, "seed", None)):
+            def _rs_seed(self, seed=None):
+                try:
+                    self._seed = seed
+                    if seed is not None:
+                        import numpy as _np
+                        import random as _rd
+                        _np.random.seed(seed % (2 ** 32))
+                        _rd.seed(seed)
+                except Exception:
+                    pass
+            _mj.seed = _rs_seed
+            _log("seed compat installed (MujocoEnv level)")
+        else:
+            _log("native MujocoEnv.seed callable, no patch needed")
+    except Exception as e:
+        _log(f"MujocoEnv patch skipped ({e})")
     target = os.environ.get("LIBERO_ROBOT", "").strip()
     if target:
         import inspect
