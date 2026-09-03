@@ -87,11 +87,13 @@ jobs:
 
       - name: Run Franka baseline evaluation
         run: |
+          set +e
+          docker rm -f eval-vla 2>/dev/null || true
           MOUNT_ARGS=""
           for b in ${{ inputs.benchmarks }}; do
             MOUNT_ARGS="$MOUNT_ARGS -v /data/scripts/bench_${b}.yaml:/workspace/configs/benchmarks/${b}.yaml:ro"
           done
-          docker run --rm --gpus all --shm-size=8g \
+          docker run --name eval-vla --gpus all --shm-size=8g \
             -v /data:/data \
             -v /data/scripts/eval_vla.py:/workspace/scripts/eval_vla.py:ro \
             -v /data/scripts/smolvla_franka.yaml:/workspace/configs/model_servers/smolvla_franka.yaml:ro \
@@ -105,6 +107,10 @@ jobs:
               --model-config smolvla_franka.yaml \
               --benchmarks ${{ inputs.benchmarks }} \
             > /data/eval/results/console.log 2>&1; CODE=$?
+          echo "docker_exit=$CODE" | tee -a /data/eval/results/console.log
+          docker logs eval-vla > /data/eval/results/console-container.log 2>&1 || true
+          docker rm -f eval-vla 2>/dev/null || true
+          ls -la /data/eval/results/ | tee -a /data/eval/results/console.log
           tail -40 /data/eval/results/console.log 2>/dev/null || echo "(no console.log)"
           cat /data/eval/results/eval_summary.json 2>/dev/null || echo "(no eval_summary.json)"
           exit $CODE
