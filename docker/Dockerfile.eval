@@ -65,6 +65,12 @@ RUN pip install --no-cache-dir \
     pip install --no-cache-dir -e /tmp/libero && \
     rm -rf /tmp/libero/.git
 
+# Pre-seed LIBERO config non-interactively (first `import libero` prompts
+# "custom path for the dataset folder? (Y/N)" and dies with EOFError when
+# stdin is closed). Answering "n" writes package-relative defaults.
+RUN yes n | python -c "import libero.libero; print('libero config seeded OK')" && \
+    cat /root/.libero/config.yaml
+
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
