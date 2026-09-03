@@ -20,6 +20,12 @@ RUN cd /tmp && \
 
 RUN python3.12 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+# Prefer /usr/local sqlite (3.45, built above) over Ubuntu 22.04 system 3.37:
+# vla-eval>=0.4 requires SQLite>=3.38 (json_patch). LD_LIBRARY_PATH is
+# resolved before the ld cache, so this beats cache-order issues.
+ENV LD_LIBRARY_PATH="/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# Fail the build (not the GPU run) if sqlite is still too old.
+RUN python -c "import sqlite3; v=tuple(map(int, sqlite3.sqlite_version.split('.')))[:3]; assert v >= (3, 38, 0), sqlite3.sqlite_version; print('sqlite check OK:', sqlite3.sqlite_version)"
 
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
