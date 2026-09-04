@@ -79,6 +79,8 @@ gh workflow run franka-eval.yml \
 
 > 镜像：`swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest`
 > （实测 provenance：Actions run `33829389761`，2026-09-04，V100）。
+> 镜像 digest（该 run 实际 pull 到的 manifest，可 pin 复现）：
+> `swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval@sha256:e7cac58b0df7e54c66ac8fe0499c0909a09329d15c192f55a6400187fd8b3c5e`
 
 ### 3.3 评测 LIBERO-PRO（5 suites）
 
