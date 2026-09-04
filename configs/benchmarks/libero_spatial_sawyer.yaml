@@ -4,10 +4,9 @@ docker:
   image: swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest
 # NOTE: eval_vla.py runs INSIDE the eval container, so vla-eval skips its own
 # docker launch and runs the benchmark in-process. The robot switch comes from
-# outer-container env set by robot-switch.yml:
-#   -e PYTHONPATH=/data/scripts/robot_shim -e LIBERO_ROBOT=Sawyer
-# (see scripts/robot_shim/sitecustomize.py). docker.image above is kept for
-# documentation / host-side runs.
+# robot-switch.yml, which file-patches the robots=["Panda"] default to
+# robots=["Sawyer"] (see scripts/patch_env_wrapper.py) and mounts the result
+# over the image copy. docker.image above is kept for documentation only.
 output_dir: "/data/eval/results/libero_spatial_sawyer"
 benchmarks:
   - benchmark: "vla_eval.benchmarks.libero.benchmark:LIBEROBenchmark"
