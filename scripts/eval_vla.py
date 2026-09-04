@@ -172,31 +172,18 @@ def main():
     if args.benchmarks:
         benchmarks = args.benchmarks
 
-    # Shim proof: visible in console.log even if the benchmark misbehaves.
+    # Patch proof: verify the file-level LIBERO seed patch is active in
+    # THIS container (env_wrapper mounted over the image copy). Visible in
+    # console.log even if the benchmark later misbehaves.
     try:
-        with open("/data/scripts/robot_shim/sitecustomize.py") as f:
-            head = f.readline().strip()
-        print(f"[shim-check] file present, first line: {head}", flush=True)
+        import inspect
+        from libero.libero.envs import env_wrapper as _ew
+        _src = inspect.getsource(_ew.ControlEnv.seed)
+        print(f"[patch-check] _rs15_seed_compat active: {'_rs15_seed_compat' in _src}",
+              flush=True)
+        print(f"[patch-check] env_wrapper file: {_ew.__file__}", flush=True)
     except Exception as e:
-        print(f"[shim-check] file MISSING ({e})", flush=True)
-    print(f"[shim-check] sitecustomize in sys.modules: {'sitecustomize' in sys.modules}",
-          flush=True)
-
-    # In-container probes: discriminate "shim not loaded in vla-eval proc"
-    # vs "env_wrapper never seen". All output lands in console.log.
-    probes = [
-        "import sys; print('[probe] child sitecustomize loaded:', 'sitecustomize' in sys.modules, flush=True)",
-        ("import sys; sys.stderr.write('[probe] child importing env_wrapper\\n'); "
-         "from libero.libero.envs import env_wrapper; "
-         "from robosuite.environments import base as b; "
-         "print('[probe] child MujocoEnv.seed callable:', callable(b.MujocoEnv.seed), flush=True)"),
-    ]
-    for p in probes:
-        r_ = subprocess.run([sys.executable, "-c", p], capture_output=True, text=True)
-        print(f"[probe] ---\n{r_.stdout.strip()}\n{r_.stderr.strip()}", flush=True)
-    r_ = subprocess.run(["bash", "-lc", "which vla-eval && head -1 $(which vla-eval)"],
-                        capture_output=True, text=True)
-    print(f"[probe] vla-eval launcher:\n{r_.stdout.strip()}", flush=True)
+        print(f"[patch-check] FAILED ({e})", flush=True)
 
     server_proc = start_model_server(args.model_config, args.checkpoint)
 
