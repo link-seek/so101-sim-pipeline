@@ -182,6 +182,9 @@ def main():
         print(f"[patch-check] _rs15_seed_compat active: {'_rs15_seed_compat' in _src}",
               flush=True)
         print(f"[patch-check] env_wrapper file: {_ew.__file__}", flush=True)
+        from robosuite.robots.fixed_base_robot import FixedBaseRobot as _FBR
+        print(f"[patch-check] _rs15_controller_compat active: "
+              f"{isinstance(getattr(_FBR, 'controller', None), property)}", flush=True)
     except Exception as e:
         print(f"[patch-check] FAILED ({e})", flush=True)
 
