@@ -84,11 +84,14 @@ jobs:
           fetch_file scripts/eval_vla.py /data/scripts/eval_vla.py
           fetch_file configs/model_servers/smolvla_franka.yaml /data/scripts/smolvla_franka.yaml
           fetch_file scripts/patch_env_wrapper.py /data/scripts/patch_env_wrapper.py
+          fetch_file scripts/patch_robosuite.py /data/scripts/patch_robosuite.py
           # File-level patches: robosuite>=1.5 seed compat + robot default.
           # Mounted over the image copy in the docker run below.
           docker run --rm --entrypoint cat ${{ env.EVAL_IMAGE }} /tmp/libero/libero/libero/envs/env_wrapper.py > /data/scripts/env_wrapper.py
           grep -n "self.env.seed(seed)" /data/scripts/env_wrapper.py
-          python3 /data/scripts/patch_env_wrapper.py '${{ inputs.robot }}'
+          python3 /data/scripts/patch_env_wrapper.py
+          docker run --rm --entrypoint cat ${{ env.EVAL_IMAGE }} /opt/venv/lib/python3.12/site-packages/robosuite/robots/fixed_base_robot.py > /data/scripts/fixed_base_robot.py
+          python3 /data/scripts/patch_robosuite.py '${{ inputs.robot }}'
           ROBOT_LOWER=$(echo '${{ inputs.robot }}' | tr '[:upper:]' '[:lower:]')
           BENCH_NAMES=""
           for b in ${{ inputs.benchmarks }}; do
@@ -114,6 +117,7 @@ jobs:
             -v /data/scripts/eval_vla.py:/workspace/scripts/eval_vla.py:ro \
             -v /data/scripts/smolvla_franka.yaml:/workspace/configs/model_servers/smolvla_franka.yaml:ro \
             -v /data/scripts/env_wrapper.py:/tmp/libero/libero/libero/envs/env_wrapper.py:ro \
+            -v /data/scripts/fixed_base_robot.py:/opt/venv/lib/python3.12/site-packages/robosuite/robots/fixed_base_robot.py:ro \
             $MOUNT_ARGS \
             -e MUJOCO_GL=egl \
             -e HF_ENDPOINT=https://hf-mirror.com \
