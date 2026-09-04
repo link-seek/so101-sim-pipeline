@@ -6,5 +6,5 @@ args:
   checkpoint: lerobot/smolvla_libero
   state_key: observation.state
   chunk_size: 10
-  max_batch_size: 8
+  max_batch_size: 1
   max_wait_time: 0.05
