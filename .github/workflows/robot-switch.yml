@@ -63,7 +63,9 @@ jobs:
           docker login -u "cn-north-4@${{ secrets.OBS_AK }}" -p "$LOGIN_KEY" swr.cn-north-4.myhuaweicloud.com
 
       - name: Pull latest image
-        run: docker pull ${{ env.EVAL_IMAGE }}
+        run: |
+          docker pull ${{ env.EVAL_IMAGE }}
+          echo "IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.EVAL_IMAGE }} 2>/dev/null || echo unknown)" | tee -a $GITHUB_ENV
 
       - name: Fetch eval script, configs and robot shim
         run: |
