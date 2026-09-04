@@ -89,9 +89,9 @@ jobs:
           # Mounted over the image copy in the docker run below.
           docker run --rm --entrypoint cat ${{ env.EVAL_IMAGE }} /tmp/libero/libero/libero/envs/env_wrapper.py > /data/scripts/env_wrapper.py
           grep -n "self.env.seed(seed)" /data/scripts/env_wrapper.py
-          python3 /data/scripts/patch_env_wrapper.py
+          python3 /data/scripts/patch_env_wrapper.py '${{ inputs.robot }}'
           docker run --rm --entrypoint cat ${{ env.EVAL_IMAGE }} /opt/venv/lib/python3.12/site-packages/robosuite/robots/fixed_base_robot.py > /data/scripts/fixed_base_robot.py
-          python3 /data/scripts/patch_robosuite.py '${{ inputs.robot }}'
+          python3 /data/scripts/patch_robosuite.py
           ROBOT_LOWER=$(echo '${{ inputs.robot }}' | tr '[:upper:]' '[:lower:]')
           BENCH_NAMES=""
           for b in ${{ inputs.benchmarks }}; do
