@@ -67,7 +67,8 @@ gh workflow run robot-switch.yml \
 
 ### 2.2 运行评测
 
-流水线与 Ch6 §3.2 同构（serve → run → merge + aggregate 诚实计分），镜像同为 `swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest`。sawyer YAML 内 `docker.image` 字段仅作文档保留，容器内运行时 harness 跳过自身 docker 拉起。
+流水线与 Ch6 §3.2 同构（serve → run → merge + aggregate 诚实计分）。镜像 digest（该 run 实际 pull 到的 manifest，注意与 Ch6 的不同——`latest` 在两次 run 之间重建过，pin 必须按 run 取）：
+`swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval@sha256:5c91fb1ed02978f1d4dca93e3ad917a386a77ea94eb334d10c9cb419ae3a145e`（run `33836694327`，2026-09-04）。sawyer YAML 内 `docker.image` 字段仅作文档保留，容器内运行时 harness 跳过自身 docker 拉起。
 
 ### 2.3 批量评测多种机器人
 
