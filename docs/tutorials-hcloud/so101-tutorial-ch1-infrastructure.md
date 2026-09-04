@@ -154,10 +154,10 @@ docker pull swr.cn-north-4.myhuaweicloud.com/link-seek/so101-mujoco:latest
 docker run --gpus all \
   -v /data:/data \
   swr.cn-north-4.myhuaweicloud.com/link-seek/so101-ppo:latest \
-  python train_ppo.py \
-    --env_id WarpPickLift-v1 \
-    --total_timesteps 30000000 \
-    --num_envs 1024 \
+  python /workspace/scripts/train_ppo.py \
+    --env-id WarpPickLift-v1 \
+    --total-timesteps 30000000 \
+    --num-envs 1024 \
     --seed 1
 ```
 
