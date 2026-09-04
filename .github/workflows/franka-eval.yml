@@ -78,15 +78,19 @@ jobs:
           rm -rf /data/eval/results
           mkdir -p /data/scripts /data/eval/results
           fetch_file scripts/eval_vla.py /data/scripts/eval_vla.py
-          mkdir -p /data/scripts/robot_shim
-          fetch_file scripts/robot_shim/sitecustomize.py /data/scripts/robot_shim/sitecustomize.py
           fetch_file configs/model_servers/smolvla_franka.yaml /data/scripts/smolvla_franka.yaml
+          fetch_file scripts/patch_env_wrapper.py /data/scripts/patch_env_wrapper.py
+          # File-level seed compat: patch LIBERO ControlEnv.seed for
+          # robosuite>=1.5 (seed is a ctor attr, not a method). Mounted over
+          # the image copy in the docker run below; fail loud on drift.
+          docker run --rm --entrypoint cat ${{ env.EVAL_IMAGE }} /tmp/libero/libero/libero/envs/env_wrapper.py > /data/scripts/env_wrapper.py
+          grep -n "self.env.seed(seed)" /data/scripts/env_wrapper.py
+          python3 /data/scripts/patch_env_wrapper.py
           for b in ${{ inputs.benchmarks }}; do
             fetch_file "configs/benchmarks/${b}.yaml" "/data/scripts/bench_${b}.yaml"
             sed -i 's/episodes_per_task: [0-9]*/episodes_per_task: ${{ inputs.episodes_per_task }}/' "/data/scripts/bench_${b}.yaml"
             grep -n "episodes_per_task" "/data/scripts/bench_${b}.yaml"
           done
-          head -3 /data/scripts/robot_shim/sitecustomize.py
           wc -l /data/scripts/eval_vla.py /data/scripts/smolvla_franka.yaml
 
       - name: Run Franka baseline evaluation
@@ -101,11 +105,11 @@ jobs:
             -v /data:/data \
             -v /data/scripts/eval_vla.py:/workspace/scripts/eval_vla.py:ro \
             -v /data/scripts/smolvla_franka.yaml:/workspace/configs/model_servers/smolvla_franka.yaml:ro \
+            -v /data/scripts/env_wrapper.py:/tmp/libero/libero/libero/envs/env_wrapper.py:ro \
             $MOUNT_ARGS \
             -e MUJOCO_GL=egl \
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_HUB_DISABLE_XET=1 \
-            -e PYTHONPATH=/data/scripts/robot_shim \
             ${{ env.EVAL_IMAGE }} \
             python /workspace/scripts/eval_vla.py \
               --model-config smolvla_franka.yaml \
