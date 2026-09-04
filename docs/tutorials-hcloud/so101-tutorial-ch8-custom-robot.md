@@ -199,6 +199,8 @@ Phase 4: 平台化（远期）
 
 **下一步**：实施 SO101 集成（§3.3 待办），向自动化评测平台演进（§5.2 差距表）。
 
+**未来（本教程之外）：双臂。** 全教程都在单臂世界里——LIBERO 是单臂任务集，robosuite 除 Baxter 外 12 个 manipulator 全是单臂，SmolVLA 输出的也是单臂动作。双臂考场是现成的：RoboTwin（CVPR 2025 Highlight；2.0 为 50 个双臂协作任务，`vla-eval` 已原生接入 `benchmarks/robotwin`）。但注意它的动作是 14D 双臂 qpos、5 个 embodiment 里没有 SO101——单臂模型接不进去。SO101 本来就是双臂遥操出身，等单臂 2x2（Ch7 §2.4）闭环后，双臂 SO101 + RoboTwin 就是下一条线，不在本教程范围内。
+
 ---
 
 ## 思考题
@@ -214,6 +216,9 @@ Phase 4: 平台化（远期）
 
 4. **从本教程到自动化评测平台，最关键的下一步是什么？**  
    提示：流水线触发已经有了（`franka-eval.yml`/`robot-switch.yml` 一键触发 + OBS 归档）。下一步是批量评测矩阵（多模型 × 多 suite 自动跑 + 对比表）和可视化报告，见 §5.2 差距表。
+
+5. **为什么本教程不评测 RoboTwin？**  
+   提示：harness 的 `robotwin` benchmark 是 RoboTwin 2.0 纯双臂（14D 双臂 qpos 动作），SmolVLA 的单臂输出维度都对不上；且 5 个 embodiment 里没有 SO101。双臂是单臂 2x2 闭环后的下一条线。
 
 ---
 
