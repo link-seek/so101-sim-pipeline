@@ -60,30 +60,25 @@ LIBERO 的 success rate 回答"能不能做"，LIBERO-PRO 的 robustness gap 回
 - Docker 已安装
 - SWR 镜像可访问
 
-### 3.2 评测 LIBERO（3 suites）
+### 3.2 评测 LIBERO（真实流水线）
+
+本教程的实测跑在**华为云 ECS（V100）**上，全流程由 GitHub Actions 编排（`.github/workflows/franka-eval.yml`），一键触发：
 
 ```bash
-# 拉取评测镜像
-docker pull swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest
-
-# 评测 libero_spatial（50 episodes/task × 10 tasks = 500 episodes）
-docker run --gpus all \
-  -e MUJOCO_GL=egl \
-  swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest \
-  vla-eval run --config /workspace/configs/benchmarks/libero_spatial.yaml
-
-# 评测 libero_object
-docker run --gpus all \
-  -e MUJOCO_GL=egl \
-  swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest \
-  vla-eval run --config /workspace/configs/benchmarks/libero_object.yaml
-
-# 评测 libero_goal
-docker run --gpus all \
-  -e MUJOCO_GL=egl \
-  swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest \
-  vla-eval run --config /workspace/configs/benchmarks/libero_goal.yaml
+# 跑 libero_spatial：10 tasks × 10 eps = 100 eps（SmolVLA 官方协议）
+gh workflow run franka-eval.yml \
+  -f benchmarks="libero_spatial" \
+  -f episodes_per_task="10"
 ```
+
+流水线在容器内做三件事（全部可复现，见仓库 `scripts/`）：
+
+1. `vla-eval serve` 启动 `lerobot/smolvla_libero` 模型服务（`configs/model_servers/smolvla_franka.yaml`）；
+2. `vla-eval run` 原地执行 benchmark（容器内运行时 harness 跳过自身 docker 拉起）；
+3. `vla-eval merge` + 诚实计分：直接读 `LIBEROBenchmark_*_aggregate.json` 统计成功/错误数——harness 即使 100 个 episode 全错也会 exit 0，**只能以 aggregate 为准**。
+
+> 镜像：`swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest`
+> （实测 provenance：Actions run `33829389761`，2026-09-04，V100）。
 
 ### 3.3 评测 LIBERO-PRO（5 suites）
 
@@ -105,13 +100,11 @@ docker run --gpus all \
 ```yaml
 server:
   url: "ws://localhost:8000"
-docker:
-  image: swr.cn-north-4.myhuaweicloud.com/link-seek/vla-eval-libero:latest
 output_dir: "/data/eval/results/libero_spatial"
 benchmarks:
-  - benchmark: "vla_eval.benchmarks.libero.benchmark:LibEROBenchmark"
+  - benchmark: "vla_eval.benchmarks.libero.benchmark:LIBEROBenchmark"
     subname: libero_spatial
-    episodes_per_task: 50
+    episodes_per_task: 10
     params:
       suite: libero_spatial
       seed: 7
@@ -120,9 +113,11 @@ benchmarks:
 
 关键参数：
 - `suite`：评测哪个 suite（spatial/object/goal）
-- `episodes_per_task`：每个任务跑多少 episode（50 是 LIBERO 标准）
+- `episodes_per_task`：每个任务跑多少 episode（**10 是 SmolVLA 官方协议**，不是 50）
 - `seed`：随机种子（可复现性）
 - `num_steps_wait`：等待环境稳定的时间步
+
+> 注意：上游 `vla-eval`（含 0.5.0）没有 `robot:` 参数，类名是 `LIBEROBenchmark`。换机器人不是改 YAML 参数，而是改文件（见 Ch7 §2 实测机制）。
 
 ---
 
@@ -153,6 +148,33 @@ LIBERO 论文原版结果（参考值）：
 
 gap = 0 说明鲁棒，gap 大说明脆弱。一个策略可以 LIBERO 80% 但 LIBERO-PRO gap 40%，意味着泛化能力有但鲁棒性差。
 
+### 4.3 实测基线（本教程真实跑分）
+
+模型 `lerobot/smolvla_libero`，`libero_spatial` 10 tasks × 10 eps = **100 eps**，V100，2026-09-04（Actions run `33829389761`）：
+
+| 指标 | 值 |
+|------|-----|
+| 成功率 | **47/100（47%）** |
+| harness 错误数 | **0**（100 个 episode 全部正常 rollout，无异常） |
+| 单 suite 耗时 | ~2h（V100） |
+
+10 个任务全部 10/10 跑完，没有任何 `failure_reason: exception`——说明**评测管线本身是健康的**，47% 是策略的真实表现，不是框架 bug。
+
+与官方 ~90% 的差距说明（诚实记录，未掩盖）：
+- 官方数字的渲染/种子/解码配置与本流水线不完全一致（EGL 离屏渲染、seed 分布、`chunk_size=10`/`max_batch_size=1` 均为本工程选择）；
+- 兼容层（见下）恢复了 API 调用，但随机数流与 1.4 时代不完全相同，任务初始分布有偏移；
+- 本基线的价值是**可复现的起点分数**，不是 SOTA 复刻。后续工作可逐项对齐（渲染分辨率、温度/采样、seed 协议）。
+
+> **开箱即用是个神话**：即使 Franka 是 LIBERO 默认机器人，2026 年的依赖组合（`vla-eval 0.4.0` + `robosuite 1.5.2` + LIBERO 快照）也跑不通，harness 全系（≤0.5.0）写的是 1.4 时代 API。本教程用**文件级兼容补丁**（不改 harness、不重建镜像）修了三处，全部挂载覆盖、断言防漂：
+>
+> | # | 现象 | 根因 | 补丁位置 |
+> |---|------|------|----------|
+> | 1 | `TypeError: 'NoneType' object is not callable`（100/100） | 1.5 把 `MujocoEnv.seed()` 方法改成了构造参数（实例属性 `None`），LIBERO 仍按方法调用 | `scripts/patch_env_wrapper.py` → `ControlEnv.seed` 改写为 `self.env.seed = seed` + 重建 `rng` |
+> | 2 | `AttributeError: 'FixedBaseRobot' object has no attribute 'controller'` | 1.5 用 composite/part controllers 重构，删掉了 `robot.controller` | `scripts/patch_robosuite.py` → `FixedBaseRobot.controller` 兼容属性（`ee_pos`/`ee_ori_mat` 读 sim site 真值） |
+> | 3 | `Server error: must override predict_batch() to use max_batch_size > 1` | 挂载的 lerobot server 脚本无 batch 实现 | `configs/model_servers/smolvla_franka.yaml`：`max_batch_size: 8 → 1`（同步评测不需要 batch） |
+>
+> 另有两个工程教训：`sitecustomize` 绝不能写 stdout（glfw 版本检查会 `eval()` 捕获到的 stdout，一行打印杀死全部 episode）；`vla-eval run` 即使全错也 exit 0，流水线必须以 aggregate 计分并在 errors>0 时判失败。
+
 ---
 
 ## 5. 这告诉我们什么
@@ -174,13 +196,15 @@ Franka 评测验证了平台的**评测管线**是通的。问题出在**机器�
 
 Ch7 将展示：RoboSuite 已有 12 种机器人，改配置就能换。Ch8 将展示：SO101 作为自定义机器人，需要改镜像才能集成。
 
-### 5.3 评测规模参考
+### 5.3 评测规模参考（实测）
 
-| 评测范围 | episodes | V100 耗时 | 成本估算 |
-|----------|----------|-----------|----------|
-| LIBERO 3 suites | 1,500 | ~8h | ~¥240 |
-| LIBERO-PRO 5 suites | 2,500 | ~14h | ~¥420 |
-| 全量（LIBERO + LIBERO-PRO） | 4,000 | ~22h | ~¥660 |
+| 评测范围 | episodes | V100 实测耗时 |
+|----------|----------|---------------|
+| `libero_spatial` 10eps/task | 100 | ~2h（含 serve 启动 ~10min） |
+| LIBERO 3 suites（同规模外推） | 300 | ~6h |
+| 冒烟（1ep/task） | 10 | ~15min |
+
+> 旧版表格中的 500eps/suite（~8h）是按 `episodes_per_task=50` 估算的；官方 SmolVLA 协议是 10eps/task，上表以实测为准。
 
 ---
 
