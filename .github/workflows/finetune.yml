@@ -15,6 +15,18 @@ on:
         description: "Base checkpoint path on ECS (empty = lerobot/smolvla_base from HF)"
         required: false
         default: "/data/checkpoints/smolvla-sim/checkpoints/015000/pretrained_model"
+      dataset_mode:
+        description: "Dataset source: obs (libero_so101_expert from OBS) or hf (LeRobot dataset from HF mirror)"
+        required: false
+        default: "obs"
+      hf_repo:
+        description: "HF dataset repo_id when dataset_mode=hf (e.g. lerobot/libero)"
+        required: false
+        default: "lerobot/libero"
+      output_name:
+        description: "Checkpoint subdir under /data/checkpoints/"
+        required: false
+        default: "smolvla_finetune"
 
 permissions:
   contents: write
@@ -51,7 +63,7 @@ jobs:
   finetune:
     needs: start-ecs
     runs-on: [self-hosted, Linux, X64, V100]
-    timeout-minutes: 180
+    timeout-minutes: 1500
     steps:
       - name: Login to SWR
         run: |
@@ -67,6 +79,7 @@ jobs:
         run: docker pull ${{ env.EVAL_IMAGE }}
 
       - name: Download dataset from OBS
+        if: inputs.dataset_mode == 'obs'
         run: |
           obsutil cp obs://${{ env.OBS_BUCKET }}/datasets/libero_so101_expert/ /data/datasets/libero_so101_expert/ -f -r -flat
           find /data/datasets/libero_so101_expert/ -type f | head -10
@@ -83,7 +96,15 @@ jobs:
             echo "Using lerobot/smolvla_base from HF"
             POLICY_ARG="--policy.type=smolvla --policy.path=lerobot/smolvla_base"
           fi
-          mkdir -p /data/checkpoints/smolvla_finetune
+          OUTDIR="/data/checkpoints/${{ inputs.output_name }}"
+          DATASET_ARGS=""
+          if [ "${{ inputs.dataset_mode }}" = "hf" ]; then
+            echo "Using HF dataset: ${{ inputs.hf_repo }} (via mirror)"
+            DATASET_ARGS="--dataset.repo_id=${{ inputs.hf_repo }}"
+          else
+            DATASET_ARGS="--dataset.repo_id=libero_so101_expert --dataset.root=/data/datasets/libero_so101_expert/libero_object"
+          fi
+          mkdir -p "$OUTDIR"
           docker run --rm --gpus "device=0" --shm-size=16g \
             -v /data:/data \
             -e CUDA_VISIBLE_DEVICES=0 \
@@ -93,9 +114,8 @@ jobs:
             bash -c "pip install -q 'lerobot[dataset,training]' && \
               lerobot-train \
                 $POLICY_ARG \
-                --dataset.repo_id=libero_so101_expert \
-                --dataset.root=/data/datasets/libero_so101_expert/libero_object \
-                --output_dir=/data/checkpoints/smolvla_finetune \
+                $DATASET_ARGS \
+                --output_dir=$OUTDIR \
                 --steps=${{ inputs.steps }} \
                 --batch_size=${{ inputs.batch_size }} \
                 --save_freq=1000 \
@@ -104,7 +124,7 @@ jobs:
 
       - name: Upload checkpoints to OBS
         run: |
-          obsutil cp /data/checkpoints/smolvla_finetune/ obs://${{ env.OBS_BUCKET }}/checkpoints/smolvla_finetune/ -f -r -flat || true
+          obsutil cp /data/checkpoints/${{ inputs.output_name }}/ obs://${{ env.OBS_BUCKET }}/checkpoints/${{ inputs.output_name }}/ -f -r -flat || true
 
   stop-ecs:
     needs: finetune
