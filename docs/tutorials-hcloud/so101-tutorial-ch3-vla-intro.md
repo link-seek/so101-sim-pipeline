@@ -204,6 +204,10 @@ env:
 
 ### 7.1 lerobot-train 命令
 
+> ⚠️ 已验证破碎（Discussion #20）：`so101-train:latest` 当前 torch/torchvision 版本错配，
+> `RuntimeError: operator torchvision::nms does not exist`，训练一行跑不起来。
+> 在镜像修复前，**走 Ch1 §4.3 的 `so101-mujoco` 路径**（已验证 153/325 = 47%）。
+
 ```bash
 docker run --rm --gpus all --shm-size=8g \
   -v /data/checkpoints:/data/checkpoints \
