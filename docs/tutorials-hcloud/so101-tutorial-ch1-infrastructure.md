@@ -162,12 +162,18 @@ docker run --gpus all \
 ```
 
 ```bash
-# SmolVLA 仿真训练 + Grid Sweep（~10 小时）
-docker run --gpus all \
+# SmolVLA 仿真训练 + Grid Sweep（训练 ~20 小时 + sweep ~10 小时，独占 GPU）
+docker run --gpus all --shm-size=16g \
   -v /data:/data \
+  -v /data/hf_cache:/root/.cache/huggingface \
+  -e HF_HUB_DISABLE_XET=1 \
   swr.cn-north-4.myhuaweicloud.com/link-seek/so101-mujoco:latest \
-  bash -c "python train_smolvla_sim.py --steps 20000 && python eval_mujoco_policy.py --mode sweep"
+  bash -c "python /workspace/scripts/train_smolvla_sim.py --steps 20000 && python /workspace/scripts/eval_mujoco_policy.py --checkpoint /data/checkpoints/smolvla-sim/checkpoints/015000/pretrained_model --mode sweep"
 ```
+
+> 已验证（Discussion #20）：15K checkpoint sweep **153/325 = 47%**，与历史 run `32221378632` 一字不差。
+> 三个坑：① `--shm-size` 必加（否则 DataLoader 起 worker 即崩）；② 国内网必备 `-e HF_HUB_DISABLE_XET=1` + HF 缓存挂载，否则数据集下载卡死；
+> ③ **独占 GPU 跑**——并行训练任务会污染 PPO 收敛（实测 0.98→0.02）；④ sweep 用 `capture_output=True`，全程静默约 10h 属正常，结束才一次性输出。
 
 ### 4.4 查看日志
 
@@ -184,7 +190,7 @@ docker logs <container_id> 2>&1 | grep -E "(success|reward|SPS|Error)"
 | 任务 | 耗时 | 输出 |
 |------|------|------|
 | PPO 训练 + 评估 | ~90 min | `best_agent.pt`、`eval_result.json` |
-| SmolVLA 训练 + Grid Sweep | ~10 h | checkpoint、成功率矩阵、热力图 |
+| SmolVLA 训练 + Grid Sweep | 训练 ~20 h + sweep ~10 h | checkpoint、成功率矩阵、热力图 |
 
 ### 4.6 评估结果
 
