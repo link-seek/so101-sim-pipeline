@@ -84,6 +84,21 @@ jobs:
           obsutil cp obs://${{ env.OBS_BUCKET }}/datasets/libero_so101_expert/ /data/datasets/libero_so101_expert/ -f -r -flat
           find /data/datasets/libero_so101_expert/ -type f | head -10
           du -sh /data/datasets/libero_so101_expert/
+          # Backfill camera axis names in dataset meta (v3.0 writer left names=None;
+          # current lerobot requires names[2]=='channel'). Idempotent; also patched in OBS.
+          python3 -c "
+          import json, glob
+          for p in glob.glob('/data/datasets/libero_so101_expert/*/meta/info.json'):
+              d = json.load(open(p))
+              changed = False
+              for k, ft in d.get('features', {}).items():
+                  if ft.get('dtype') in ('image', 'video') and not ft.get('names'):
+                      ft['names'] = ['height', 'width', 'channel']
+                      changed = True
+              if changed:
+                  json.dump(d, open(p, 'w'), indent=2)
+                  print('patched', p)
+          "
 
       - name: Finetune SmolVLA
         run: |
@@ -94,7 +109,7 @@ jobs:
             POLICY_ARG="--policy.path=$BASE"
           else
             echo "Using lerobot/smolvla_base from HF"
-            POLICY_ARG="--policy.type=smolvla --policy.path=lerobot/smolvla_base"
+            POLICY_ARG="--policy.path=lerobot/smolvla_base"
           fi
           OUTDIR="/data/checkpoints/${{ inputs.output_name }}"
           DATASET_ARGS=""
@@ -110,12 +125,15 @@ jobs:
             -v /data:/data \
             -e CUDA_VISIBLE_DEVICES=0 \
             -e HF_ENDPOINT=https://hf-mirror.com \
+            -e HF_HUB_DISABLE_XET=1 \
             -e WANDB_MODE=offline \
+            -e PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
             ${{ env.EVAL_IMAGE }} \
-            bash -c "pip install -q 'lerobot[dataset,training]' && \
+            bash -c "pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple 'lerobot[dataset,training]' && \
               lerobot-train \
                 $POLICY_ARG \
                 $DATASET_ARGS \
+                --policy.push_to_hub=false \
                 --output_dir=$OUTDIR \
                 --steps=${{ inputs.steps }} \
                 --batch_size=${{ inputs.batch_size }} \
