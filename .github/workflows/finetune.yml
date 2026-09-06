@@ -20,7 +20,7 @@ on:
         required: false
         default: "obs"
       hf_repo:
-        description: "HF dataset repo_id when dataset_mode=hf (e.g. lerobot/libero)"
+        description: "HF dataset repo_id when dataset_mode=hf. MUST have the same 3-camera features as smolvla_base (observation.images.camera1/2/3); e.g. lerobot/libero (2 cams) FAILS with feature-mismatch (#18)"
         required: false
         default: "lerobot/libero"
       output_name:
