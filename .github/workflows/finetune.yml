@@ -104,7 +104,8 @@ jobs:
           else
             DATASET_ARGS="--dataset.repo_id=libero_so101_expert --dataset.root=/data/datasets/libero_so101_expert/libero_object"
           fi
-          mkdir -p "$OUTDIR"
+          # NOTE: do NOT mkdir OUTDIR here — lerobot-train treats an existing
+          # output dir as an error (resume=False), even when empty.
           docker run --rm --gpus "device=0" --shm-size=16g \
             -v /data:/data \
             -e CUDA_VISIBLE_DEVICES=0 \
