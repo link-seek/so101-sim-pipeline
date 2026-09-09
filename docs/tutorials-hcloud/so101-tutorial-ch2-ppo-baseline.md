@@ -151,7 +151,7 @@ iter 1500 | success: 0.98 | SPS: 5785 | ent_coef: 0.008
 iter 1831 | success: 0.965 | best: 0.995 | ent_coef: 0.005
 ```
 
-### 4.3 评估
+### 4.4 评估
 
 训练完成后自动触发评估：
 
@@ -178,7 +178,7 @@ def evaluate(checkpoint_path, env_id, num_episodes=50):
     }
 ```
 
-### 4.4 结果
+### 4.5 结果
 
 | 指标 | 值 |
 |------|-----|
