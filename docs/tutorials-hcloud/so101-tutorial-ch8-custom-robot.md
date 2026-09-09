@@ -106,7 +106,7 @@ Phase 6: 脚本专家采集 30 eps LeRobot v3 数据集（trial 成功率 68%，
 | 评测管线能跑 LIBERO（serve→run→merge+诚实计分） | 47%@100eps，0 harness 错误 | Ch6 §4.3（run `33829389761`） |
 | 非默认机器人能构造+跑通全流程 | Sawyer 10/10 eps 跑通，0 错误 | Ch7 §2.4（run `33836694327`） |
 | 版本漂移可用文件补丁消化（不改 harness/镜像） | seed/controller/batch 三补丁 | Ch6 §4.3 |
-| 一键触发+OBS 归档 | `franka-eval.yml`/`robot-switch.yml` | 本章 §5 |
+| 前期验证：触发+OBS 归档跑通 | `franka-eval.yml`/`robot-switch.yml` | 本章 §5 |
 
 SO101 自己的 XML/类/控制器/BDDL 适配也在 #9 实施中完成（含 v1.4.0→1.5.2 迁移的 10 个兼容性修复，如 MuJoCo Enum 非 IntEnum、qM 移除、meshdir 解析）——纯机器人建模工作已闭环，不再涉及评测框架风险。
 
@@ -128,7 +128,7 @@ SO101 自己的 XML/类/控制器/BDDL 适配也在 #9 实施中完成（含 v1.
 
 | 维度 | 现状 |
 |------|------|
-| 触发方式 | CodeArts 评测流水线（交付物，只含评测）；GH Actions（`franka-eval.yml` / `robot-switch.yml`）仅内部编排 |
+| 触发方式 | CodeArts 评测流水线（交付物，只含评测）；GH Actions（`franka-eval.yml` / `robot-switch.yml`）是前期技术验证，不交付 |
 | 环境配置 | 镜像固定（`so101-eval:latest`）+ 文件补丁挂载，ECS 自托管 runner 执行 |
 | 结果查看 | OBS 自动归档 + Actions artifacts（`console.log`/`eval_summary.json`/`server.log`），aggregate 诚实计分 |
 | 评测实证 | Franka 47%@100eps（run `33829389761`）+ Sawyer 10eps 跑通（run `33836694327`） |
@@ -155,7 +155,7 @@ Phase 1: 原型验证（本教程 Ch1-Ch5）
 Phase 2: 机器人扩展（Ch6-Ch8，本教程实测部分）
   ├── ✅ Franka 基线 47%@100eps（Ch6，run 33829389761）
   ├── ✅ Sawyer L1 机制+演示跑通（Ch7，run 33836694327）
-  ├── ✅ 一键触发流水线（franka-eval.yml / robot-switch.yml）
+  ├── ✅ 前期技术验证跑通（franka-eval.yml / robot-switch.yml）
   └── ✅ SO101 自定义集成完成（#9，2026-09-03 集成完成结论）
 
 Phase 3: 自动化（下一步）
@@ -208,7 +208,7 @@ Phase 4: 平台化（远期）
    提示：有。它量化了「单任务训练 → 多任务泛化」的差距，是后续优化的 baseline。0% 和 20% 的指导价值完全不同。
 
 4. **从本教程到自动化评测平台，最关键的下一步是什么？**  
-   提示：流水线触发已经有了（`franka-eval.yml`/`robot-switch.yml` 一键触发 + OBS 归档）。下一步是批量评测矩阵（多模型 × 多 suite 自动跑 + 对比表）和可视化报告，见 §5.2 差距表。
+   提示：前期技术验证时触发+归档已经跑通（`franka-eval.yml`/`robot-switch.yml` + OBS 归档）。下一步是批量评测矩阵（多模型 × 多 suite 自动跑 + 对比表）和可视化报告，见 §5.2 差距表。
 
 5. **为什么本教程不评测 RoboTwin？**  
    提示：harness 的 `robotwin` benchmark 是 RoboTwin 2.0 纯双臂（14D 双臂 qpos 动作），SmolVLA 的单臂输出维度都对不上；且 5 个 embodiment 里没有 SO101。双臂是单臂 2x2 闭环后的下一条线。
