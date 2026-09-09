@@ -20,7 +20,7 @@
 | **Gymnasium** | API 标准 | 环境接口 | `info["success"]`, `reward` | 所有 eval 脚本的底层 API |
 | **LeRobot lerobot-eval** | 评测方法 | VLA 通用评测 | `pc_success`, `avg_sum_reward` | `replay_demo.py` 用其推理管线 |
 | **LIBERO** | 评测方法 | VLA benchmark | task success rate × 10 tasks | `eval_vla.py` 通过 vla-eval harness |
-| **LIBERO-PRO** | 评测方法 | VLA 鲁棒性 | 5 个扰动维度 | `eval_vla.py` 的 libero_pro_* benchmarks |
+| **LIBERO-PRO** | 评测方法 | VLA 鲁棒性 | robustness gap | `eval_vla.py` 的 libero_pro_*（5 种扰动，定义见 §4.6） |
 | **CleanRL** | 评测方法 | RL 评估范式 | `success_rate`, `ep_return` | `eval_ppo.py` 的确定性评估 |
 | **Grid Sweep** | 评测方法 | 多初始条件评测 | success rate across grid | `eval_mujoco_policy.py` 实现 |
 | **so101_nexus** | 仿真环境 | MuJoCo 仿真 | — | Ch4 回放验证 |
@@ -88,103 +88,32 @@ LIBERO 建立在 [RoboSuite](https://github.com/ARISE-Initiative/robosuite) 仿�
 
 ### 4.2 评测对象
 
-LIBERO 评测的是 **VLA 策略**（Vision-Language-Action Policy）——接收图像观测和语言指令，输出机器人动作的策略模型：
-
-```
-评测对象: VLA 策略 π(a | o_image, o_state, l_instruction)
-
-输入:
-  o_image   ∈ R^{H×W×3}    — 相机图像 (RGB)
-  o_state   ∈ R^{d_state}   — 机器人本体感觉 (关节角度等)
-  l_instruction ∈ String    — 语言指令 ("pick up the black bowl and place it on the plate")
-
-输出:
-  a ∈ R^{d_action}           — 机器人动作 (6 维: 5 关节 + 1 gripper)
-```
-
-**评测的 VLA 模型类型**（LIBERO 论文中评测的）：
-
-| 模型类型 | 代表 | 特点 |
-|----------|------|------|
-| Diffusion Policy | DP | 扩散过程生成 action |
-| ACT | ACT | Transformer + action chunking |
-| RT-1 | RT-1 | Transformer, 大规模 |
-| SimpleVLA | SimpleVLA | 轻量 VLA |
-
-我们的 SmolVLA 也属于 VLA 策略，理论上可以作为评测对象——但需要机器人匹配（详见 §4.7）。
+LIBERO 评测的是 **VLA 策略**：输入图像 + 语言指令，输出机器人动作。我们的 SmolVLA 也是 VLA，理论上可测——实际卡在机器人不匹配（详见 §4.7）：LIBERO 只认 Franka，我们的模型是 SO101 的身体。
 
 ### 4.3 任务定义机制：BDDL
 
-LIBERO 的任务用 **BDDL**（Behavior Description Definition Language）声明式定义。每个任务一个 `.bddl` 文件：
+LIBERO 的任务用 **BDDL**（Behavior Description Definition Language）声明式定义。每个任务一个 `.bddl` 文件——只看骨架：
 
 ```bddl
-;; pick_up_the_black_bowl_between_the_plate_and_the_ramekin
-;; and_place_it_on_the_plate.bddl
-
 (define (problem libero_spatial_pick_up_the_black_bowl ...)
-  (:domain robosuite)
   (:objects
-    black_bowl_1     -- bowl
-    plate_1          -- plate
-    ramekin_1        -- ramekin
-    robot_0          -- panda robot
-  )
+    black_bowl_1  -- bowl
+    plate_1       -- plate
+    robot_0       -- panda robot)
   (:init
     (on black_bowl_1 table_1)
-    (nextto black_bowl_1 plate_1)
-    (nextto black_bowl_1 ramekin_1)
-    ;; 区域坐标定义物体初始位置
-    (inregion black_bowl_1 "target_3")
-    (inregion plate_1 "target_1")
-    (inregion ramekin_1 "target_2")
-  )
+    (inregion black_bowl_1 "target_3"))  ;; 位置用区域抽象，不是硬编码坐标
   (:goal
-    (and (on black_bowl_1 plate_1))
-  )
-)
+    (and (on black_bowl_1 plate_1))))    ;; 成功条件：碗在盘子上
 ```
 
 **BDDL 的关键设计**：
-- **声明式**：只描述"初始状态"和"目标状态"，不描述"怎么做"
-- **区域抽象**：物体位置用 `inregion` 引用预定义区域，不是硬编码坐标
-- **目标条件**：`:goal` 定义成功条件（如 `(on A B)` = A 在 B 上面）
-- **环境无关**：同一 BDDL 可以在不同机器人/环境中实例化
-
-**从 BDDL 到评测 episode**：
-
-```
-BDDL 文件
-  → BDDLEnv 解析
-    → RoboSuite 环境实例化 (加载机器人、物体、场景)
-      → reset() → 初始观测
-        → policy(obs) → action → env.step(action)
-          → 检查 :goal 条件 → success?
-```
+- **声明式**：只描述"初始状态"和"目标状态"，不描述"怎么做"——同一 BDDL 可在不同机器人上实例化，也方便程序化生成扰动变体（PRO 就是这么来的）
+- **成功条件即判定**：`:goal` 就是评测时的 `info["success"]` 来源，评测者不自造标准（回扣 §2.1 的契约）
 
 ### 4.4 评测方法：Episode 生成与成功判定
 
-LIBERO 的评测流程遵循 Gymnasium API，但在任务层面做了标准化：
-
-```python
-# LIBERO 评测伪代码
-for suite in ["libero_spatial", "libero_object", "libero_goal"]:
-    tasks = get_suite_tasks(suite)          # 10 个 BDDL 任务
-    for task in tasks:
-        env = BDDLEnv(task, robot="Panda")  # 从 BDDL 实例化环境
-        for ep in range(50):                # 每任务 50 episodes
-            obs = env.reset(seed=base_seed + ep)
-            for step in range(max_steps):   # 通常 600 步
-                action = policy(obs, task.language_instruction)
-                obs, reward, terminated, truncated, info = env.step(action)
-                if info["success"]:         # BDDL :goal 条件满足
-                    success = True
-                    break
-            record(suite, task, ep, success)
-```
-
-**成功判定逻辑**：
-
-LIBERO 的 `info["success"]` 由 BDDL `:goal` 条件驱动，不是简单的 reward 阈值：
+流程就是 §4.3 骨架跑起来：每个 suite 10 个 BDDL 任务，每任务 N 个 episode（`reset(seed)` → policy 推理 → `step` → 查 `:goal`）。成功判定由 BDDL `:goal` 驱动，不是 reward 阈值：
 
 | 目标类型 | BDDL 示例 | 判定方式 |
 |----------|-----------|----------|
@@ -193,80 +122,19 @@ LIBERO 的 `info["success"]` 由 BDDL `:goal` 条件驱动，不是简单的 rew
 | 状态 | `(inregion A "target")` | A 的位置在目标区域内 |
 | 组合 | `(and (on A B) (on C D))` | 所有子条件同时满足 |
 
-**与 Gymnasium 标准的关系**：LIBERO 环境继承 RoboSuite 的 `MujocoEnv`，最终暴露 Gymnasium API。`info["success"]` 的判定逻辑由 BDDL→RoboSuite 链路自动处理，评测者不需要自己定义成功条件。
+链路 BDDL→RoboSuite→Gymnasium 全自动，评测者不定义成功条件——还是 §2.1 那条契约。
 
 ### 4.5 三个 Suite 的设计理念
 
-LIBERO 的核心创新是**通过任务分组系统化评测泛化的不同维度**：
+LIBERO 的核心创新是**通过任务分组系统化评测泛化的不同维度**——10 个任务里只变一个维度，其他固定：
 
-#### libero_spatial — 空间泛化
+| Suite | 只变什么 | 例子 | 测什么 |
+|-------|---------|------|--------|
+| `libero_spatial` | 初始位置 | 同一个黑碗放 10 个不同位置 | 空间泛化：学的是"抓放"还是记住了位置 |
+| `libero_object` | 物体 | 同一位置抓 10 种不同物体 | 视觉泛化：能否操作没见过的物体 |
+| `libero_goal` | 目标位置 | 同一黑碗放 10 个不同目标上 | 语义泛化：懂不懂"放到 X 上" |
 
-**问题**：策略能否适应物体位置变化？
-
-```
-Task 1: pick up black bowl at position A, place on plate
-Task 2: pick up black bowl at position B, place on plate
-...
-Task 10: pick up black bowl at position J, place on plate
-```
-
-- 10 个任务，**同一物体同一目标**，只变初始位置
-- 评测策略是否学到了"抓放"的通用技能，而不是记住特定位置
-- 对应我们 grid sweep 的"不同初始条件"——但 LIBERO 更系统化
-
-#### libero_object — 物体泛化
-
-**问题**：策略能否适应不同物体？
-
-```
-Task 1: pick up the black bowl, place on plate
-Task 2: pick up the cream cheese, place on plate
-...
-Task 10: pick up the chocolate pudding, place on plate
-```
-
-- 10 个任务，**同一位置同一目标**，只变物体（形状、大小、摩擦系数不同）
-- 评测策略的视觉泛化能力——能否识别和操作没见过的物体
-- 这是 VLA 相比传统 RL 的核心优势：语言+视觉理解
-
-#### libero_goal — 目标泛化
-
-**问题**：策略能否适应不同目标？
-
-```
-Task 1: pick up the black bowl, place on the plate
-Task 2: pick up the black bowl, place on the ramekin
-...
-Task 10: pick up the black bowl, place on the moka pot
-```
-
-- 10 个任务，**同一物体同一初始位置**，只变目标位置
-- 评测策略是否理解"放到 X 上"的语义，而非记住固定轨迹
-
-#### 三个 Suite 的关系
-
-```
-泛化维度:
-  libero_spatial:  位置变化 → 测试空间泛化
-  libero_object:   物体变化 → 测试视觉泛化
-  libero_goal:     目标变化 → 测试语义泛化
-
-  三个维度正交，组合起来全面评测 VLA 的泛化能力
-```
-
-**指标计算**：
-
-```python
-# 每个 suite 的报告
-suite_result = {
-    "suite": "libero_spatial",
-    "task_success_rates": [0.8, 0.6, 0.9, ...],  # 10 个任务各自的成功率
-    "overall_success_rate": 0.72,                  # 所有 episode 的平均成功率
-    "num_episodes": 500,                           # 10 tasks × 50 episodes
-}
-```
-
-**关键指标**：`overall_success_rate`（所有 episode 的平均成功率）是论文中报告的主指标。但 `task_success_rates` 的分布也重要——如果某任务 0% 而其他 100%，说明策略对该任务完全失败。
+三个维度正交，组合起来定位泛化瓶颈。主指标 `overall_success_rate`（所有 episode 平均成功率）；`task_success_rates` 分布也看——某任务 0% 而其他 100% 说明该任务完全失败。
 
 ### 4.6 LIBERO-PRO：相对 LIBERO 拓展了什么
 
@@ -282,27 +150,7 @@ PRO 的 gap 是框架内自计算的，不依赖训练信息——第三方黑�
 
 **为什么选 LIBERO**：LIBERO 是 VLA 领域公认的标准 benchmark（CoRL 2023，2.2k stars），提供 3 个 suite × 10 tasks 的多任务泛化评测。如果一个 VLA 模型能在 LIBERO 上拿到高分，说明它具备跨任务泛化能力——这是衡量 VLA 质量的金标准。
 
-**我们的实现**：仓库已设计完整 LIBERO 评测管线——`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` Docker 镜像。用 `docker run` 一条命令即可运行。
-
-**模型和数据来源**：评测用的模型和数据集都存放在 OBS（华为云对象存储）。
-
-数据采集是独立于评测的步骤：
-- **真机数据**：人工在 SO101 实机上操作录制（如 ataghof 数据集）
-- **仿真数据**：在 MuJoCo 仿真环境中录制（如 dobri420 数据集）
-- **LIBERO 专家数据**：可通过 `so101-eval` 镜像的采集脚本获取
-
-采集完成后上传到 OBS，后续流程：
-
-```
-上传数据集到 OBS → 训练 → 上传模型到 OBS → 评测从 OBS 下载模型+数据 → 运行评测
-```
-
-我们上传了：
-- **数据集**：`obs://so101-sim-pipeline/datasets/so101-dataset` — SO101 仿真采集的演示数据
-- **模型**：`obs://so101-sim-pipeline/models/so101-act` — ACT 策略（行为克隆）
-- **模型**：`obs://so101-sim-pipeline/models/so101-smolvla` — SmolVLA 策略（视觉-语言-动作）
-
-也可以评测其他模型，只要指定 OBS 路径即可。计算在我们自己的华为云 V100 ECS 上完成。
+**我们的实现**：仓库已设计完整 LIBERO 评测管线——`eval_vla.py` + 8 个 benchmark 配置 + `so101-eval` Docker 镜像。模型和数据集存 OBS，计算在华为云 V100 ECS 上完成，用 `docker run` 一条命令即可运行。
 
 **实战结果**（2026-08-27，run 33053613547）：
 
@@ -369,7 +217,7 @@ VLA 标准 benchmark，测跨任务泛化。跑法见 Ch6 §3.2（Franka 100eps 
 
 | 方法 | 回放 (replay) | Grid Sweep | PPO 确定性评估 | LIBERO |
 |------|---------------|------------|----------------|--------|
-| Episodes | 1 (300 steps) | 325 | 50 | 500 (10 tasks × 50) |
+| Episodes | 1 (300 steps) | 325 | 50 | 100（Franka 实测 10 tasks × 10；官方协议另有 50/task 版，见 Ch6 §5.3） |
 | 耗时 | ~30s | ~30min | ~15min | ~2h |
 | 用途 | 快速 smoke test | 单任务工作空间扫描 | RL 策略评估 | 跨任务泛化评估 |
 | 时机 | 每次训练后 | 关键 checkpoint | PPO 训练完成 | 里程碑节点 |
@@ -436,31 +284,15 @@ VLA 标准 benchmark，测跨任务泛化。跑法见 Ch6 §3.2（Franka 100eps 
 
 ### 6.2 统计显著性：多少 episodes 才够
 
-给定成功率 p，N 个 episodes 的标准误差：
+给定成功率 p，N 个 episodes 的标准误差 `SE = sqrt(p*(1-p)/N)`：
 
-```
-SE = sqrt(p * (1-p) / N)
-```
+| N | p=0.47 时 95% CI | 含义 |
+|---|--------|------|
+| 50 | ±14% | 太宽，两个模型差 10% 也分不出 |
+| 325 | ±5.5% | 可接受——这就是 grid sweep 用 325 的原因 |
+| 1000 | ±3% | 好，但 V100 跑不起 |
 
-| N | p=0.47 | 95% CI | 含义 |
-|---|--------|--------|------|
-| 50 | 0.47 | ±0.14 | [33%, 61%] — 太宽 |
-| 325 | 0.47 | ±0.055 | [41.5%, 52.5%] — 可接受 |
-| 1000 | 0.47 | ±0.031 | [43.9%, 50.1%] — 好 |
-
-**我们的选择**：
-- PPO: 50 episodes — PPO 策略稳定（100% 或 0%），不需要多 episode
-- VLA: 325 episodes — VLA 泛化性差，需要足够 episodes 才有统计意义
-- LIBERO: 50 ep × 10 tasks = 500 episodes — 多任务评测，总量足够
-
-**所需 episodes 数公式**（95% CI 宽度 < w）：
-
-```python
-N > 1.96^2 * p * (1-p) / (w/2)^2
-
-# 例：p=0.47, 想要 CI 宽度 < 10% (±5%)
-N > 3.84 * 0.47 * 0.53 / 0.0025 = 382
-```
+**我们的选择**：PPO 50eps（策略稳定，100% 或 0%，SE≈0）；VLA 325eps；LIBERO 按官方协议（10eps/task，Franka 线见 Ch6 §5.3）。记住一条：**报成功率不报 N，就是耍流氓**——§5.6 的"平台≠倒退"全靠这条才立得住。
 
 ### 6.3 评测指标设计原则
 
@@ -517,29 +349,20 @@ LeRobot `lerobot-eval` 默认 `seed=1000`，我们的 `eval_ppo.py` 用 `seed=12
 1. **LeRobot 的 `pc_success` 和我们的 `success_rate` 有什么区别？**  
    提示：只是命名和单位不同（百分比 vs 小数），计算方式相同：`mean(successes)`。
 
-2. **为什么 grid sweep 要用 5 trials 而不是 1？**  
-   提示：单次试验有随机性（物体初始姿态、接触动力学），5 次取平均更可靠。统计上 N=5 的 SE = sqrt(p(1-p)/5)。
+2. **PPO 用 50eps、VLA 用 325eps、grid sweep 每格 5 trials，N 都是怎么定的？**  
+   提示：同一条公式 `SE = sqrt(p(1-p)/N)`。PPO 的 p≈1（SE≈0）；VLA 的 p≈0.5（最需要 N）；每格 5 trials 是"格子内平均"，325 是"格子间平均"，两层平均别混。
 
 3. **如果训练数据只覆盖中心区域，边缘 0% 是 bug 还是预期？**  
    提示：是预期。模型没有边缘数据，无法泛化。解决方案是补充边缘数据或数据增强。LIBERO 的 `libero_spatial` 就是为了测试这种空间泛化。
 
-4. **PPO 用 50 episodes，VLA 用 325 episodes，为什么？**  
-   提示：PPO 在训练环境中 on-policy 学习，泛化性好（MLP 不依赖视觉）。VLA 从固定数据集学习，泛化性受限，需要更全面评估。统计上 PPO 100% 时 SE=0，50 ep 足够。
-
-5. **LIBERO 评测和 grid sweep 评测有什么互补性？**  
+4. **LIBERO 评测和 grid sweep 评测有什么互补性？**  
    提示：LIBERO 测跨任务泛化（不同物体/目标/语言），grid sweep 测单任务工作空间覆盖。一个模型可能 LIBERO 80% 但 grid sweep 边缘 0%。
 
-6. **LIBERO 的三个 suite（spatial/object/goal）为什么是正交的？**  
+5. **LIBERO 的三个 suite（spatial/object/goal）为什么是正交的？**  
    提示：每次只变一个维度，其他固定。spatial 变位置、object 变物体、goal 变目标。组合起来可以定位泛化瓶颈在哪个维度。
 
-7. **LIBERO-PRO 的 robustness gap 和 LIBERO 的 success rate 有什么区别？**  
+6. **LIBERO-PRO 的 robustness gap 和 LIBERO 的 success rate 有什么区别？**  
    提示：LIBERO 的 success rate 回答"能不能做"，LIBERO-PRO 的 gap 回答"扰动后还能不能做"。gap=0 说明鲁棒，gap 大说明脆弱。一个策略可以 LIBERO 80% 但 LIBERO-PRO gap 40%，意味着泛化能力有但鲁棒性差。
-
-8. **BDDL 的声明式任务定义相比硬编码有什么优势？**  
-   提示：声明式只描述初始状态和目标，不描述怎么做。这意味着同一 BDDL 可以在不同机器人上实例化（只要环境支持所需谓词），也方便自动生成扰动变体（LIBERO-PRO 就是程序化修改 BDDL）。
-
-9. **为什么说 LIBERO-PRO 比 LIBERO 更适合第三方黑盒评测？**  
-   提示：LIBERO 的"泛化"结论需要实验者知道训练时见过什么才能解读。LIBERO-PRO 的 robustness gap 是框架内自计算的（原始成功率 − 扰动成功率），不依赖任何训练信息。第三方评测方不需要知道模型怎么训练的，跑完 LIBERO + LIBERO-PRO 就能得到完整的"行不行 + 稳不稳"报告。
 
 ---
 
