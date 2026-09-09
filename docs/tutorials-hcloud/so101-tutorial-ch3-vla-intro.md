@@ -74,11 +74,11 @@ VLA 的核心优势是**有视觉**——可以看到物体、理解场景，因
 └─────────────────────────────────────┘
 ```
 
-### 7.1 SmolVLM Base
+### 3.1 SmolVLM Base
 
 预训练的视觉-语言模型，理解图像内容和语言指令。我们用 `lerobot/smolvla_base` 作为初始权重，在自己的数据上 fine-tune。
 
-### 7.2 Action Head
+### 3.2 Action Head
 
 将 SmolVLM 的隐状态映射到 6 维动作 (5 关节 + 1 gripper)：
 
@@ -88,7 +88,7 @@ action = action_head(hidden_state)  # shape: (batch, 50, 6)
 
 输出 50 个未来 step 的 action（action chunking），每次推理后逐步执行。
 
-### 7.3 Action Chunking
+### 3.3 Action Chunking
 
 Action Chunking 是 SmolVLA 的核心特性：
 
@@ -104,7 +104,7 @@ Action Chunking 是 SmolVLA 的核心特性：
 
 ## 4. LeRobot 数据格式
 
-### 7.1 v3.0 格式
+### 4.1 v3.0 格式
 
 ```
 dataset/
@@ -130,7 +130,7 @@ dataset/
 }
 ```
 
-### 7.2 rename_map
+### 4.2 rename_map
 
 数据集的相机名可能和模型期望不一致，需要映射：
 
@@ -141,23 +141,23 @@ dataset/
 }
 ```
 
-这个看似简单的映射，在我们的项目中导致了第一个 bug（P0 相机不匹配，详见 Ch4）。
+这个看似简单的映射，在我们的项目中导致了第一个 bug（P0 相机不匹配，主场在 Ch4 前情提要）。
 
 ---
 
-## 5. 数据集选择
+## 5. 候选数据集
 
-我们尝试了 3 个数据集，每个都有不同的教训：
+训练需要演示数据。这里有 3 个候选——先认识它们是谁、长什么样。选谁、为什么选、结局如何，是下一章的故事，本章不判胜负。
 
-### 7.1 数据集对比
+### 5.1 候选一览
 
-| 数据集 | 来源 | Episodes | 相机 | 视觉域 | 结果 |
-|--------|------|----------|------|--------|------|
-| `shattori/so101_pick_place_thor` | **真机**遥操作 | 100 | wrist+overhead (2) | 真机 | P0 修复但 P1 存在 |
-| `ataghof/so101nexus-cube500-binary` | **仿真** scripted expert | 500 | cam0+cam1 (2) | 仿真≠评测环境 | 5 轮失败，终止 |
-| `dobri420/pick-cube-so101-sim` | **仿真** sim twin | - | camera1/2/3 (3) | 仿真=评测环境 | ✅ 47% |
+| 数据集 | 来源 | Episodes | 相机 | 视觉域 |
+|--------|------|----------|------|--------|
+| `shattori/so101_pick_place_thor` | **真机**遥操作 | 100 | wrist+overhead (2) | 真机 |
+| `ataghof/so101nexus-cube500-binary` | **仿真** scripted expert | 500 | cam0+cam1 (2) | 仿真 |
+| `dobri420/pick-cube-so101-sim` | **仿真** sim twin | - | camera1/2/3 (3) | 仿真 |
 
-### 7.2 第一个数据集：shattori（真机）
+### 5.2 第一个候选：shattori（真机）
 
 ```yaml
 # 训练配置：shattori 数据集
@@ -166,13 +166,9 @@ env:
   RENAME_MAP: '{"wrist":"camera1", "overhead":"camera2"}'
 ```
 
-**发现 P0**：训练用 `side+up` 相机，推理用 `wrist+overhead`，模型从未见过腕部视角。
+真机遥操作采集，100 episodes，wrist+overhead 双摄。注意它的视觉域是**真机**，而我们的评测在 MuJoCo 里——这个组合后来出了故事，见 Ch4 前情提要（P1）。
 
-**修复**：切换到 shattori 数据集（wrist+overhead），prediction errors → 0/300。
-
-**发现 P1**：训练数据是真机照片，评测是 MuJoCo 渲染。视觉域不匹配，模型在真机图片上学到的特征在仿真中失效。
-
-### 7.3 第二个数据集：ataghof（仿真，500 eps）
+### 5.3 第二个候选：ataghof（仿真，500 eps）
 
 ```yaml
 env:
@@ -181,11 +177,9 @@ env:
   DATASET_FPS: 30
 ```
 
-**优点**：500 episodes（vs shattori 100），仿真采集（vs 真机），已有 MolmoAct2 验证结果。
+500 episodes（5 倍于 shattori），仿真采集，已有 MolmoAct2 验证结果（93% grasp）。账面上是最强的候选——我们拿它开局。开局之后发生的事，整章在 Ch4。
 
-**结果**：5 轮训练 + 3 个 bug 修复后仍 Success=False。根因是数据采集环境 ≠ 评测环境。（详见 Ch4）
-
-### 7.4 第三个数据集：dobri420（仿真 sim twin）
+### 5.4 第三个候选：dobri420（仿真 sim twin）
 
 ```yaml
 # 训练配置：dobri420 sim twin 数据集
@@ -194,15 +188,13 @@ env:
   # 无需 rename_map，3 相机原生匹配
 ```
 
-**关键优势**：数据采集和评估在同一个 MuJoCo 场景，1:1 匹配。
-
-**结果**：15K steps 训练，grid sweep 325 episodes，**47% 成功率**。
+sim twin 数据：采集和评估在同一个 MuJoCo 场景，3 相机原生匹配，无需 `rename_map`。它什么时候出场、出场拿几分，见 Ch4。
 
 ---
 
 ## 6. 训练流程
 
-### 7.1 lerobot-train 命令
+### 6.1 lerobot-train 命令
 
 > ⚠️ 已验证破碎（Discussion #20）：`so101-train:latest` 当前 torch/torchvision 版本错配，
 > `RuntimeError: operator torchvision::nms does not exist`，训练一行跑不起来。
@@ -222,7 +214,7 @@ docker run --rm --gpus all --shm-size=8g \
     --env_eval_freq=2000
 ```
 
-### 7.2 训练脚本核心
+### 6.2 训练脚本核心
 
 ```python
 # scripts/train_smolvla.py（简化）
@@ -252,22 +244,19 @@ def train(args):
             save_checkpoint(policy, f"/data/checkpoints/{step}")
 ```
 
-### 7.3 训练 Loss 曲线
+### 6.3 训练 Loss 曲线（正常启动长这样）
 
-以 ataghof 数据集 20K steps 为例：
+以前 5K steps 为例，loss 单调下降就是训练跑起来了：
 
 ```
 Step    Loss     LR
 500     0.461    8.3e-05
 1000    0.292    9.5e-05
 2000    0.204    7.3e-05
-5000    0.119    3.3e-06   ← Phase 2 完成
-10000   0.069    4.9e-05
-15000   0.058    2.7e-05
-20000   0.046    2.5e-06   ← Phase 3 完成
+5000    0.119    3.3e-06
 ```
 
-Loss 持续下降，但 0.046 远高于社区成功案例的 0.005-0.018。这暗示有问题（详见 Ch4）。
+只记住一件事：loss 下降 = 优化器在干活。但它不承诺任务会成——有人拿着这条曲线判过"验证通过"，错了（见 Ch4 Phase 2）。
 
 ---
 
@@ -309,41 +298,22 @@ def replay(checkpoint_path, env_id="MuJoCoPickAndPlace-v1"):
     return {"prediction_errors": errors, "success": info["success"]}
 ```
 
-### 7.2 回放结果
+### 7.2 回放输出怎么读
 
-| 阶段 | Prediction Errors | Success | Reward |
-|------|-------------------|---------|--------|
-| P0 修复前 | >0 | False | ≈0 |
-| P0 修复后 | 0/300 ✅ | False | ≈0 |
-| 20K 训练后 | 0/300 ✅ | False | ≈0 |
-| 3 Bug 修复后 | 0/300 ✅ | False | ≈0 |
-| Sim Twin (方案B) | 0/300 ✅ | **True (47%)** | >0 |
+| 输出 | 含义 |
+|------|------|
+| prediction errors > 0 | 推理管线不通（常见于相机名没对齐，见 §4.2 `rename_map`） |
+| 0/300 errors + Success=False | 管线通，但任务没完成——这是数据/训练问题，不是代码问题 |
 
-"0 errors 但 Success=False" 是一个关键信号——模型能控制机器人，但没学会完成任务。这引导我们去找系统性问题（Ch4）。
+回放只回答"管线通不通"，不回答"任务会不会成"。拿着这套工具连败 5 轮、又翻盘的故事，在 Ch4。
 
 ---
 
 ## 踩坑复盘
 
-### 坑 1：P0 相机视角不匹配
+### 坑 1 / 坑 2：P0 相机不匹配、P1 视觉鸿沟
 
-**现象**：prediction errors > 0，模型输出不合理。
-
-**根因**：训练数据用 `side+up` 相机，推理环境只有 `wrist+overhead`。模型从未见过腕部视角，推理时相当于盲猜。
-
-**修复**：切换到相机匹配的数据集 + 配置 `rename_map`。
-
-**教训**：训练和推理的观测空间必须一致。这是最基本的约束，但容易被忽略。
-
-### 坑 2：P1 Sim-to-Real Visual Gap
-
-**现象**：P0 修复后 0 errors，但 Success=False，reward ≈ 0。
-
-**根因**：训练数据是真机照片（自然光、真实材质），评测是 MuJoCo 渲染（点光源、简单纹理）。模型在真机图片上学到的视觉特征在仿真中失效。
-
-**修复**：切换到仿真采集的数据集（ataghof → dobri420）。
-
-**教训**：**训练和评估必须在同一视觉域**。这是本教程最重要的一个原则。
+已搬入 Ch4：P0/P1 是破案故事的起点，在 Ch4 前情提要盒子里（那里是它们的主场）。工具层面的对应知识见本章 §4.2（`rename_map`）和 §5（视觉域列）。
 
 ### 坑 3：FPS 不匹配
 
@@ -357,17 +327,16 @@ def replay(checkpoint_path, env_id="MuJoCoPickAndPlace-v1"):
 
 ## 思考题
 
-1. **为什么 500 episodes 的 ataghof 失败了，但 sim twin 数据集成功了？**  
-   提示：episodes 数量不是关键，数据-环境匹配才是。
-
-2. **Action Chunking（chunk_size=50）为什么比逐步执行好？**  
+1. **Action Chunking（chunk_size=50）为什么比逐步执行好？**  
    提示：想想高频推理的抖动问题，以及 50 步前瞻规划的连贯性。
 
-3. **Loss 0.046 vs 社区 0.005，差距在哪里？**  
-   提示：相机数（2 vs 3）、数据来源（scripted vs 遥操作）、batch_size（32 vs 64）。
+2. **如果 `rename_map` 把两个相机写反了，回放会报什么？**  
+   提示：看 §7.2 的输出对照表——errors 会先于 Success 告诉你。
 
-4. **如果用 3 个相机训练，但推理时只有 2 个，会怎样？**  
-   提示：这就是我们的 camera3 bug——训练时缺失 camera3，推理时不应提供。
+3. **数据集 33Hz、环境 30Hz，不对齐直接训会怎样？**  
+   提示：见坑 3，`--dataset.fps=30` 是干什么的。
+
+4. **预告**：下一章我们拿着这套工具连败 5 轮。先猜一个：loss 一路下降、0 errors，但 Success 恒为 False——病根会在代码、数据、环境三者中的哪一个？为什么？
 
 ---
 
