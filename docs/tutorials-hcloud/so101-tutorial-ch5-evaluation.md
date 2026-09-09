@@ -11,40 +11,7 @@
 
 本章就来搞清楚：**社区是怎么评测机器人策略的，我们的脚本和这些框架是什么关系。**
 
-机器人策略评测不是我们发明的——社区已有成熟框架。我们的项目站在它们肩膀上。评测涉及两个维度：**评测方法**（怎么评）和**环境来源**（在哪评）：
-
-```
-评测方法:
-
-  Gymnasium (环境 API 标准，所有评测的底层接口)
-    │
-    ├── LeRobot lerobot-eval (VLA 通用评测)
-    │     └── 我们的 replay_demo.py 用其推理管线做回放验证
-    │
-    ├── LIBERO / LIBERO-PRO (VLA 标准 benchmark + 鲁棒性扩展)
-    │     └── 我们的 eval_vla.py 通过 vla-eval harness 调用
-    │
-    ├── CleanRL (RL 评测范式)
-    │     └── 我们的 eval_ppo.py 遵循其确定性评估模式
-    │
-    └── Grid Sweep (多初始条件评测，社区常用方法)
-          └── 我们的 eval_mujoco_policy.py 实现 5×13×5 sweep
-
-环境来源:
-
-  仿真环境 (Simulation)
-    ├── MuJoCo 系列
-    │     ├── so101_nexus —— Ch4 回放验证用的环境
-    │     ├── so101-mujoco (社区 sim twin) —— Grid Sweep 用的环境
-    │     └── Gym ALOHA —— ALOHA 双臂机器人仿真
-    ├── RoboTwin —— 双臂操作 benchmark 仿真
-    ├── LIBERO 仿真环境 —— eval_vla.py 用的环境
-    └── Isaac Sim / Habitat —— 大规模仿真（本项目未用）
-
-  真实机器人 (Real Robot)
-    ├── SO101 实机 —— ataghof 数据采集用
-    └── ALOHA / Viper / Franka —— 其他真实平台（本项目未用）
-```
+新手流程地图（一句话版）：回放（smoke）→ Grid Sweep（单任务考试）→ PPO 确定性评估（RL 参照）→ LIBERO（毕业考试）。四种方法的何时用、谁执行，见 §5.5 对照表；操作细节是 Ch1–Ch4 的内容，本章不重复——下面只讲框架关系与专业测评。
 
 ### 各框架对比
 
@@ -65,33 +32,9 @@
 
 ## 2. Gymnasium：评测的通用语言
 
-### 2.1 标准 API
+### 2.1 唯一的契约：`info["success"]`
 
-所有评测脚本都基于 [Gymnasium](https://gymnasium.farama.org/) 的标准 API：
-
-```python
-import gymnasium as gym
-
-env = gym.make("MuJoCoPickAndPlace-v1", render_mode="rgb_array")
-obs, info = env.reset(seed=42)          # 重置环境, 返回初始观测
-action = policy(obs)                     # 策略推理
-obs, reward, terminated, truncated, info = env.step(action)  # 执行
-# info["success"] → bool: 任务是否完成
-```
-
-**关键约定**（Gymnasium 标准）：
-- `reset(seed)` → 固定 seed 保证可复现
-- `step()` 返回 5 元组 `(obs, reward, terminated, truncated, info)`
-- `info["success"]` → 任务完成判定（环境定义，非策略定义）
-- `terminated` → 任务自然结束（成功或失败）
-- `truncated` → 因步数上限被截断
-
-### 2.2 为什么用 Gymnasium 而不是自己写
-
-LeRobot、so101_nexus、LIBERO 全部基于 Gymnasium API。用标准 API 意味着：
-- 同一策略可以在任何 Gymnasium 环境中评测
-- 环境的 `info["success"]` 判定逻辑由环境作者维护，评测者不需要自己定义
-- 向量化环境 (`gym.vector.VectorEnv`) 可以并行评测多个 episode
+所有评测脚本都基于 [Gymnasium](https://gymnasium.farama.org/) 的标准 API（`reset(seed)` / `step()` 五元组）。新手只需记住一条：**成功与否由环境的 `info["success"]` 说了算，评测者不自造标准**——自造就会刷出 PPO v1 那种 100% 假成功（见 §6.3 原则 1）。Ch2/Ch4 的脚本都是这个契约的实例，细节查文档。
 
 ---
 
@@ -110,56 +53,15 @@ lerobot-eval \
     --policy.device=cuda
 ```
 
-### 3.2 评测配置（`EvalPipelineConfig`）
+### 3.2 配置与指标（一句话版）
 
-```python
-@dataclass
-class EvalConfig:
-    n_episodes: int = 50        # 评测 episode 数
-    batch_size: int = 0         # 0 = 自动选择(按 CPU 核数, 上限 64)
-    # seed: int = 1000          # 起始 seed, 每个 episode 递增
+`EvalPipelineConfig` = 环境 + 评测（`n_episodes`，默认 50）+ 策略 + 全局 seed（默认 1000）+ `rename_map`（Ch4 修过的那个）。输出分两层：`per_episode`（每回合 success/seed/reward）+ `aggregated`（成功率、平均回报、耗时）。
 
-@dataclass
-class EvalPipelineConfig:
-    env: EnvConfig              # 环境配置
-    eval: EvalConfig            # 评测配置
-    policy: PreTrainedConfig    # 策略配置
-    seed: int = 1000            # 全局 seed
-    rename_map: dict = {}       # 观测键名映射
-```
-
-### 3.3 LeRobot 的评测指标
-
-`lerobot-eval` 输出的指标体系（`src/lerobot/scripts/lerobot_eval.py`）：
-
-```python
-info = {
-    "per_episode": [
-        {
-            "episode_ix": i,
-            "sum_reward": sum_reward,    # 累积 reward
-            "max_reward": max_reward,     # 最大 reward
-            "success": success,           # 是否成功
-            "seed": seed,                 # 使用的 seed
-        }
-        for i, (...) in enumerate(...)
-    ],
-    "aggregated": {
-        "avg_sum_reward": float(np.nanmean(sum_rewards)),   # 平均累积 reward
-        "avg_max_reward": float(np.nanmean(max_rewards)),   # 平均最大 reward
-        "pc_success": float(np.nanmean(all_successes) * 100),  # 成功率 (%)
-        "eval_s": elapsed,                # 评测总耗时
-        "eval_ep_s": elapsed / n_episodes,  # 每 episode 耗时
-    },
-}
-```
-
-| 指标 | LeRobot 名称 | 我们 `eval_ppo.py` 对应 | 含义 |
-|------|-------------|----------------------|------|
-| 成功率 | `pc_success` | `success_rate` | `mean(successes) * 100` |
-| 平均累积回报 | `avg_sum_reward` | `avg_reward` | `mean(sum(rewards))` |
-| 平均最大回报 | `avg_max_reward` | — | `mean(max(rewards))` |
-| 每 episode 耗时 | `eval_ep_s` | `elapsed_s / num_episodes` | 效率指标 |
+| 指标 | LeRobot 名称 | 我们 `eval_ppo.py` 对应 |
+|------|-------------|----------------------|
+| 成功率 | `pc_success` | `success_rate` |
+| 平均累积回报 | `avg_sum_reward` | `avg_reward` |
+| 每 episode 耗时 | `eval_ep_s` | `elapsed_s / num_episodes` |
 
 **我们的 `eval_ppo.py` 遵循了同样的指标设计**，只是命名不同。`avg_max_reward` 我们没追踪，因为 PPO 的 reward 语义和 VLA 不同。
 
@@ -366,115 +268,13 @@ suite_result = {
 
 **关键指标**：`overall_success_rate`（所有 episode 的平均成功率）是论文中报告的主指标。但 `task_success_rates` 的分布也重要——如果某任务 0% 而其他 100%，说明策略对该任务完全失败。
 
-### 4.6 LIBERO-PRO：鲁棒性评测理论
+### 4.6 LIBERO-PRO：相对 LIBERO 拓展了什么
 
-[LIBERO-PRO](https://github.com/sylvestf/LIBERO-plus)（423 stars，LIBERO-plus）在 LIBERO 基础上引入**扰动评测**——不只测泛化，还测**鲁棒性**。
+[LIBERO-PRO](https://github.com/sylvestf/LIBERO-plus) 在 LIBERO 的 3 个泛化 suite 之外，加了 **5 个扰动维度**：物体替换（swap）、属性变化（object）、语言变化（lan）、任务组合（task）、环境变化（env）。一句话：**LIBERO 测"能不能泛化"，PRO 测"泛化稳不稳"**——核心输出 robustness gap = 原始成功率 − 扰动成功率，gap 越小越鲁棒。
 
-#### 核心理念
+PRO 的 gap 是框架内自计算的，不依赖训练信息——第三方黑盒评测（不知道模型怎么训的）直接拿 gap 即可，这是它相对 LIBERO 最大的方法论拓展。
 
-> 真实部署中，环境不会完美匹配训练条件。VLA 策略能否在扰动下保持性能？
-
-LIBERO-PRO 定义了 5 个扰动维度，每个维度一个 benchmark suite：
-
-| Suite | 扰动类型 | 具体做法 | 评测什么 |
-|-------|---------|---------|---------|
-| `libero_pro_swap` | 物体替换 | 把任务中的物体 A 换成同类物体 B | 策略能否适应同类但不同的物体 |
-| `libero_pro_object` | 属性变化 | 改变物体大小/颜色/摩擦 | 策略能否适应物体属性变化 |
-| `libero_pro_lan` | 语言变化 | 同一任务用不同语言描述 | 策略是否真正理解语言语义 |
-| `libero_pro_task` | 任务组合 | 把两个单任务组合成复合任务 | 策略能否执行长程任务 |
-| `libero_pro_env` | 环境变化 | 改变场景布局/光照/相机视角 | 策略能否适应环境变化 |
-
-#### 扰动评测的方法论
-
-```python
-# LIBERO-PRO 评测伪代码
-for suite in LIBERO_PRO_SUITES:
-    for task in get_tasks(suite):
-        original_task = task.base_task          # 原始 LIBERO 任务
-        perturbed_task = apply_perturbation(task) # 扰动后的任务
-
-        # 在扰动任务上评测
-        env = BDDLEnv(perturbed_task)
-        for ep in range(50):
-            obs = env.reset(seed=ep)
-            success = run_episode(policy, env, obs)
-            record(suite, task, ep, success)
-
-    # 计算 robustness gap
-    original_rate = get_original_success_rate(suite)
-    perturbed_rate = get_perturbed_success_rate(suite)
-    robustness_gap = original_rate - perturbed_rate  # 越小越鲁棒
-```
-
-#### Robustness Gap
-
-LIBERO-PRO 的核心输出不只是扰动后的成功率，而是 **robustness gap**——原始性能与扰动后性能的差距：
-
-```
-robustness_gap = success_rate(original) - success_rate(perturbed)
-
-gap ≈ 0:  策略鲁棒 (扰动不影响性能)
-gap 大:   策略脆弱 (扰动导致性能大幅下降)
-```
-
-| 扰动类型 | 典型 gap | 含义 |
-|---------|---------|------|
-| swap | 10-30% | 换物体导致性能下降 |
-| lan | 5-20% | 语言变化影响理解 |
-| env | 15-40% | 环境变化影响视觉感知 |
-| task | 20-50% | 复合任务难度显著增加 |
-
-#### 与 LIBERO 的关系
-
-```
-LIBERO (基础泛化)
-  ├── libero_spatial  (位置泛化)
-  ├── libero_object   (物体泛化)
-  └── libero_goal     (目标泛化)
-
-LIBERO-PRO (鲁棒性)
-  ├── libero_pro_swap   (物体替换扰动)
-  ├── libero_pro_object (属性变化扰动)
-  ├── libero_pro_lan    (语言变化扰动)
-  ├── libero_pro_task   (任务组合扰动)
-  └── libero_pro_env    (环境变化扰动)
-
-  总计: 8 个 suite, 80 个任务, 4000 个 episode
-```
-
-**LIBERO 测的是"能不能泛化"，LIBERO-PRO 测的是"泛化稳不稳"**。两者互补：一个策略可能 LIBERO 80% 但 LIBERO-PRO 仅 40%，说明它能泛化但鲁棒性差。
-
-#### 关键区别：谁需要知道训练过程？
-
-LIBERO 和 LIBERO-PRO 在**对训练信息的依赖**上有本质区别：
-
-| | LIBERO | LIBERO-PRO |
-|--|--------|------------|
-| **"泛化"的参照系** | 训练时见过的任务 | 任务本身（原始 vs 扰动） |
-| **需要知道训练数据？** | ✅ 需要 | ❌ 不需要 |
-| **结论的得出方式** | 实验者对比训练集 A 和评测集 B，自己判断"B 没见过 → 这是泛化" | 框架自动计算 `gap = 原始成功率 − 扰动成功率`，不依赖训练信息 |
-| **适合谁用** | 模型开发者（知道自己训练了什么） | **第三方评测方**（黑盒评测，不关心训练过程） |
-
-**为什么有这个区别？**
-
-- LIBERO 的"泛化"结论是**实验者解读出来的**，不是框架计算的。LIBERO 只提供任务 + 环境 + 成功率，"泛化"这个标签是实验者根据自己的训练集贴上去的
-- LIBERO-PRO 的 robustness gap 是**框架内自计算的**：对每个任务 T，跑原始版本和扰动版本，`gap = success(T) − success(T_perturbed)`。这个过程完全不需要知道模型训练时见过什么
-
-**对第三方评测方的启示**：
-
-如果你是一个**不知道模型训练细节的评测方**（比如 leaderboard 评审、第三方 benchmark），最佳策略是：
-
-```
-1. 跑 LIBERO 全部 3 个 suite → 拿到绝对成功率（"在这些任务上表现如何"）
-2. 跑 LIBERO-PRO 全部 5 个扰动维度 → 拿到鲁棒性（"对扰动有多敏感"）
-3. 两者组合 = 完整评测报告，不依赖任何训练信息
-```
-
-- LIBERO 告诉你**"行不行"**（绝对性能）
-- LIBERO-PRO 告诉你**"稳不稳"**（抗扰动能力）
-- 两者都不需要知道模型是怎么训练的
-
-**对我们的意义**：我们的 SO101 SmolVLA 在 SO101 pick-cube 演示上训练，从没见过 LIBERO 物体/任务。跑 LIBERO 时所有任务都是"没见过的" → 测的是完全 zero-shot 泛化。跑 LIBERO-PRO 时不需要关心这个 → 直接拿 robustness gap。两种结果的解读都不依赖于"训练时见过什么"，因为对我们来说答案很简单：什么都没见过。
+**本项目状态**：PRO 有命令（Ch6 §3.3）、**零跑分**。先欠着，等 Franka 线之外的 suite 出正分再补。
 
 ### 4.7 我们的 LIBERO 实战：从设计到 0%
 
@@ -521,7 +321,7 @@ LIBERO 和 LIBERO-PRO 在**对训练信息的依赖**上有本质区别：
 
 ## 5. 我们的评测实践
 
-前面介绍了社区框架（§1-4），现在看我们实际怎么用。
+前面是社区框架速览（§1-4，新手建立流程观）；下面是我们的实战记录。单源原则：操作命令以 Ch1–Ch4 首发章节为准，本节只保留结果与解读。
 
 **评测进展总览**：
 
@@ -530,7 +330,7 @@ LIBERO 和 LIBERO-PRO 在**对训练信息的依赖**上有本质区别：
 | 回放验证 | so101-train | ✅ 已执行 | 方案 A 失败，方案 B 成功 |
 | Grid Sweep | so101-mujoco | ✅ 已执行 | 153/325 = 47% |
 | PPO 确定性评估 | so101-ppo | ✅ 已执行 | v1: 100%, v2: 98% |
-| LIBERO | so101-eval | ✅ 已执行 | 120 episodes / 0%（模型-环境不兼容） |
+| LIBERO | so101-eval | ✅ 已执行 | 跨身体 120eps 0%（§4.7）；Franka 100eps 47%（Ch6） |
 | LIBERO-PRO | — | ⬜ 已设计未执行 | 依赖 LIBERO 先出正分 |
 | SO-101 Bench | — | ⬜ 硬件不支持 | V100 无法运行 |
 
@@ -538,16 +338,7 @@ LIBERO 和 LIBERO-PRO 在**对训练信息的依赖**上有本质区别：
 
 ### 5.1 回放验证：快速 smoke test
 
-每次训练后快速验证模型能否正常推理——跑 1 个 episode（300 步），~30 秒出结果。
-
-**如何运行**：`replay_demo.py` 支持本地运行。训练后执行：
-
-```bash
-python scripts/replay_demo.py \
-  --checkpoint /path/to/checkpoint \
-  --dataset xieyucheng123/so101-dataset \
-  --num-episodes 1
-```
+每次训练后快速验证模型能否正常推理——跑 1 个 episode（300 步），~30 秒出结果（用法见 Ch3 §7，命令以 Ch3 为准）。
 
 **回放指标解读**：
 
@@ -560,72 +351,15 @@ python scripts/replay_demo.py \
 
 ### 5.2 PPO 确定性评估：CleanRL 范式
 
-[CleanRL](https://github.com/vwxyzjn/cleanrl) 确立了 RL 评测的标准做法：固定 seed + 确定性策略 + 足够多的 episodes。
-
-**如何运行**：用 Docker 镜像 `so101-ppo`，一条命令完成训练+评估：
-
-```bash
-docker run --gpus all \
-  -v /data:/data \
-  swr.cn-north-4.myhuaweicloud.com/link-seek/so101-ppo:latest \
-  bash -c "python train_ppo.py --env_id WarpPickLift-v1 --total_timesteps 30000000 --seed 1 && python eval_ppo.py --num_episodes 50"
-```
-
-训练完成后自动触发评估，输出 `eval_result.json`。
+[CleanRL](https://github.com/vwxyzjn/cleanrl) 范式：固定 seed + 确定性策略 + 足够多的 episodes。标准命令见 Ch2 §4.2（v1）/ §5（v2，需 `--lift-threshold 0.15`）；结果 v1 100%、v2 98%、#20 直跑复现 100%。
 
 ### 5.3 Grid Sweep：单任务工作空间扫描
 
-Grid sweep 不是标准 RL 评测方法，而是机器人仿真社区的实践——系统扫描工作空间初始条件（5 个距离 × 13 个角度 × 5 次 = 325 episodes）。
-
-**如何运行**：用 Docker 镜像 `so101-mujoco`，一条命令完成训练+Grid Sweep：
-
-```bash
-docker run --gpus all \
-  -v /data:/data \
-  swr.cn-north-4.myhuaweicloud.com/link-seek/so101-mujoco:latest \
-  bash -c "python train_smolvla_sim.py --steps 20000 && python eval_mujoco_policy.py --mode sweep"
-```
-
-训练完成后自动执行 Grid Sweep（325 episodes），输出成功率矩阵和热力图。
-
-#### 热力图
-
-```
-reach\azim   -90   -75   -60   -45   -30   -15    +0   +15   +30   +45   +60   +75   +90
-  15cm    3/5   1/5   1/5   4/5   5/5   5/5   4/5   2/5   2/5   4/5   0/5   3/5   0/5
-  18cm    4/5   2/5   2/5   4/5   4/5   5/5   4/5   1/5   4/5   3/5   1/5   0/5   0/5
-  20cm    1/5   1/5   4/5   0/5   3/5   4/5   2/5   4/5   2/5   2/5   3/5   0/5   1/5
-  22cm    3/5   0/5   1/5   3/5   3/5   5/5   4/5   4/5   2/5   2/5   1/5   1/5   0/5
-  25cm    3/5   2/5   2/5   4/5   3/5   4/5   3/5   5/5   1/5   1/5   1/5   0/5   0/5
-
-SUCCESS 153/325 = 47%
-```
-
-**如何解读热力图**：
-
-- **中心区域（-15 到 +15 azimuth, 15-22cm reach）**：成功率 60-100% — 机器人最舒适的工作区域，训练数据最密集
-- **边缘区域（±90 azimuth）**：成功率接近 0% — 物体在机器人侧面极限位置，训练数据很少覆盖
-- **结论**：47% 是 325 个不同初始条件的平均，不是单一条件。中心区域已经可用，边缘需要更多数据覆盖
+系统扫描工作空间初始条件（5 reach × 13 azim × 5 trials = 325 episodes）。标准命令见 Ch1 §4.3（`--shm-size`、XET 关闭、缓存挂载三个坑随命令走，命令以 Ch1 为准）。结果 153/325 = 47%，完整复盘见 Ch4 尾声；热力图一句话读法：中心 60–100%，边缘 ~0%——平均数掩盖覆盖盲区。
 
 ### 5.4 LIBERO 评测：跨任务泛化
 
-LIBERO 是 VLA 领域的标准 benchmark（CoRL 2023，2.2k stars），评测模型跨任务泛化能力。
-
-**如何运行**：用 Docker 镜像 `so101-eval`，一条命令完成 LIBERO 评测：
-
-```bash
-docker run --gpus all \
-  -v /data:/data \
-  swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest \
-  python eval_vla.py \
-    --model_repo xieyucheng123/so101-act \
-    --dataset_repo xieyucheng123/so101-dataset \
-    --num_episodes 10
-```
-
-自动运行 8 个 LIBERO/LIBERO-PRO benchmark，输出每任务 success_rate。
-
-> **注意**：`evaluate.yml` 可以评测任意模型（包括我们自己的）。我们用它评测了 LIBERO，结果是 0%——因为 LIBERO 只支持 Franka Panda，而我们的模型是在 SO101 上训练的。要让 LIBERO 出正分，需要先在 LIBERO 中添加 SO101 机器人（详见 Ch8）。
+VLA 标准 benchmark，测跨任务泛化。跑法见 Ch6 §3.2（Franka 100eps 出 47% 正分）；跨身体 0% 见 §4.7；SO101 集成后 300eps 见 Ch8。
 
 ### 5.5 四种方法对比
 
@@ -647,37 +381,11 @@ docker run --gpus all \
 
 回放是"快速 smoke test"，Grid Sweep 是"单任务考试"，PPO Eval 是"RL baseline 参照"，LIBERO 是"毕业考试"（已开考：Ch6 47% 出正分，#9 SO101 300eps 跑通但 0% 定性为模型问题，详见 [Discussion #9](https://github.com/link-seek/so101-sim-pipeline/discussions/9) 和 [Ch8](so101-tutorial-ch8-custom-robot.md)）。
 
-### 5.6 同一把尺子：0 → 47 → 45
+### 5.6 同一把尺子：0 → 47 → 45（复盘已移至 Ch4 尾声）
 
-> 数据来源：[Discussion #20](https://github.com/link-seek/so101-sim-pipeline/discussions/20)（2026-09-05）、[#18](https://github.com/link-seek/so101-sim-pipeline/discussions/18)（2026-09-07）。本节三个数**全是同一把尺子量的**：SO101 MuJoCo Grid Sweep，5 reach × 13 azim × 5 trials = 325 episodes。§4.7 的 LIBERO 0%（Franka 身体）是另一把尺子，不参与本节对比。
+完整复盘（含三行表、三句话解读、手段对照表）见 [Ch4 尾声](so101-tutorial-ch4-debug-journey.md)。核心结论一句话：在数据欠拟合时，**加对任务的数据 > 加步数；步数只负责走到收敛，跨不过数据的天花板**。
 
-同一个评测网格，我们先后量出三个数：
-
-| 阶段 | Checkpoint / 数据 | 分数 | 含义 |
-|------|-------------------|------|------|
-| 错任务数据 | libero_object 30eps 训出的变体，15K | **0/325 = 0%** | 数据任务不对，网格全灭 |
-| 对任务数据 | pick-cube 数据，15K | **153/325 = 47%** | 与历史 run（`32221378632`）逐数相同，可复现 |
-| 单纯加步数 | 同模型续到 20K | **145/325 = 45%** | 掉 8 个 episode，不再涨 |
-
-三句话解读：
-
-1. **0 的教训**：换任务数据 ≠ 变体。pick-cube 的能力只从 pick-cube 的数据来，30eps 的 libero_object 数据在网格上拿零分，不是因为步数不够，是因为学的东西不对（#18）。
-2. **47 的含义**：对任务数据 + 15K，能复现历史分数。47% 是 325 个初始条件的平均：中心区域 60–100%，边缘接近 0%（见 §5.3 热力图讨论）——单一数字掩盖了覆盖盲区。
-3. **45 的诚实读法**：145 vs 153 只差 8 个 episode（2.5 个百分点）。在 N=325、p≈0.46 时标准误约 ±2.8%，这个差距**落在噪声带里**。所以结论只能写“平台/不再涨”，不能写“显著倒退”。原判语“过训/噪声平台”（#18）留的余地是对的——加步数路线死，不是因为它显著变差，而是因为它**不再变好**。
-
-### 有效 vs 无效：本节的手段对照表
-
-| 手段 | 证据 | 结论 |
-|------|------|------|
-| 任务对齐的数据 | 0/325 → 153/325，全场最大单项增益 | ✅ 最有效 |
-| 更新量（batch × steps） | 官方配方 20k steps @ batch 64；我们 batch 8，步数相同但样本更新量差 8 倍（dyordan1/so101-mujoco README） | ✅ 先看更新量，不只看步数 |
-| 单纯加步数（15K → 20K） | 153/325 → 145/325，平台 | ❌ 无效 |
-| 换任务数据（libero_object） | 0/325 | ❌ 无效 |
-| 补数据量（Sawyer 100-ep 对照） | 路线已停，见下 | ⏳ 取消，不展开 |
-
-> **本节 takeaway**：在数据欠拟合时，**加对任务的数据 > 加步数；步数只负责走到收敛，跨不过数据的天花板**。跨实验对比前先问“同一把尺子吗”（N、身体、任务分布任一不同，数字直接比就是耍流氓）。
->
-> **路线已停说明**：Sawyer 50→100ep 对照（10eps/task）于 2026-09-08 取消——10eps/task 仍远低于社区配方密度（50eps/单task），预期买不到能改变结论的数据，而重训需 ~43h 卡时（实测 8s/step，数据加载瓶颈），性价比不足。结论以 50-ep + ACT 为准（详见 Ch7 §2.4）。
+> **路线已停说明**：Sawyer 50→100ep 对照（10eps/task）于 2026-09-08 取消——10eps/task 仍远低于社区配方密度，预期买不到能改变结论的数据，而重训需 ~43h 卡时，性价比不足。结论以 50-ep + ACT 为准（详见 Ch7 §2.4）。
 
 ---
 
