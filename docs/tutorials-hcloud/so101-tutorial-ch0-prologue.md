@@ -36,14 +36,14 @@
 
 PPO 快速验证了环境可学性，VLA 验证了视觉方案的可行性。两者互补，不是替代关系。
 
-我们为整个流程提供了 **4 个 Docker 镜像**，预装所有依赖，`docker run` 一条命令即可运行：
+我们为整个流程提供了 **4 个 Docker 镜像**（华为云 SWR 华北-北京四 `swr.cn-north-4.myhuaweicloud.com/link-seek/` 下），预装所有依赖，`docker run` 一条命令即可运行：
 
 | 镜像 | 用途 |
 |------|------|
 | `so101-ppo` | PPO 训练 + 评估 |
 | `so101-mujoco` | SmolVLA 训练 + Grid Sweep 评测 |
 | `so101-eval` | LIBERO 评测 |
-| `so101-train` | SmolVLA 训练 + 回放验证 |
+| `so101-train` | SmolVLA 训练 + 回放验证（当前版本已验证破碎，见 Ch3；先走 `so101-mujoco` 路径） |
 
 ---
 
