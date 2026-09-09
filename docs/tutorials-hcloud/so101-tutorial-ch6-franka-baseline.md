@@ -64,6 +64,8 @@ LIBERO 的 success rate 回答"能不能做"，LIBERO-PRO 的 robustness gap 回
 
 本教程的实测跑在**华为云 ECS（V100）**上，全流程由 GitHub Actions 编排（`.github/workflows/franka-eval.yml`），一键触发：
 
+> 口径说明：本节记录的是 9-04 实测当时的触发方式（内部编排）；对外交付的评测流水线是 CodeArts（见 Ch0 §3.3），`gh workflow run` 仅用于复现历史 run。
+
 ```bash
 # 跑 libero_spatial：10 tasks × 10 eps = 100 eps（SmolVLA 官方协议）
 gh workflow run franka-eval.yml \
