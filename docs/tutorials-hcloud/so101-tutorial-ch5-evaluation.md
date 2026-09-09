@@ -1,7 +1,7 @@
 # Ch5：仿真评测方法论
 
 > SO101 仿真评测教程 · 第五章
-> 参考框架：[Gymnasium](https://gymnasium.farama.org/) · [LeRobot `lerobot-eval`](https://github.com/huggingface/lerobot) · [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) · [LIBERO-PRO](https://github.com/sylvestf/LIBERO-plus)
+> 参考框架：[Gymnasium](https://gymnasium.farama.org/) · [LeRobot `lerobot-eval`](https://github.com/huggingface/lerobot) · [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) · [LIBERO-PRO（harness 源码定义）](https://github.com/allenai/vla-evaluation-harness/blob/v0.4.0/src/vla_eval/benchmarks/libero_pro/benchmark.py)
 
 ---
 
@@ -65,7 +65,7 @@ lerobot-eval \
 
 **我们的 `eval_ppo.py` 遵循了同样的指标设计**，只是命名不同。`avg_max_reward` 我们没追踪，因为 PPO 的 reward 语义和 VLA 不同。
 
-### 3.4 我们的脚本如何使用社区框架
+### 3.3 我们的脚本如何使用社区框架
 
 | 脚本 | 遵循的框架 | 推理管线 | Docker 镜像 |
 |------|-----------|---------|------------|
@@ -270,11 +270,13 @@ suite_result = {
 
 ### 4.6 LIBERO-PRO：相对 LIBERO 拓展了什么
 
-[LIBERO-PRO](https://github.com/sylvestf/LIBERO-plus) 在 LIBERO 的 3 个泛化 suite 之外，加了 **5 个扰动维度**：物体替换（swap）、属性变化（object）、语言变化（lan）、任务组合（task）、环境变化（env）。一句话：**LIBERO 测"能不能泛化"，PRO 测"泛化稳不稳"**——核心输出 robustness gap = 原始成功率 − 扰动成功率，gap 越小越鲁棒。
+本节定义以开源社区为准：我们镜像装的是 `vla-eval==0.4.0`（allenai/vla-evaluation-harness），它的 `LIBEROProBenchmark`（`src/vla_eval/benchmarks/libero_pro/benchmark.py`）在 LIBERO 之外加了 **5 种扰动**（套件命名 `{base}_{perturbation}`，如 `libero_spatial_swap`，需预生成 BDDL + init-state）：**swap**=物体位置交换、**object**=换成新物体、**lan**=指令同义改写（语义不变）、**task**=目标重设计（成功条件变了）、**env**=整个环境替换。一句话：**LIBERO 测"能不能泛化"，PRO 测"泛化稳不稳"**——核心输出 robustness gap = 原始成功率 − 扰动成功率，gap 越小越鲁棒。
+
+> **别混淆**：另有一个同名的 [LIBERO-Plus](https://github.com/sylvestf/LIBERO-plus)（sylvestf，7 个扰动维度、10030 tasks，论文 2510.13626），harness 里是独立的 `libero_plus` benchmark——**本教程一次没跑过**。下文 PRO 均指 harness 的 5 种扰动。
 
 PRO 的 gap 是框架内自计算的，不依赖训练信息——第三方黑盒评测（不知道模型怎么训的）直接拿 gap 即可，这是它相对 LIBERO 最大的方法论拓展。
 
-**本项目状态**：PRO 有命令（Ch6 §3.3）、**零跑分**。先欠着，等 Franka 线之外的 suite 出正分再补。
+**本项目状态**：PRO 有命令（Ch6 §3.3，跑的是我们自己的 `configs/benchmarks/libero_pro_*.yaml`）、**零跑分**。先欠着，等 Franka 线之外的 suite 出正分再补。
 
 ### 4.7 我们的 LIBERO 实战：从设计到 0%
 
@@ -316,6 +318,8 @@ PRO 的 gap 是框架内自计算的，不依赖训练信息——第三方黑�
 1. **评测前先确认机器人兼容性**——不是所有 benchmark 都支持所有机器人
 2. **0% 也是有价值的结果**——直接证实了模型-环境不兼容，避免继续浪费时间
 3. **需要先做集成**——要让 LIBERO 出正分，必须先在 LIBERO 中添加 SO101 机器人（已在 #9 完成，详见 Ch8；集成后 300eps 仍 0%，定性为模型视觉域问题而非集成 bug）
+
+> **两把尺子**：本节是跨身体线的 0%（SO101 模型跑 Franka 环境）；同套 LIBERO 在 Franka 原生模型上的正分 **47/100** 见 Ch6 §4.3。两节对照读：管线是通的（Ch6），跨身体是不通的（本节）。
 
 ---
 
