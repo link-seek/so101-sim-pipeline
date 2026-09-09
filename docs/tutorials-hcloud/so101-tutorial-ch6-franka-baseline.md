@@ -22,33 +22,12 @@ Ch5 讲了评测方法论，但方法论需要落地。**谁的评测最容易�
 
 ---
 
-## 2. LIBERO Benchmark 全景
+## 2. LIBERO Benchmark 全景（概念见 Ch5 §4）
 
-LIBERO 是 VLA 领域的标准 benchmark（CoRL 2023，2.2k stars），提供 3 个 suite × 10 个任务：
+概念主场在 Ch5 §4（BDDL、episode 生成、三个 suite 的设计理念、PRO 扰动定义——定义以 harness `vla-eval==0.4.0` 源码为准，见 Ch5 §4.6）。本章只保留跑单必需的两行：
 
-### 2.1 三个 Suite
-
-| Suite | 测试维度 | 10 个任务示例 |
-|-------|----------|--------------|
-| `libero_spatial` | 空间泛化（不同位置/姿态） | put the bowl on the plate, put the eggplant in the basket... |
-| `libero_object` | 物体泛化（不同物体） | put the tomato in the basket, put the carrot on the plate... |
-| `libero_goal` | 目标泛化（不同目标状态） | open the drawer, close the drawer, push the plate... |
-
-每个 suite 的 10 个任务是**正交的**——只变一个维度，其他固定。组合起来可以定位泛化瓶颈在哪个维度。
-
-### 2.2 LIBERO-PRO 扩展
-
-LIBERO-PRO（2024）在 LIBERO 基础上增加了**鲁棒性测试**——对环境施加扰动，测量性能下降幅度：
-
-| 扰动类型 | 说明 |
-|----------|------|
-| `env` | 物理参数扰动（摩擦、重力） |
-| `object` | 物体外观扰动（纹理、颜色） |
-| `lan` | 语言指令扰动（同义改写） |
-| `task` | 任务结构扰动（目标位置偏移） |
-| `swap` | 交叉评测（A suite 训练 → B suite 测试） |
-
-LIBERO 的 success rate 回答"能不能做"，LIBERO-PRO 的 robustness gap 回答"扰动后还能不能做"。
+- 三个 suite：`libero_spatial`（空间）/ `libero_object`（物体）/ `libero_goal`（目标），各 10 任务；
+- PRO 扰动套件命名 `{base}_{perturbation}`（如 `libero_spatial_swap`），`swap`=位置交换、`object`=新物体、`lan`=同义改写、`task`=目标重设计、`env`=环境替换——§3.3 的命令和 §4.2 的 gap 解读依赖这套命名。
 
 ---
 
@@ -164,6 +143,8 @@ gap = 0 说明鲁棒，gap 大说明脆弱。一个策略可以 LIBERO 80% 但 L
 
 10 个任务全部 10/10 跑完，没有任何 `failure_reason: exception`——说明**评测管线本身是健康的**，47% 是策略的真实表现，不是框架 bug。
 
+> **两把尺子**：本节是 Franka 原生线的正分；同一套 LIBERO 在跨身体线（SO101 模型跑 Franka 环境）的 120eps 0% 见 Ch5 §4.7。两节对照读。
+
 与官方 ~90% 的差距说明（诚实记录，未掩盖）：
 - 官方数字的渲染/种子/解码配置与本流水线不完全一致（EGL 离屏渲染、seed 分布、`chunk_size=10`/`max_batch_size=1` 均为本工程选择）；
 - 兼容层（见下）恢复了 API 调用，但随机数流与 1.4 时代不完全相同，任务初始分布有偏移；
@@ -214,14 +195,14 @@ Ch7 将展示：RoboSuite 已有 12 种机器人，改配置就能换。Ch8 将�
 
 ## 思考题
 
-1. **为什么 Franka 能开箱即用，SO101 不能？**  
-   提示：LIBERO 基于 RoboSuite，Franka 是 RoboSuite 的原生机器人之一。SO101 不在 RoboSuite 中，需要自行集成。
+1. **harness 全错也会 exit 0，为什么流水线必须以 aggregate 计分？**  
+   提示：见 §3.2 第 3 步——`vla-eval merge` 后读 `LIBEROBenchmark_*_aggregate.json`，并在 errors>0 时判失败。exit code 信不得。
 
-2. **LIBERO 的 3 个 suite 为什么是正交的？**  
-   提示：每次只变一个维度（位置/物体/目标），其他固定。组合起来可以定位泛化瓶颈在哪个维度。
+2. **三处兼容补丁里，哪处最脆、为什么？**  
+   提示：见 §4.3 补丁表。想想哪个补丁依赖的是"读 sim 真值"这种实现细节，哪处是纯参数。
 
-3. **LIBERO-PRO 的 robustness gap 和 LIBERO 的 success rate 有什么互补性？**  
-   提示：success rate 回答"能不能做"，gap 回答"扰动后还能不能做"。一个策略可以 LIBERO 80% 但 gap 40%。
+3. **为什么是 10eps/task 而不是 50？**  
+   提示：10 是 SmolVLA 官方协议（见 §3.4 `episodes_per_task`）。50 跑不起吗？看 §5.3 的耗时表算一笔账。
 
 4. **如果要在 SO101 上评测 LIBERO，需要解决什么问题？**  
    提示：SO101 不是 RoboSuite 原生机器人，需要添加机器人定义（XML + Python 类），适配 BDDL 任务文件，修改评测镜像。详见 Ch8。
