@@ -61,7 +61,7 @@ PPO 快速验证了环境可学性，VLA 验证了视觉方案的可行性。两
 
 ### 3.3 评测流水线
 
-GitHub Actions 一键触发（`franka-eval.yml` / `robot-switch.yml`，workflow_dispatch），华为云 ECS（V100）执行，自动归档结果到 OBS。被测模型只需提供：
+华为云 CodeArts 流水线一键触发（交付物；只含评测，不含训练），V100 自定义执行机执行，自动归档结果到 OBS。GitHub Actions（`franka-eval.yml` / `robot-switch.yml`，workflow_dispatch）仅为内部编排，不对外交付。被测模型只需提供：
 
 | 必填项 | 说明 | 示例 |
 |--------|------|------|
@@ -71,8 +71,8 @@ GitHub Actions 一键触发（`franka-eval.yml` / `robot-switch.yml`，workflow_
 
 | 可选项 | 默认值 | 说明 |
 |--------|--------|------|
-| 评测 episode 数 | 10 | LIBERO/SmolVLA 官方协议（Ch6/Ch7 实测取值） |
-| 随机种子 | 7 | 可复现性（Ch6/Ch7 实测取值） |
+| 评测 episode 数 | 10 | LIBERO/SmolVLA 官方协议（Ch6 取 10；Ch7 演示取 1） |
+| 随机种子 | 7 | 建议固定，保证可复现 |
 | 额外配置 | 空 | 自定义参数（如 camera names、action scale） |
 
 平台自动完成环境搭建、评测执行、结果归档（JSON 报告 + 视频 + 截图），输出标准化评测报告。
@@ -98,7 +98,7 @@ GitHub Actions 一键触发（`franka-eval.yml` / `robot-switch.yml`，workflow_
 | Ch4 | Debug 实战 | 从 0% 到 47% 的完整调试旅程 |
 | Ch5 | 评测方法论 | 怎么评测（方法 + 指标 + 原则） |
 | Ch6 | Franka 评测能力盘点 | 实测基线 47%@100eps（run 33829389761） |
-| Ch7 | RoboSuite 机器人扩展 | 文件补丁+挂载换机器人，Sawyer 跑通（run 33836694327） |
+| Ch7 | RoboSuite 机器人扩展 | 文件补丁+挂载换机器人，Sawyer 跑通（run 33836694327）；Sawyer 专模 verdict：数据不足 0%，路线已停（§2.4） |
 | Ch8 | 自定义机器人扩展 + SO101 落地 | L2 方案就绪（未实施）+ 平台现状盘点 |
 | 附录 | 环境速查 | 命令 + 配置 + 数据集对比 |
 
