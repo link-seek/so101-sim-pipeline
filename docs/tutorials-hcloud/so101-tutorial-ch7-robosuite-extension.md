@@ -65,7 +65,7 @@ gh workflow run robot-switch.yml \
   -f episodes_per_task="1"
 ```
 
-> 口径说明：同 Ch6——GH 命令是 9-04 实测当时的内部编排；交付流水线是 CodeArts（见 Ch0 §3.3）。
+> 口径说明：同 Ch6——GH 命令是前期技术验证记录（9-04）；交付流水线是 CodeArts（见 Ch0 §3.3）。
 
 ### 2.2 运行评测
 
