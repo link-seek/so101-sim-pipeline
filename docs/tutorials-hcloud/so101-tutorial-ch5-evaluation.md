@@ -510,12 +510,12 @@ LIBERO 和 LIBERO-PRO 在**对训练信息的依赖**上有本质区别：
 | `libero_spatial` | 20 | 0%，跑满 230 步 | 能运行但任务未完成 |
 | **总计** | **120** | **0%** | **模型-环境不兼容** |
 
-**为什么是 0%**：LIBERO 只支持 Franka Panda 7 DoF 机械臂，我们的模型是在 SO101 5 DoF 上训练的。关节定义、观测空间、动作语义全部不匹配——SO101 的模型根本无法驱动 Franka。
+**为什么是 0%**：LIBERO 只支持 Franka Panda 7 DoF 机械臂，我们的模型是在 SO101 6 DoF（5 arm + 1 gripper）上训练的。关节定义、观测空间、动作语义全部不匹配——SO101 的模型根本无法驱动 Franka。
 
 **学到的教训**：
 1. **评测前先确认机器人兼容性**——不是所有 benchmark 都支持所有机器人
 2. **0% 也是有价值的结果**——直接证实了模型-环境不兼容，避免继续浪费时间
-3. **需要先做集成**——要让 LIBERO 出正分，必须先在 LIBERO 中添加 SO101 机器人（详见 Ch6）
+3. **需要先做集成**——要让 LIBERO 出正分，必须先在 LIBERO 中添加 SO101 机器人（已在 #9 完成，详见 Ch8；集成后 300eps 仍 0%，定性为模型视觉域问题而非集成 bug）
 
 ---
 
@@ -636,7 +636,7 @@ docker run --gpus all \
 | 用途 | 快速 smoke test | 单任务工作空间扫描 | RL 策略评估 | 跨任务泛化评估 |
 | 时机 | 每次训练后 | 关键 checkpoint | PPO 训练完成 | 里程碑节点 |
 | 框架 | LeRobot 推理管线 | so101-mujoco | CleanRL 范式 | vla-eval harness |
-| **我们是否跑过** | ✅ 已执行 | ✅ 已执行 | ✅ 已执行 | ✅ 已执行（0%，模型-环境不兼容） |
+| **我们是否跑过** | ✅ 已执行 | ✅ 已执行 | ✅ 已执行 | ✅ 已执行（Ch6 47% 出正分；跨身体/SO101 线 0%，见 §4.7/#9） |
 
 **从快到慢，从简单到全面**：
 
@@ -645,7 +645,7 @@ docker run --gpus all \
   smoke test    单任务考试       RL baseline        毕业考试
 ```
 
-回放是"快速 smoke test"，Grid Sweep 是"单任务考试"，PPO Eval 是"RL baseline 参照"，LIBERO 是"毕业考试"（已设计好考场但还没开考，详见 [Discussion #9](https://github.com/link-seek/so101-sim-pipeline/discussions/9) 和 [Ch8](so101-tutorial-ch8-custom-robot.md)）。
+回放是"快速 smoke test"，Grid Sweep 是"单任务考试"，PPO Eval 是"RL baseline 参照"，LIBERO 是"毕业考试"（已开考：Ch6 47% 出正分，#9 SO101 300eps 跑通但 0% 定性为模型问题，详见 [Discussion #9](https://github.com/link-seek/so101-sim-pipeline/discussions/9) 和 [Ch8](so101-tutorial-ch8-custom-robot.md)）。
 
 ### 5.6 同一把尺子：0 → 47 → 45
 
