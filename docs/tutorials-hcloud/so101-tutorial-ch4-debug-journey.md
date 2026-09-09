@@ -20,6 +20,11 @@
 
 **这不是事后总结，而是真实的调试日志。误判原文都留着——调试故事的可信度来自错了两次的记录，不是成功记录。**
 
+> **前情提要：P0 / P1（工具细节见 Ch3 §4.2、§5，坑 3 也在 Ch3）**
+> - **P0 相机不匹配**：最早拿 `side+up` 数据训练、`wrist+overhead` 推理，模型没见过腕部视角，errors > 0。切 wrist+overhead 数据 + `rename_map` 后 errors → 0/300。
+> - **P1 视觉鸿沟**：真机照片训练 vs MuJoCo 渲染评测，0 errors 但 Success=False。切仿真数据集（ataghof）解决。
+> 本章从"P0/P1 已修"开场。记住 P1 的教训——"训练和评估必须在同一视觉域"，终章它会换个粒度杀回来。
+
 ---
 
 ## 时间线总览
@@ -58,37 +63,25 @@
 
 ### 数据集选择
 
-选择 `ataghof/so101nexus-cube500-binary`：
+开局我们选 `ataghof/so101nexus-cube500-binary`。当时看来，这手牌全对：
 
-| 项目 | 值 |
-|------|-----|
-| Episodes | 500 |
-| Frames | 20,647 |
-| FPS | 33 Hz |
-| 相机 | cam0 (overhead) + cam1 (wrist), 480×640 |
-| 格式 | LeRobot v3.0 |
-| 机器人 | SO-101, 6-DOF |
-| Gripper | 二值化 (0=闭合, 45=打开) |
-| 任务 | Pick up red cube → place on blue circle |
-| 已验证 | MolmoAct2 LoRA champion, 93% grasp / 30% success |
+| 当时的判断 | 依据 |
+|-----------|------|
+| 视觉域对了 | 仿真采集，不再是真机照片——P1 不会重演 |
+| 量级够了 | 500 episodes，是官方 10eps 的 50 倍 |
+| 格式顺了 | LeRobot v3 + 二值 gripper（社区称二值化为 "single largest win"） |
+| 有人验证过 | MolmoAct2 在此数据上 93% grasp / 30% success |
 
-### 代码修改（4 个文件）
+规格：500 eps / 20,647 frames / 33Hz（训练 resample 到 30Hz）/ cam0+cam1 双摄 480×640 / SO-101 6-DOF / 任务 pick red cube → blue circle。
 
-| 文件 | 变更 |
-|------|------|
-| `vla-pipeline.yml` | `DATASET_REPO=ataghof/so101nexus-cube500-binary`, `RENAME_MAP` 更新 |
-| `train_smolvla.py` | 新增 `--dataset.fps` 参数 |
-| `replay_demo.py` | 相机 key 统一为 `overhead`/`wrist` |
-| `replay_demo.py` | 默认 task 改为 `"Pick up the red cube and place it on the blue circle."` |
+当时没在意的两行，先记下，08-18 回收：
 
-### rename_map
+- **只有 2 个相机**——SmolVLA base 预训练用 3 个；
+- **来源是 scripted expert**——社区成功案例多为真机遥操作 / sim twin。
 
-```json
-{
-  "observation.images.cam0": "observation.images.overhead",
-  "observation.images.cam1": "observation.images.wrist"
-}
-```
+### 代码修改
+
+接口对齐：`rename_map`（cam0/cam1 → overhead/wrist）+ `--dataset.fps=30`，共 4 个文件。纯操作，细节见 Ch3 §4.2 / §6，本章不展开。
 
 ---
 
@@ -119,7 +112,7 @@ Loss 从 0.461 稳定下降至 0.119，模型正在学习。训练时间 3h 31m�
 
 ### 关键发现
 
-1. **P1（视觉域不匹配）已消除** — 模型全程控制机器人 (300/300 steps)，无随机回退
+1. **P1（视觉域不匹配）已消除** — 模型全程控制机器人 (300/300 steps)，无随机回退（判据对比：shattori 时代一切换域就崩，现在模型认得这个视觉域了）
 2. **Loss 稳定下降** — 学习曲线健康
 3. **Reward ~0** — 5k steps 不足以学会完成任务，但模型行为正常
 
@@ -373,6 +366,8 @@ Loss 0.046 vs 社区 0.005（差距 10x）
 
 **核心问题**：ataghof 数据集在 so101_nexus 环境中采集，但回放评测环境与采集环境存在视觉/物理差异，模型无法泛化。3 个 bug 修复后回放 0/300 errors 但 Success=False，说明不是代码 bug，而是系统性的数据-环境不匹配。
 
+> **回马枪**：P1 当年修的是"真机→仿真"这一层；这次是"仿真→仿真，但不是同一个仿真"。同一原则、更细粒度——Phase 2 宣布"已解决"的那个教训，其实只过了一半。
+
 ### 保留资产
 
 方案 A 虽然失败，但保留了：
@@ -530,6 +525,9 @@ SUCCESS 153/325 = 47%
 
 5. **47% 之后为什么还要续到 20K？事前怎么判断这 5K 步值不值？**  
    提示：续训的成本是确定的（卡时），收益是不确定的（分数可能涨也可能不涨）。什么情况下应该先停下来想清楚，而不是先跑起来再说？
+
+6. **为什么 500 episodes 的 ataghof 全败，而 sim twin 一把就成？**  
+   提示：回看终止决策的对照表——episodes 数量不是关键，数据-环境匹配才是。
 
 ---
 
