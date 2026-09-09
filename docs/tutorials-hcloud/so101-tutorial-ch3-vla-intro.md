@@ -194,30 +194,25 @@ sim twin 数据：采集和评估在同一个 MuJoCo 场景，3 相机原生匹�
 
 ## 6. 训练流程
 
-### 6.1 lerobot-train 命令
+### 6.1 训练命令（单源：Ch1 §4.3）
 
-> ⚠️ 已验证破碎（Discussion #20）：`so101-train:latest` 当前 torch/torchvision 版本错配，
-> `RuntimeError: operator torchvision::nms does not exist`，训练一行跑不起来。
-> 在镜像修复前，**走 Ch1 §4.3 的 `so101-mujoco` 路径**（已验证 153/325 = 47%）。
+> ⚠️ 历史坑（Discussion #20）：`so101-train:latest` 镜像 torch/torchvision 版本错配，
+> `RuntimeError: operator torchvision::nms does not exist`，训练一行跑不起来。旧命令已删——训练只走 `so101-mujoco` 路径。
 
 ```bash
-docker run --rm --gpus all --shm-size=8g \
-  -v /data/checkpoints:/data/checkpoints \
-  -v /data/datasets:/data/datasets \
-  so101-train:latest \
-  python /workspace/scripts/train_smolvla.py \
-    --dataset.repo_id=dobri420/pick-cube-so101-sim \
-    --policy.path=lerobot/smolvla_base \
-    --steps=20000 \
-    --batch_size=32 \
-    --save_freq=5000 \
-    --env_eval_freq=2000
+# SmolVLA 仿真训练（已验证 153/325 = 47%，三个坑随命令走，见 Ch1 §4.3）
+docker run --gpus all --shm-size=16g \
+  -v /data:/data \
+  -v /data/hf_cache:/root/.cache/huggingface \
+  -e HF_HUB_DISABLE_XET=1 \
+  swr.cn-north-4.myhuaweicloud.com/link-seek/so101-mujoco:latest \
+  python /workspace/scripts/train_smolvla_sim.py --steps 20000
 ```
 
 ### 6.2 训练脚本核心
 
 ```python
-# scripts/train_smolvla.py（简化）
+# 训练逻辑示意（真实入口：so101-mujoco 镜像的 train_smolvla_sim.py，命令见 §6.1）
 def train(args):
     # 1. 加载数据集
     dataset = LeRobotDataset(args.dataset_repo_id, root=args.data_dir)
@@ -265,7 +260,7 @@ Step    Loss     LR
 ### 7.1 回放流程
 
 ```python
-# scripts/replay_demo.py（简化）
+# 回放机制示意（历史脚本 replay_demo.py，so101-train 线——Ch4 当年回放用的就是这套机制）
 def replay(checkpoint_path, env_id="MuJoCoPickAndPlace-v1"):
     # 1. 加载训练好的策略
     policy = SmolVLA.from_pretrained(checkpoint_path)
