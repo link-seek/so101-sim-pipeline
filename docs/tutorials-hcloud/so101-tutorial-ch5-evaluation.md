@@ -25,8 +25,6 @@
 | **Grid Sweep** | 评测方法 | 多初始条件评测 | success rate across grid | `eval_mujoco_policy.py` 实现 |
 | **so101_nexus** | 仿真环境 | MuJoCo 仿真 | — | Ch4 回放验证 |
 | **so101-mujoco** | 仿真环境 | MuJoCo sim twin | — | `eval_mujoco_policy.py` 的环境 |
-| **RoboTwin** | 仿真环境 | 双臂操作 benchmark | — | 本项目未用 |
-| **SO101 实机** | 真实机器人 | 数据采集 | — | ataghof 数据集来源 |
 
 ---
 
@@ -217,7 +215,7 @@ VLA 标准 benchmark，测跨任务泛化。跑法见 Ch6 §3.2（Franka 100eps 
 
 | 方法 | 回放 (replay) | Grid Sweep | PPO 确定性评估 | LIBERO |
 |------|---------------|------------|----------------|--------|
-| Episodes | 1 (300 steps) | 325 | 50 | 100（Franka 实测 10 tasks × 10；官方协议另有 50/task 版，见 Ch6 §5.3） |
+| Episodes | 1 (300 steps) | 325 | 50 | 100（Franka 实测 10 tasks × 10；官方协议另有 50/task 版，见 Ch6 §5.2） |
 | 耗时 | ~30s | ~30min | ~15min | ~2h |
 | 用途 | 快速 smoke test | 单任务工作空间扫描 | RL 策略评估 | 跨任务泛化评估 |
 | 时机 | 每次训练后 | 关键 checkpoint | PPO 训练完成 | 里程碑节点 |
