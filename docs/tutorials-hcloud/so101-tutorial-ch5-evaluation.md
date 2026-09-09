@@ -235,7 +235,7 @@ VLA 标准 benchmark，测跨任务泛化。跑法见 Ch6 §3.2（Franka 100eps 
 
 ### 5.6 同一把尺子：0 → 47 → 45
 
-> 数据来源：[Discussion #20](https://github.com/link-seek/so101-sim-pipeline/discussions/20)（2026-09-05）、[#18](https://github.com/link-seek/so101-sim-pipeline/discussions/18)（2026-09-07）。本节三个数**全是同一把尺子量的**：SO101 MuJoCo Grid Sweep，5 reach × 13 azim × 5 trials = 325 episodes。§4.7 的 LIBERO 0%（Franka 身体）是另一把尺子，不参与本节对比。
+> 数据来源：[Discussion #20](https://github.com/link-seek/so101-sim-pipeline/discussions/20)（2026-09-05）、[#18](https://github.com/link-seek/so101-sim-pipeline/discussions/18)（2026-09-07）。本节三个数**全是同一把尺子量的**：SO101 MuJoCo Grid Sweep，5 reach × 13 azim × 5 trials = 325 episodes。§4.7 的 LIBERO 0%（Franka 身体）是另一把尺子，不参与本节对比；Franka 考场的另一个 47%（47/100）见 Ch6 §4.3 防火墙，别混。
 
 同一个评测网格，我们先后量出三个数：
 
