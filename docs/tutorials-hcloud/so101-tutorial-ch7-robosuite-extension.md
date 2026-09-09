@@ -65,6 +65,8 @@ gh workflow run robot-switch.yml \
   -f episodes_per_task="1"
 ```
 
+> 口径说明：同 Ch6——GH 命令是 9-04 实测当时的内部编排；交付流水线是 CodeArts（见 Ch0 §3.3）。
+
 ### 2.2 运行评测
 
 流水线与 Ch6 §3.2 同构（serve → run → merge + aggregate 诚实计分）。镜像 digest（该 run 实际 pull 到的 manifest，注意与 Ch6 的不同——`latest` 在两次 run 之间重建过，pin 必须按 run 取）：
