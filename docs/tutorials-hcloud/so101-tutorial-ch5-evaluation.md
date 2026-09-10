@@ -15,16 +15,16 @@
 
 ### 各框架对比
 
-| 框架 | 类型 | 用途 | 核心指标 | 我们的使用方式 |
-|------|------|------|----------|---------------|
-| **Gymnasium** | API 标准 | 环境接口 | `info["success"]`, `reward` | 所有 eval 脚本的底层 API |
-| **LeRobot lerobot-eval** | 评测方法 | VLA 通用评测 | `pc_success`, `avg_sum_reward` | `replay_demo.py` 用其推理管线 |
-| **LIBERO** | 评测方法 | VLA benchmark | task success rate × 10 tasks | `eval_vla.py` 通过 vla-eval harness |
-| **LIBERO-PRO** | 评测方法 | VLA 鲁棒性 | robustness gap | `eval_vla.py` 的 libero_pro_*（5 种扰动，定义见 §4.6） |
-| **CleanRL** | 评测方法 | RL 评估范式 | `success_rate`, `ep_return` | `eval_ppo.py` 的确定性评估 |
-| **Grid Sweep** | 评测方法 | 多初始条件评测 | success rate across grid | `eval_mujoco_policy.py` 实现 |
-| **so101_nexus** | 仿真环境 | MuJoCo 仿真 | — | Ch4 回放验证 |
-| **so101-mujoco** | 仿真环境 | MuJoCo sim twin | — | `eval_mujoco_policy.py` 的环境 |
+| 框架 | 类型 | 用途 | 核心指标 | 我们的使用方式 | 一句话感受 |
+|------|------|------|----------|---------------|-------------|
+| **Gymnasium** | API 标准 | 环境接口 | `info["success"]`, `reward` | 所有 eval 脚本的底层 API | 契约本身没坑，坑全在环境作者定的 success 对不对——PPO v1 的 100% 假成功就是例子 |
+| **LeRobot lerobot-eval** | 评测方法 | VLA 通用评测 | `pc_success`, `avg_sum_reward` | `replay_demo.py` 用其推理管线 | 推理管线开箱即用；指标名和我们的对得上，seed 默认 1000 照抄就行 |
+| **LIBERO** | 评测方法 | VLA benchmark | task success rate × 10 tasks | `eval_vla.py` 通过 vla-eval harness | 金标准但只认 Franka——跨身体直接 0%，跑之前先确认机器人，见 §4.7 |
+| **LIBERO-PRO** | 评测方法 | VLA 鲁棒性 | robustness gap | `eval_vla.py` 的 libero_pro_*（5 种扰动，定义见 §4.6） | 有命令零跑分；定义以 harness 源码为准，两章曾各说各话，已按源码统一 |
+| **CleanRL** | 评测方法 | RL 评估范式 | `success_rate`, `ep_return` | `eval_ppo.py` 的确定性评估 | 范式最省心：固定 seed + 确定性策略 + 50eps，PPO 稳到不用算 CI |
+| **Grid Sweep** | 评测方法 | 多初始条件评测 | success rate across grid | `eval_mujoco_policy.py` 实现 | 不是标准框架，是社区土办法——但只有它照出了覆盖盲区（边缘 ~0%），最爱的一张热力图 |
+| **so101_nexus** | 仿真环境 | MuJoCo 仿真 | — | Ch4 回放验证 | 回放够用，但和 ataghof 采集环境不是一回事——Ch4 全章就是为这句话买的单 |
+| **so101-mujoco** | 仿真环境 | MuJoCo sim twin | — | `eval_mujoco_policy.py` 的环境 | 救命的环境：训测同场，47% 从这来；三个坑（shm/XET/独占）见 Ch1 §4.3 |
 
 ---
 
