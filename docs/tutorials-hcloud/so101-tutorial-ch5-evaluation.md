@@ -20,7 +20,7 @@
 | **Gymnasium** | API 标准 | 环境接口 | `info["success"]`, `reward` | 所有 eval 脚本的底层 API | 契约本身没坑，坑全在环境作者定的 success 对不对——PPO v1 的 100% 假成功就是例子 |
 | **LeRobot lerobot-eval** | 评测方法 | VLA 通用评测 | `pc_success`, `avg_sum_reward` | `replay_demo.py` 用其推理管线 | 推理管线开箱即用；指标名和我们的对得上，seed 默认 1000 照抄就行 |
 | **LIBERO** | 评测方法 | VLA benchmark | task success rate × 10 tasks | `eval_vla.py` 通过 vla-eval harness | 金标准但只认 Franka——跨身体直接 0%，跑之前先确认机器人，见 §4.7 |
-| **LIBERO-PRO** | 评测方法 | VLA 鲁棒性 | robustness gap | `eval_vla.py` 的 libero_pro_*（5 种扰动，定义见 §4.6） | 有命令零跑分；定义以 harness 源码为准，两章曾各说各话，已按源码统一 |
+| **LIBERO-PRO** | 评测方法 | VLA 鲁棒性 | robustness gap | `eval_vla.py` 的 libero_pro_*（5 种扰动，定义见 §4.6） | 非官方改题卷，定义以 AllenAI 源码为准，详见 §4.6 |
 | **CleanRL** | 评测方法 | RL 评估范式 | `success_rate`, `ep_return` | `eval_ppo.py` 的确定性评估 | 范式最省心：固定 seed + 确定性策略 + 50eps，PPO 稳到不用算 CI |
 | **Grid Sweep** | 评测方法 | 多初始条件评测 | success rate across grid | `eval_mujoco_policy.py` 实现 | 不是标准框架，是社区土办法——但只有它照出了覆盖盲区（边缘 ~0%），最爱的一张热力图 |
 | **so101_nexus** | 仿真环境 | MuJoCo 仿真 | — | Ch4 回放验证 | 回放够用，但和 ataghof 采集环境不是一回事——Ch4 全章就是为这句话买的单 |
@@ -85,22 +85,17 @@ lerobot-eval \
 │ 考纲 + BDDL 真题     │            │ harness 附赠）           │
 │ 130 tasks, Franka    │            │ 5 种改法，gap 判稳       │
 └─────────────────────┘            └─────────────────────────┘
-        │ 另出卷                              │ 卷子没印（零跑分）
+        │ 另出卷                              │ 数据随镜像发布
         ↓                                     ↓
 ┌─────────────────────┐            ┌─────────────────────────┐
 │ Plus（Sylvest）      │            │ 我们的 harness           │
 │ 照考纲另出一套全真卷  │            │ vla-eval==0.4.0          │
 │ 7 维 10030 题        │            │ 跑 LIBERO 真题 +          │
-│ 本教程没跑           │            │ PRO 改题（待印卷）        │
+│ 本教程没跑           │            │ PRO 改题（见§4.6）       │
 └─────────────────────┘            └─────────────────────────┘
-                                                      │
-              ┌───────────────────┬───────────────────┼───────────────────┐
-              ↓                   ↓                   ↓                   ↓
-     Franka 原生 47/100     跨身体 0/120        SO101 集成后 0/300    PRO 改题 0/0
-     （Ch6，管线通）         （§4.7，身体不通）   （Ch8，模型不行）     （待印卷，欠账）
 ```
 
-**读图路线**：§4.1–§4.5 讲左上角真题卷长什么样（BDDL、判定、三个 suite）；§4.6 讲右上角改题卷（5 种改法 + gap）；§4.7 是我们交的三张答卷——1 张 47 分（Ch6 跑的）+ 两张 0 分，外加一张没印出来的卷子。
+**读图路线**：§4.1–§4.5 讲左上真题卷长什么样（BDDL、判定、三个 suite）；§4.6 讲右上改题卷（5 种改法 + gap）。跑分的事 §4.7 和 §5 再讲，这里只讲关系不讲分。
 
 ### 4.1 LIBERO 是什么：官方真题卷（左上那盒）
 
@@ -162,17 +157,19 @@ LIBERO 的核心创新是**通过任务分组系统化评测泛化的不同维�
 
 ### 4.6 LIBERO-PRO：非官方改题卷（右上那盒）
 
-官方只有 LIBERO 一家——PRO 是 AllenAI 在自家 harness（[allenai/vla-evaluation-harness](https://github.com/allenai/vla-evaluation-harness)）里配的扩展，定义以该仓库源码为准。我们镜像装的是 `vla-eval==0.4.0`，它的 `LIBEROProBenchmark`（`src/vla_eval/benchmarks/libero_pro/benchmark.py`）就是"拿真题改题"的 5 种改法（套件命名 `{base}_{perturbation}`，如 `libero_spatial_swap`，改完需预生成 BDDL + init-state——相当于改完题自己印卷子，我们的卷子还没印）：**swap**=物体位置交换、**object**=换成新物体、**lan**=指令同义改写（语义不变）、**task**=目标重设计（成功条件变了）、**env**=整个环境替换。一句话：**LIBERO 测"能不能泛化"，PRO 测"泛化稳不稳"**——核心输出 robustness gap = 原始成功率 − 扰动成功率，gap 越小越鲁棒。
+官方只有 LIBERO 一家——PRO 是 AllenAI 在自家 harness（[allenai/vla-evaluation-harness](https://github.com/allenai/vla-evaluation-harness)）里配的扩展，定义以该仓库源码为准。我们镜像装的是 `vla-eval==0.4.0`，它的 `LIBEROProBenchmark`（`src/vla_eval/benchmarks/libero_pro/benchmark.py`）就是"拿真题改题"的 5 种改法（套件命名 `{base}_{perturbation}`，如 `libero_spatial_swap`，改完需预生成 BDDL + init-state（这批文件随 AllenAI 的 `libero-pro` 镜像发布）：**swap**=物体位置交换、**object**=换成新物体、**lan**=指令同义改写（语义不变）、**task**=目标重设计（成功条件变了）、**env**=整个环境替换。一句话：**LIBERO 测"能不能泛化"，PRO 测"泛化稳不稳"**——核心输出 robustness gap = 原始成功率 − 扰动成功率，gap 越小越鲁棒。
 
 > **别混淆**：左下角另有一套全真卷 [LIBERO-Plus](https://github.com/sylvestf/LIBERO-plus)，同样非官方——维护者是 Sylvest 团队（7 个扰动维度、10030 tasks，论文 2510.13626），harness 里是独立的 `libero_plus` benchmark——**本教程一次没跑过**。下文 PRO 均指右上角的 5 种改法。
 
 PRO 的 gap 是框架内自计算的，不依赖训练信息——第三方黑盒评测（不知道模型怎么训的）直接拿 gap 即可，这是它相对 LIBERO 最大的方法论拓展。
 
-**本项目状态**：PRO 有命令（Ch6 §3.3，跑的是我们自己的 `configs/benchmarks/libero_pro_*.yaml`）、**零跑分**。先欠着，等 Franka 线之外的 suite 出正分再补。
+### 4.7 交卷：我们的四张答卷
 
-### 4.7 交卷：跨身体这张 0 分卷（最下一行第二张）
+```
+Franka 原生 47/100（Ch6，管线通）｜跨身体 0/120（本节，身体不通）｜SO101 集成后 0/300（Ch8，模型不行）｜PRO 改题（还没跑，安排见 §5）
+```
 
-对照关系图最下一行：四张答卷里本节讲第二张——SO101 模型跑 Franka 考场。第一张（Franka 原生 47/100）见 Ch6 §4.3，第三张（SO101 集成后 300eps 仍 0%）见 Ch8，第四张（PRO）卷子还没印。
+四张里本节讲第二张——SO101 模型跑 Franka 考场。
 
 **为什么选 LIBERO**：LIBERO 是 VLA 领域公认的标准 benchmark（CoRL 2023，2.2k stars），提供 3 个 suite × 10 tasks 的多任务泛化评测。如果一个 VLA 模型能在 LIBERO 上拿到高分，说明它具备跨任务泛化能力——这是衡量 VLA 质量的金标准。
 
