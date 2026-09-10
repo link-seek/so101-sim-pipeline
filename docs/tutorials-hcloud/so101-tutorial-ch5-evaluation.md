@@ -21,7 +21,7 @@
 |------|------|------|----------|---------------|-------------|
 | **Gymnasium** | API 标准 | 环境接口 | `info["success"]`, `reward` | 所有 eval 脚本的底层 API | 契约本身没坑，坑全在环境作者定的 success 对不对——PPO v1 的 100% 假成功就是例子 |
 | **LeRobot lerobot-eval** | 评测方法 | VLA 通用评测 | `pc_success`, `avg_sum_reward` | `replay_demo.py` 用其推理管线 | 推理管线开箱即用；指标名和我们的对得上，seed 默认 1000 照抄就行 |
-| **LIBERO** | 评测方法 | VLA benchmark | task success rate × 10 tasks | `eval_vla.py` 通过 vla-eval harness | 金标准但只认 Franka——跨身体直接 0%，跑之前先确认机器人，见 §4.7 |
+| **LIBERO** | 评测方法 | VLA benchmark | task success rate × 10 tasks | `eval_vla.py` 通过 vla-eval harness | 金标准但只认 Franka——跨身体直接 0%，跑之前先确认机器人，见 §4.8 |
 | **LIBERO-PRO** | 评测方法 | VLA 鲁棒性 | robustness gap | `eval_vla.py` 的 libero_pro_*（5 种扰动，定义见 §4.6） | 非官方改题卷，定义以 AllenAI 源码为准，详见 §4.6 |
 | **CleanRL** | 评测方法 | RL 评估范式 | `success_rate`, `ep_return` | `eval_ppo.py` 的确定性评估 | 范式最省心：固定 seed + 确定性策略 + 50eps，PPO 稳到不用算 CI |
 | **Grid Sweep** | 评测方法 | 多初始条件评测 | success rate across grid | `eval_mujoco_policy.py` 实现 | 不是标准框架，是社区土办法——但只有它照出了覆盖盲区（边缘 ~0%），最爱的一张热力图 |
@@ -97,7 +97,7 @@ lerobot-eval \
 └─────────────────────┘            └─────────────────────────┘
 ```
 
-**读图路线**：§4.1–§4.5 讲左上真题卷长什么样（BDDL、判定、三个 suite）；§4.6 讲右上改题卷（5 种改法 + gap）。跑分的事 §4.7 和 §5 再讲，这里只讲关系不讲分。
+**读图路线**：§4.1–§4.5 讲左上真题卷长什么样（BDDL、判定、三个 suite）；§4.6 讲右上改题卷（5 种改法 + gap），§4.7 讲左下全真卷（另出卷，和 PRO 的区别）。跑分的事 §4.8 和 §5 再讲，这里只讲关系不讲分。
 
 ### 4.1 LIBERO 是什么：官方真题卷（左上那盒）
 
@@ -109,7 +109,7 @@ LIBERO 建立在 [RoboSuite](https://github.com/ARISE-Initiative/robosuite) 仿�
 
 ### 4.2 评测对象
 
-LIBERO 评测的是 **VLA 策略**：输入图像 + 语言指令，输出机器人动作。我们的 SmolVLA 也是 VLA，理论上可测——实际卡在机器人不匹配（详见 §4.7）：LIBERO 只认 Franka，我们的模型是 SO101 的身体。
+LIBERO 评测的是 **VLA 策略**：输入图像 + 语言指令，输出机器人动作。我们的 SmolVLA 也是 VLA，理论上可测——实际卡在机器人不匹配（详见 §4.8）：LIBERO 只认 Franka，我们的模型是 SO101 的身体。
 
 ### 4.3 任务定义机制：BDDL
 
@@ -165,7 +165,23 @@ LIBERO 的核心创新是**通过任务分组系统化评测泛化的不同维�
 
 PRO 的 gap 是框架内自计算的，不依赖训练信息——第三方黑盒评测（不知道模型怎么训的）直接拿 gap 即可，这是它相对 LIBERO 最大的方法论拓展。
 
-### 4.7 交卷：我们的四张答卷
+### 4.7 LIBERO-Plus：非官方全真卷（左下那盒）
+
+同样非官方——维护者是 Sylvest 团队，论文 [arXiv:2510.13626](https://arxiv.org/abs/2510.13626)《LIBERO-Plus: In-depth Robustness Analysis of Vision-Language-Action Models》。7 个扰动维度（物体布局、相机视角、机器人初始状态、语言指令、光照、背景纹理、传感器噪声），10030 tasks；harness 里是独立的 `libero_plus` benchmark。
+
+和 PRO 的区别：**改题 vs 另出题**，生产线完全不同——
+
+|  | PRO（右上） | Plus（左下） |
+|---|---|---|
+| 出法 | 拿真题改：每道有母题，名字暴露血缘（`libero_spatial_swap` = spatial 卷 swap 来的） | 照考纲另出：新题无母题，与 130 道真题无对应关系 |
+| 输出 | robustness gap（母题分 − 改题分） | 独立分数 |
+| 动机 | 测"扰动后稳不稳" | 补真题没有的维度——LIBERO 真题机位固定，想考"换个角度还认不认识"只能新出，改无可改 |
+
+论文最狠的发现：相机视角和机器人初始状态最致命（95% 跌到 30% 以下），语言改写基本无感——模型根本不看指令。
+
+工具链归属：本教程的链（`vla-eval==0.4.0`）自带 PRO；Plus 是另一套包（要替换 `libero`），不在同一条链上。只出镜，不参演。
+
+### 4.8 交卷：我们的四张答卷
 
 ```
 Franka 原生 47/100（Ch6，管线通）｜跨身体 0/120（本节，身体不通）｜SO101 集成后 0/300（Ch8，模型不行）｜PRO 改题（还没跑，安排见 §5）
@@ -207,7 +223,7 @@ Franka 原生 47/100（Ch6，管线通）｜跨身体 0/120（本节，身体不
 | 回放验证 | so101-train | ✅ 已执行 | 方案 A 失败，方案 B 成功 |
 | Grid Sweep | so101-mujoco | ✅ 已执行 | 153/325 = 47% |
 | PPO 确定性评估 | so101-ppo | ✅ 已执行 | v1: 100%, v2: 98% |
-| LIBERO | so101-eval | ✅ 已执行 | 跨身体 120eps 0%（§4.7）；Franka 100eps 47%（Ch6） |
+| LIBERO | so101-eval | ✅ 已执行 | 跨身体 120eps 0%（§4.8）；Franka 100eps 47%（Ch6） |
 | LIBERO-PRO | — | ⬜ 已设计未执行 | 依赖 LIBERO 先出正分 |
 | SO-101 Bench | — | ⬜ 硬件不支持 | V100 无法运行 |
 
@@ -236,7 +252,7 @@ Franka 原生 47/100（Ch6，管线通）｜跨身体 0/120（本节，身体不
 
 ### 5.4 LIBERO 评测：跨任务泛化
 
-VLA 标准 benchmark，测跨任务泛化。跑法见 Ch6 §3.2（Franka 100eps 出 47% 正分）；跨身体 0% 见 §4.7；SO101 集成后 300eps 见 Ch8。
+VLA 标准 benchmark，测跨任务泛化。跑法见 Ch6 §3.2（Franka 100eps 出 47% 正分）；跨身体 0% 见 §4.8；SO101 集成后 300eps 见 Ch8。
 
 ### 5.5 四种方法对比
 
@@ -247,7 +263,7 @@ VLA 标准 benchmark，测跨任务泛化。跑法见 Ch6 §3.2（Franka 100eps 
 | 用途 | 快速 smoke test | 单任务工作空间扫描 | RL 策略评估 | 跨任务泛化评估 |
 | 时机 | 每次训练后 | 关键 checkpoint | PPO 训练完成 | 里程碑节点 |
 | 框架 | LeRobot 推理管线 | so101-mujoco | CleanRL 范式 | vla-eval harness |
-| **我们是否跑过** | ✅ 已执行 | ✅ 已执行 | ✅ 已执行 | ✅ 已执行（Ch6 47% 出正分；跨身体/SO101 线 0%，见 §4.7/#9） |
+| **我们是否跑过** | ✅ 已执行 | ✅ 已执行 | ✅ 已执行 | ✅ 已执行（Ch6 47% 出正分；跨身体/SO101 线 0%，见 §4.8/#9） |
 
 **从快到慢，从简单到全面**：
 
@@ -260,7 +276,7 @@ VLA 标准 benchmark，测跨任务泛化。跑法见 Ch6 §3.2（Franka 100eps 
 
 ### 5.6 同一把尺子：0 → 47 → 45
 
-> 数据来源：[Discussion #20](https://github.com/link-seek/so101-sim-pipeline/discussions/20)（2026-09-05）、[#18](https://github.com/link-seek/so101-sim-pipeline/discussions/18)（2026-09-07）。本节三个数**全是同一把尺子量的**：SO101 MuJoCo Grid Sweep，5 reach × 13 azim × 5 trials = 325 episodes。§4.7 的 LIBERO 0%（Franka 身体）是另一把尺子，不参与本节对比；Franka 考场的另一个 47%（47/100）见 Ch6 §4.3 防火墙，别混。
+> 数据来源：[Discussion #20](https://github.com/link-seek/so101-sim-pipeline/discussions/20)（2026-09-05）、[#18](https://github.com/link-seek/so101-sim-pipeline/discussions/18)（2026-09-07）。本节三个数**全是同一把尺子量的**：SO101 MuJoCo Grid Sweep，5 reach × 13 azim × 5 trials = 325 episodes。§4.8 的 LIBERO 0%（Franka 身体）是另一把尺子，不参与本节对比；Franka 考场的另一个 47%（47/100）见 Ch6 §4.3 防火墙，别混。
 
 同一个评测网格，我们先后量出三个数：
 
