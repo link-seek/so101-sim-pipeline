@@ -91,7 +91,7 @@ lerobot-eval \
 │ Plus（Sylvest）      │            │ 我们的 harness           │
 │ 照考纲另出一套全真卷  │            │ vla-eval==0.4.0          │
 │ 7 维 10030 题        │            │ 跑 LIBERO 真题 +          │
-│ 本教程没跑           │            │ PRO 改题（见§4.6）       │
+│ 论文 2510.13626     │            │ PRO 改题（见§4.6）       │
 └─────────────────────┘            └─────────────────────────┘
 ```
 
@@ -159,7 +159,7 @@ LIBERO 的核心创新是**通过任务分组系统化评测泛化的不同维�
 
 官方只有 LIBERO 一家——PRO 是 AllenAI 在自家 harness（[allenai/vla-evaluation-harness](https://github.com/allenai/vla-evaluation-harness)）里配的扩展，定义以该仓库源码为准。我们镜像装的是 `vla-eval==0.4.0`，它的 `LIBEROProBenchmark`（`src/vla_eval/benchmarks/libero_pro/benchmark.py`）就是"拿真题改题"的 5 种改法（套件命名 `{base}_{perturbation}`，如 `libero_spatial_swap`，改完需预生成 BDDL + init-state（这批文件随 AllenAI 的 `libero-pro` 镜像发布）：**swap**=物体位置交换、**object**=换成新物体、**lan**=指令同义改写（语义不变）、**task**=目标重设计（成功条件变了）、**env**=整个环境替换。一句话：**LIBERO 测"能不能泛化"，PRO 测"泛化稳不稳"**——核心输出 robustness gap = 原始成功率 − 扰动成功率，gap 越小越鲁棒。
 
-> **别混淆**：左下角另有一套全真卷 [LIBERO-Plus](https://github.com/sylvestf/LIBERO-plus)，同样非官方——维护者是 Sylvest 团队（7 个扰动维度、10030 tasks，论文 2510.13626），harness 里是独立的 `libero_plus` benchmark——**本教程一次没跑过**。下文 PRO 均指右上角的 5 种改法。
+> **别混淆**：左下角另有一套全真卷 [LIBERO-Plus](https://github.com/sylvestf/LIBERO-plus)，同样非官方——维护者是 Sylvest 团队（7 个扰动维度、10030 tasks，论文 2510.13626），harness 里是独立的 `libero_plus` benchmark。下文 PRO 均指右上角的 5 种改法。
 
 PRO 的 gap 是框架内自计算的，不依赖训练信息——第三方黑盒评测（不知道模型怎么训的）直接拿 gap 即可，这是它相对 LIBERO 最大的方法论拓展。
 
