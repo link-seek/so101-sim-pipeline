@@ -102,9 +102,9 @@ lerobot-eval \
 
 **读图路线**：§4.1–§4.5 讲左上角真题卷长什么样（BDDL、判定、三个 suite）；§4.6 讲右上角改题卷（5 种改法 + gap）；§4.7 是我们交的三张答卷——1 张 47 分（Ch6 跑的）+ 两张 0 分，外加一张没印出来的卷子。
 
-### 4.1 LIBERO 是什么
+### 4.1 LIBERO 是什么：官方真题卷（左上那盒）
 
-[LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO)（2.2k stars，CoRL 2023）全称 **Lifelong Benchmark for Robotics**，是 Bo Liu 等人提出的 VLA 标准 benchmark。它的核心定位：
+这是官方出的唯一一套卷，维护者是 [Lifelong-Robot-Learning 团队](https://github.com/Lifelong-Robot-Learning/LIBERO)（Bo Liu 等，CoRL 2023，2.2k stars）。全称 **Lifelong Benchmark for Robotics**，核心定位：
 
 > 给定一组操作任务，系统化地评测 VLA 策略的**泛化能力**——不是"能不能做一个任务"，而是"能不能做一类任务"。
 
@@ -160,17 +160,19 @@ LIBERO 的核心创新是**通过任务分组系统化评测泛化的不同维�
 
 三个维度正交，组合起来定位泛化瓶颈。主指标 `overall_success_rate`（所有 episode 平均成功率）；`task_success_rates` 分布也看——某任务 0% 而其他 100% 说明该任务完全失败。
 
-### 4.6 LIBERO-PRO：改题卷（右上角那盒）
+### 4.6 LIBERO-PRO：非官方改题卷（右上那盒）
 
-定义以开源社区为准：我们镜像装的是 `vla-eval==0.4.0`（allenai/vla-evaluation-harness），它的 `LIBEROProBenchmark`（`src/vla_eval/benchmarks/libero_pro/benchmark.py`）就是"拿真题改题"的 5 种改法（套件命名 `{base}_{perturbation}`，如 `libero_spatial_swap`，改完需预生成 BDDL + init-state——相当于改完题自己印卷子，我们的卷子还没印）：**swap**=物体位置交换、**object**=换成新物体、**lan**=指令同义改写（语义不变）、**task**=目标重设计（成功条件变了）、**env**=整个环境替换。一句话：**LIBERO 测"能不能泛化"，PRO 测"泛化稳不稳"**——核心输出 robustness gap = 原始成功率 − 扰动成功率，gap 越小越鲁棒。
+官方只有 LIBERO 一家——PRO 是 AllenAI 在自家 harness（[allenai/vla-evaluation-harness](https://github.com/allenai/vla-evaluation-harness)）里配的扩展，定义以该仓库源码为准。我们镜像装的是 `vla-eval==0.4.0`，它的 `LIBEROProBenchmark`（`src/vla_eval/benchmarks/libero_pro/benchmark.py`）就是"拿真题改题"的 5 种改法（套件命名 `{base}_{perturbation}`，如 `libero_spatial_swap`，改完需预生成 BDDL + init-state——相当于改完题自己印卷子，我们的卷子还没印）：**swap**=物体位置交换、**object**=换成新物体、**lan**=指令同义改写（语义不变）、**task**=目标重设计（成功条件变了）、**env**=整个环境替换。一句话：**LIBERO 测"能不能泛化"，PRO 测"泛化稳不稳"**——核心输出 robustness gap = 原始成功率 − 扰动成功率，gap 越小越鲁棒。
 
-> **别混淆**：左下角另有一套全真卷 [LIBERO-Plus](https://github.com/sylvestf/LIBERO-plus)（sylvestf，7 个扰动维度、10030 tasks，论文 2510.13626），harness 里是独立的 `libero_plus` benchmark——**本教程一次没跑过**。下文 PRO 均指右上角的 5 种改法。
+> **别混淆**：左下角另有一套全真卷 [LIBERO-Plus](https://github.com/sylvestf/LIBERO-plus)，同样非官方——维护者是 Sylvest 团队（7 个扰动维度、10030 tasks，论文 2510.13626），harness 里是独立的 `libero_plus` benchmark——**本教程一次没跑过**。下文 PRO 均指右上角的 5 种改法。
 
 PRO 的 gap 是框架内自计算的，不依赖训练信息——第三方黑盒评测（不知道模型怎么训的）直接拿 gap 即可，这是它相对 LIBERO 最大的方法论拓展。
 
 **本项目状态**：PRO 有命令（Ch6 §3.3，跑的是我们自己的 `configs/benchmarks/libero_pro_*.yaml`）、**零跑分**。先欠着，等 Franka 线之外的 suite 出正分再补。
 
-### 4.7 我们的 LIBERO 实战：从设计到 0%
+### 4.7 交卷：跨身体这张 0 分卷（最下一行第二张）
+
+对照关系图最下一行：四张答卷里本节讲第二张——SO101 模型跑 Franka 考场。第一张（Franka 原生 47/100）见 Ch6 §4.3，第三张（SO101 集成后 300eps 仍 0%）见 Ch8，第四张（PRO）卷子还没印。
 
 **为什么选 LIBERO**：LIBERO 是 VLA 领域公认的标准 benchmark（CoRL 2023，2.2k stars），提供 3 个 suite × 10 tasks 的多任务泛化评测。如果一个 VLA 模型能在 LIBERO 上拿到高分，说明它具备跨任务泛化能力——这是衡量 VLA 质量的金标准。
 
