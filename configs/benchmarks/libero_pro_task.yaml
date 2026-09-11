@@ -6,6 +6,9 @@ output_dir: "/data/eval/results/libero_pro_task"
 benchmarks:
   - benchmark: "vla_eval.benchmarks.libero_pro.benchmark:LIBEROProBenchmark"
     subname: libero_spatial_task
+    recording:
+      record_video: true
+      video_fps: 20
     episodes_per_task: 50
     params:
       suite: libero_spatial
