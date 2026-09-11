@@ -87,6 +87,9 @@ output_dir: "/data/eval/results/libero_spatial"
 benchmarks:
   - benchmark: "vla_eval.benchmarks.libero.benchmark:LIBEROBenchmark"
     subname: libero_spatial
+    recording:
+      record_video: true
+      video_fps: 20
     episodes_per_task: 10
     params:
       suite: libero_spatial
@@ -99,8 +102,42 @@ benchmarks:
 - `episodes_per_task`：每个任务跑多少 episode（**10 是 SmolVLA 官方协议**，不是 50）
 - `seed`：随机种子（可复现性）
 - `num_steps_wait`：等待环境稳定的时间步
+- `recording.record_video`：每集存 mp4（成功失败都有），`video_fps` 20，随评测结果一起归档到 OBS
 
 > 注意：上游 `vla-eval`（含 0.5.0）没有 `robot:` 参数，类名是 `LIBEROBenchmark`。换机器人不是改 YAML 参数，而是改文件（见 Ch7 §2 实测机制）。
+
+---
+
+### 3.5 CodeArts 一键评测（交付形态）
+
+前期用 GH 验证的是同一套脚本（§3.2）；交付的执行引擎是 CodeArts（呼应 Ch0 §3.3）：流水线 `franka-eval-pipeline`（AI4test 项目），点运行即走完全程，不填参数就是冒烟配置。
+
+三阶段：
+
+| 阶段 | 做什么 |
+|------|--------|
+| `boot-ecs` | 开机 V100 ECS，确认 ACTIVE（SOFT 开机约 3 分钟） |
+| `evaluate` | SWR 登录 → 拉脚本/打补丁 → `docker run` 评测 → 传 OBS → 判分 |
+| `stop-ecs` | 总是运行：sleep 60 后 SOFT 关机，不空转烧钱 |
+
+运行时变量（全有默认值，不填即冒烟 `libero_spatial × 1ep`）：
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `BENCHMARKS` | `libero_spatial` | 空格分隔多个 suite |
+| `EPISODES_PER_TASK` | `1` | 冒烟 1，官方协议 10 |
+| `MODEL_CONFIG` | `smolvla_franka.yaml` | 模型服务配置 |
+| `RENDER_VIDEO` | `true` | 每集存 mp4（成功失败都有），随结果进 OBS |
+| `HWC_AK` / `HWC_SK` | （secret） | 华为云凭证，只走变量不进脚本 |
+
+两个实测坑（配一次就记住）：
+
+1. **池子必须用 LINUX 主机池直跑 GPU**——LINUX_DOCKER 池会落到 CCE 容器里，无 GPU 无 docker，评测起不来。自定义池的 resource 是 JSON 转义串格式，控制台建一条参照流水线、把它的 resource 抄过来最稳。
+2. **脚本必须压成单行**——多行脚本会被服务端以"系统繁忙"拒收（内容无关，纯格式问题）。本地 `bash -n` 过一遍再提交；`if/for/function` 的换行接续要用空格（`then`/`do`/`{` 后不能跟 `;`）。复杂逻辑不要内联，写成仓库脚本让流水线去拉（`scripts/enable_video.py` 就是这么来的）。
+
+冒烟证据（CodeArts run `606dc0ec`，2026-09-11）：三阶段全绿；progress `completed 10/10, errors 0`；OBS `eval/franka_codearts/` 归档 17 文件；ECS 自动 SHUTOFF。视频版冒烟（`RENDER_VIDEO=true`）OBS 每集都有对应 mp4，见 `eval/franka_codearts/.../*.mp4`。
+
+> 成功率诚实记录：冒烟 10 集 6/10（`task0000/0004/0005/0009` 没过）。fail 的是策略在某些初始摆位下没做完任务——10 集全部正常 rollout、harness 错误 0，线是通的。冒烟只看 errors=0，不看成功率。
 
 ---
 
@@ -186,7 +223,7 @@ Ch7 将展示：RoboSuite 已有 12 种机器人，改配置就能换。Ch8 将�
 |----------|----------|---------------|
 | `libero_spatial` 10eps/task | 100 | ~2h（含 serve 启动 ~10min） |
 | LIBERO 3 suites（同规模外推） | 300 | ~6h |
-| 冒烟（1ep/task） | 10 | ~15min |
+| 冒烟（1ep/task） | 10 | ~20min（含开机等待；CodeArts 一键，视频版约 25min） |
 
 > 旧版表格中的 500eps/suite（~8h）是按 `episodes_per_task=50` 估算的；官方 SmolVLA 协议是 10eps/task，上表以实测为准。
 
