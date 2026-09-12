@@ -85,7 +85,7 @@ RUN git clone --depth 1 https://github.com/Zxy-MLlab/LIBERO-PRO.git /tmp/libero-
     cp /tmp/libero-pro/libero/libero/benchmark/libero_suite_task_map.py /tmp/libero/libero/libero/benchmark/libero_suite_task_map.py && \
     cp /tmp/libero-pro/libero/libero/benchmark/__init__.py /tmp/libero/libero/libero/benchmark/__init__.py && \
     cp /tmp/libero-pro/libero/libero/envs/objects/self_designed_object.py /tmp/libero/libero/libero/envs/objects/self_designed_object.py && \
-    python -c "from libero.libero.benchmark import get_benchmark; get_benchmark('libero_spatial_env'); get_benchmark('libero_spatial'); print('PRO overlay OK')" && \
+    cd /tmp && python -c "from libero.libero.benchmark import get_benchmark; get_benchmark('libero_spatial_env'); get_benchmark('libero_spatial'); print('PRO overlay OK')" && \
     rm -rf /tmp/libero-pro
 
 # PRO assets (new objects only): cp -rn so shared meshes/textures stay
@@ -102,7 +102,7 @@ RUN git clone --depth 1 https://github.com/Zxy-MLlab/LIBERO-PRO.git /tmp/libero-
     cp /tmp/libero-pro/libero/libero/envs/objects/google_scanned_objects.py /tmp/libero/libero/libero/envs/objects/google_scanned_objects.py && \
     cp /tmp/libero-pro/libero/libero/envs/objects/articulated_objects.py /tmp/libero/libero/libero/envs/objects/articulated_objects.py && \
     cp /tmp/libero-pro/libero/libero/envs/objects/turbosquid_objects.py /tmp/libero/libero/libero/envs/objects/turbosquid_objects.py && \
-    python -c "from libero.libero.envs.objects import get_object_dict; d=get_object_dict(); assert 'libero_mug_yellow' in d, sorted(d)[:5]; print('PRO objects OK:', len(d), 'registered')" && \
+    cd /tmp && python -c "from libero.libero.envs.objects import get_object_dict; d=get_object_dict(); assert 'libero_mug_yellow' in d, sorted(d)[:5]; print('PRO objects OK:', len(d), 'registered')" && \
     rm -rf /tmp/libero-pro
 
 ENV MUJOCO_GL=egl
