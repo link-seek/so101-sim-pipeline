@@ -128,7 +128,7 @@ SO101 自己的 XML/类/控制器/BDDL 适配也在 #9 实施中完成（含 v1.
 
 | 维度 | 现状 |
 |------|------|
-| 触发方式 | CodeArts 评测流水线（交付物，只含评测）；GH Actions（`franka-eval.yml` / `robot-switch.yml`）是前期技术验证，不交付 |
+| 触发方式 | CodeArts `franka-eval-pipeline`（已交付，09-11 run #7 全绿）；GH Actions（`franka-eval.yml` / `robot-switch.yml`）是前期技术验证，不交付 |
 | 环境配置 | 镜像固定（`so101-eval:latest`）+ 文件补丁挂载，ECS 自托管 runner 执行 |
 | 结果查看 | OBS 自动归档 + Actions artifacts（`console.log`/`eval_summary.json`/`server.log`），aggregate 诚实计分 |
 | 评测实证 | Franka 47%@100eps（run `33829389761`）+ Sawyer 10eps 跑通（run `33836694327`） |

@@ -61,7 +61,7 @@ PPO 快速验证了环境可学性，VLA 验证了视觉方案的可行性。两
 
 ### 3.3 评测流水线
 
-华为云 CodeArts 流水线一键触发（交付物；只含评测，不含训练），V100 自定义执行机执行，自动归档结果到 OBS。GitHub Actions（`franka-eval.yml` / `robot-switch.yml`）是前期技术验证，不对外交付。被测模型只需提供：
+华为云 CodeArts 流水线一键触发（交付物；只含评测，不含训练），V100 自定义执行机执行，自动归档结果到 OBS。`franka-eval-pipeline`（项目 `AI4test`）已建成并跑通：09-11 手动触发 7 次，run #7 三阶段全绿（boot-ecs → evaluate → stop-ecs，约 24 分钟）。GitHub Actions（`franka-eval.yml` / `robot-switch.yml`）是前期技术验证，不对外交付。被测模型只需提供：
 
 | 必填项 | 说明 | 示例 |
 |--------|------|------|
