@@ -94,6 +94,10 @@ RUN git clone --depth 1 https://github.com/Zxy-MLlab/LIBERO-PRO.git /tmp/libero-
 # to protect the 47% visual baseline.
 # PRO object registration: fork's objects/__init__.py (official + 1 import)
 # + 4 object files whose diffs are verified pure-addition (0 deletions).
+# Plus fork's base_object.py: identical except register_object tolerates
+# duplicates via try/except (the fork defines RedAlphabetSoup twice;
+# official asserts hard). Zero behavior change for standard suites
+# (no dupes there) — faithful to upstream.
 RUN git clone --depth 1 https://github.com/Zxy-MLlab/LIBERO-PRO.git /tmp/libero-pro && \
     cd /tmp/libero-pro && git fetch -q --depth 1 origin "${LIBERO_PRO_REF}" && git checkout -q FETCH_HEAD && \
     cp -rn /tmp/libero-pro/libero/libero/assets/. /tmp/libero/libero/libero/assets/ && \
@@ -102,6 +106,7 @@ RUN git clone --depth 1 https://github.com/Zxy-MLlab/LIBERO-PRO.git /tmp/libero-
     cp /tmp/libero-pro/libero/libero/envs/objects/google_scanned_objects.py /tmp/libero/libero/libero/envs/objects/google_scanned_objects.py && \
     cp /tmp/libero-pro/libero/libero/envs/objects/articulated_objects.py /tmp/libero/libero/libero/envs/objects/articulated_objects.py && \
     cp /tmp/libero-pro/libero/libero/envs/objects/turbosquid_objects.py /tmp/libero/libero/libero/envs/objects/turbosquid_objects.py && \
+    cp /tmp/libero-pro/libero/libero/envs/base_object.py /tmp/libero/libero/libero/envs/base_object.py && \
     cd / && python -c "from libero.libero.envs.objects import get_object_dict; d=get_object_dict(); assert 'libero_mug_yellow' in d, sorted(d)[:5]; print('PRO objects OK:', len(d), 'registered')" && \
     rm -rf /tmp/libero-pro
 
