@@ -12,6 +12,12 @@ from pathlib import Path
 
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 os.environ.setdefault("MUJOCO_GL", "egl")
+# Persist HF downloads on the host-mounted /data volume. Without this every
+# run re-downloads the full model into the throwaway container and the 600s
+# serve-health tripwire below becomes a coin flip (run #9 died exactly here:
+# model.safetensors still downloading when the loop expired).
+os.environ.setdefault("HF_HUB_CACHE", "/data/hf-cache")
+Path("/data/hf-cache").mkdir(parents=True, exist_ok=True)
 
 CONFIGS_DIR = Path("/workspace/configs")
 RESULTS_DIR = Path("/data/eval/results")
