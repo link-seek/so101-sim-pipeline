@@ -71,6 +71,23 @@ RUN pip install --no-cache-dir \
 RUN yes n | python -c "import libero.libero; print('libero config seeded OK')" && \
     cat /root/.libero/config.yaml
 
+# LIBERO-PRO overlay (perturbation suites, pure addition):
+# Zxy-MLlab/LIBERO-PRO is a file-level superset of official LIBERO for
+# bddl_files+init_files (385 overlapping files byte-identical, verified
+# 2026-09-12), plus suite registration (task map + benchmark classes).
+# Base package stays official X-embodiment; shared code (envs/) untouched,
+# so robosuite-1.5 compat patches and X-embodiment keep working. Pinned.
+ARG LIBERO_PRO_REF=eafdb809426b13153aa1e4c42d6601844217dfec
+RUN git clone --depth 1 https://github.com/Zxy-MLlab/LIBERO-PRO.git /tmp/libero-pro && \
+    cd /tmp/libero-pro && git fetch -q --depth 1 origin "${LIBERO_PRO_REF}" && git checkout -q FETCH_HEAD && \
+    cp -r /tmp/libero-pro/libero/libero/bddl_files/. /tmp/libero/libero/libero/bddl_files/ && \
+    cp -r /tmp/libero-pro/libero/libero/init_files/. /tmp/libero/libero/libero/init_files/ && \
+    cp /tmp/libero-pro/libero/libero/benchmark/libero_suite_task_map.py /tmp/libero/libero/libero/benchmark/libero_suite_task_map.py && \
+    cp /tmp/libero-pro/libero/libero/benchmark/__init__.py /tmp/libero/libero/libero/benchmark/__init__.py && \
+    cp /tmp/libero-pro/libero/libero/envs/objects/self_designed_object.py /tmp/libero/libero/libero/envs/objects/self_designed_object.py && \
+    python -c "from libero.libero.benchmark import get_benchmark; get_benchmark('libero_spatial_env'); get_benchmark('libero_spatial'); print('PRO overlay OK')" && \
+    rm -rf /tmp/libero-pro
+
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
