@@ -92,9 +92,17 @@ RUN git clone --depth 1 https://github.com/Zxy-MLlab/LIBERO-PRO.git /tmp/libero-
 # byte-identical to official. Verified 2026-09-12: 585 overlapping assets,
 # only 2 differ (kitchen/study scene style xmls) — excluded via no-clobber
 # to protect the 47% visual baseline.
+# PRO object registration: fork's objects/__init__.py (official + 1 import)
+# + 4 object files whose diffs are verified pure-addition (0 deletions).
 RUN git clone --depth 1 https://github.com/Zxy-MLlab/LIBERO-PRO.git /tmp/libero-pro && \
     cd /tmp/libero-pro && git fetch -q --depth 1 origin "${LIBERO_PRO_REF}" && git checkout -q FETCH_HEAD && \
     cp -rn /tmp/libero-pro/libero/libero/assets/. /tmp/libero/libero/libero/assets/ && \
+    cp /tmp/libero-pro/libero/libero/envs/objects/__init__.py /tmp/libero/libero/libero/envs/objects/__init__.py && \
+    cp /tmp/libero-pro/libero/libero/envs/objects/hope_objects.py /tmp/libero/libero/libero/envs/objects/hope_objects.py && \
+    cp /tmp/libero-pro/libero/libero/envs/objects/google_scanned_objects.py /tmp/libero/libero/libero/envs/objects/google_scanned_objects.py && \
+    cp /tmp/libero-pro/libero/libero/envs/objects/articulated_objects.py /tmp/libero/libero/libero/envs/objects/articulated_objects.py && \
+    cp /tmp/libero-pro/libero/libero/envs/objects/turbosquid_objects.py /tmp/libero/libero/libero/envs/objects/turbosquid_objects.py && \
+    python -c "from libero.libero.envs.objects import get_object_dict; d=get_object_dict(); assert 'libero_mug_yellow' in d, sorted(d)[:5]; print('PRO objects OK:', len(d), 'registered')" && \
     rm -rf /tmp/libero-pro
 
 ENV MUJOCO_GL=egl
