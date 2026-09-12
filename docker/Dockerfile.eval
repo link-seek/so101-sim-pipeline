@@ -88,6 +88,15 @@ RUN git clone --depth 1 https://github.com/Zxy-MLlab/LIBERO-PRO.git /tmp/libero-
     python -c "from libero.libero.benchmark import get_benchmark; get_benchmark('libero_spatial_env'); get_benchmark('libero_spatial'); print('PRO overlay OK')" && \
     rm -rf /tmp/libero-pro
 
+# PRO assets (new objects only): cp -rn so shared meshes/textures stay
+# byte-identical to official. Verified 2026-09-12: 585 overlapping assets,
+# only 2 differ (kitchen/study scene style xmls) — excluded via no-clobber
+# to protect the 47% visual baseline.
+RUN git clone --depth 1 https://github.com/Zxy-MLlab/LIBERO-PRO.git /tmp/libero-pro && \
+    cd /tmp/libero-pro && git fetch -q --depth 1 origin "${LIBERO_PRO_REF}" && git checkout -q FETCH_HEAD && \
+    cp -rn /tmp/libero-pro/libero/libero/assets/. /tmp/libero/libero/libero/assets/ && \
+    rm -rf /tmp/libero-pro
+
 ENV MUJOCO_GL=egl
 ENV HF_ENDPOINT=https://hf-mirror.com
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
