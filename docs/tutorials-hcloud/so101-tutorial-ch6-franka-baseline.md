@@ -78,7 +78,15 @@ hcloud CodeArtsPipeline RunPipeline --cli-region=cn-north-4 \
 | `RENDER_FPS` | `20` | 逐集视频帧率，展示层参数 |
 | `IMAGE` | `so101-eval:latest` | 镜像版本参数化：digest 金丝雀验证后切默认。API 落地（变量+4 处引用+pull），见 #19 |
 
-参数三级规则（对比的前提是"同考场同规则"）：🟢展示层随便调（`BENCHMARKS`/`EPISODES` 注明冒烟全量、`RENDER_*`、`IMAGE`）；🟡换考生（`checkpoint` 经 `MODEL_CONFIG` 或覆盖变量）分数可比正是评测目的，但须记录是谁；🔴换考场（`seed`/`chunk_size`/`max_batch_size`/`num_steps_wait`，见 §3.5）动了就不再是官方协议分数——改可以，改完要么重建基线（同配置 100eps 定新 anchor），要么明确标注非标。权重本身在评测中只读，改参数从不改模型，底气在这里。
+参数三级规则（对比的前提是"同考场同规则"——改的是"怎么看"，还是"考什么"，决定了分数还能不能比）：
+
+| 级 | 改的是什么 | 参数 | 改后义务 |
+|---|---|---|---|
+| 🟢流程展示层 | 只改变跑法和呈现（跑几个 suite、冒烟还是全量、录不录像、用什么镜像跑），**不改变考题和判分**，分数含义不变 | `BENCHMARKS`、`EPISODES_PER_TASK`（注明冒烟/全量）、`RENDER_*`、`IMAGE` | 无，照常用 |
+| 🟡考生层 | 换被测模型，考场不变——这正是评测的目的 | `MODEL_CONFIG`、`MODEL_CHECKPOINT` | 记录是谁（模型签名进报告） |
+| 🔴考场层 | 改考题分布或判分规则，跑出来不再是官方协议分数 | `seed`、`num_steps_wait`、`chunk_size`、`max_batch_size`（见 §3.5） | 二选一：同配置跑满 100eps 重建基线，或明确标注非标 |
+
+权重本身在评测中只读——改参数从不改模型，动考场参数废掉的只是旧基线的可比性，模型随时可拿原配置重跑复现。
 
 容器内做三件事（全部可复现，见仓库 `scripts/`）：
 
