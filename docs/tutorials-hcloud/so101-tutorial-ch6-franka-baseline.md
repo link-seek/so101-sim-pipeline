@@ -78,7 +78,15 @@ hcloud CodeArtsPipeline RunPipeline --cli-region=cn-north-4 \
 | `RENDER_FPS` | `20` | 逐集视频帧率，展示层参数 |
 | `IMAGE` | `so101-eval:latest` | 镜像版本参数化：digest 金丝雀验证后切默认。API 落地（变量+4 处引用+pull），见 #19 |
 
-参数三级规则（对比的前提是"同考场同规则"）：🟢展示层随便调（`BENCHMARKS`/`EPISODES` 注明冒烟全量、`RENDER_*`、`IMAGE`）；🟡换考生（`checkpoint` 经 `MODEL_CONFIG` 或覆盖变量）分数可比正是评测目的，但须记录是谁；🔴换考场（`seed`/`chunk_size`/`max_batch_size`/`num_steps_wait`，见 §3.5）动了就不再是官方协议分数——改可以，改完要么重建基线（同配置 100eps 定新 anchor），要么明确标注非标。权重本身在评测中只读，改参数从不改模型，底气在这里。
+调参之前先确认一件事：**改完之后，分数还能不能和以前比**。按对可比性的影响，参数分三类：
+
+| 类型 | 定义 | 参数 | 改后要求 |
+|---|---|---|---|
+| 不影响可比性 | 只改变运行规模、产物和执行镜像，不改变任务分布、推理行为和成功判定 | `BENCHMARKS`（注明 suite）、`EPISODES_PER_TASK`（注明冒烟/全量）、`RENDER_VIDEO`、`RENDER_FPS`、`IMAGE` | 无，照常用 |
+| 更换被测模型 | 改变策略权重；比较不同模型的分数正是评测的目的 | `MODEL_CONFIG`、`MODEL_CHECKPOINT` | 在报告中注明模型来源 |
+| 改变测量条件 | 改变任务初始分布、环境等待步数或解码设置，所得分数不再是 SmolVLA 官方协议下的分数 | `seed`、`num_steps_wait`、`chunk_size`、`max_batch_size`（见 §3.5） | 同配置跑满 100eps 重建基线，或明确标注非标 |
+
+评测全程只读模型权重——参数改变的从来不是模型本身，而是分数的可比性；原配置随时可重跑复现。
 
 容器内做三件事（全部可复现，见仓库 `scripts/`）：
 
