@@ -49,10 +49,10 @@
 | `evaluate` | `swr-login` → `fetch-scripts` → `run-eval` → `upload-obs` → `verdict`，下沉 V100 自定义执行机 | 见下 |
 | `stop-ecs` | 关机双保险 | ①evaluate 内 `stop-ecs-inline` 步骤（upload 后、verdict 前，`exit 0` 不影响诚实判分；失败 run #15 实测关机成功）②独立 stop-ecs 阶段（成功路径；失败时阶段不调度——job condition/缺省/`always()`/fail_fast/depends_on/job 内后置步骤沙箱 6 变体全灭，见 #19）。另：默认资源池曾报"套餐状态异常或时长不足"（run #16 起），S1/S3 的 default-pool 步骤会因此失败——inline 关机不依赖 default pool，是计费兜底的最后防线；开/关机若失败先查套餐余量 |
 
-触发方式（二选一）：
+触发方式（三选一）：
 
 ```bash
-# 方法 1：CodeArts 控制台 → franka-eval-pipeline → 运行，填 4 个运行时参数
+# 方法 1：CodeArts 控制台 → franka-eval-pipeline → 运行，填运行时参数
 # 方法 2：hcloud CLI（AK 传参，不落盘）
 hcloud CodeArtsPipeline RunPipeline --cli-region=cn-north-4 \
   --project_id=872f029c6e1646d19b0a3a248fbb26f8 \
@@ -61,7 +61,11 @@ hcloud CodeArtsPipeline RunPipeline --cli-region=cn-north-4 \
   --variables.2.name=EPISODES_PER_TASK --variables.2.value=10 \
   --variables.3.name=MODEL_CONFIG --variables.3.value=smolvla_franka.yaml \
   --variables.4.name=RENDER_VIDEO --variables.4.value=true
+# 方法 3：FunctionGraph 一键（开机→等 ACTIVE→触发 run，参数与下表一一对应；
+# 代码在 `infra/fg/`，AK 走函数加密环境变量；看门狗 Timer 兜底关机。细节见 #19）
 ```
+
+> **派发前置条件**：CodeArts 派发前检查租户套餐——体验版"资源型任务执行时长"只有 300 分钟/月（租户级共享，同租户别组也在烧；Build 的 1800 分钟是另一笔账，别看错）。耗尽/冻结的表现是 job 级 message `套餐状态异常或时长不足`、步骤全 INIT、run 直接 FAILED：run #16 先是 stop-ecs（default-pool）挂，#17 起连自定义池的 evaluate 也全挂。查余量路径：CodeArts 控制台 → 查看所有资源用量（API 无此接口，已验证）；重置日=当初开通那天的时分秒。分钟用完没有"超额自动转按需"（用完即停），但有执行时长扩容包可买（仅基础版及以上，体验版只能等重置或升级）；套餐到期另有宽限期（显示已过期但可用）→保留期（冻结，无法执行任何操作）两档，对照状态栏即可二选一确诊。
 
 运行时参数（点 run 时填，不改代码）：
 
@@ -247,6 +251,12 @@ Ch7 将展示：RoboSuite 已有 12 种机器人，改配置就能换。Ch8 将�
 | PRO 冒烟 `libero_spatial_with_mug`（GHA） | 10 | ~25min |
 
 > 旧版表格中的 500eps/suite（~8h）是按 `episodes_per_task=50` 估算的；官方 SmolVLA 协议是 10eps/task，上表以实测为准。
+
+### 5.3 运维教训：配额与开关机
+
+- **配额是租户级的，网关拦的是派发**：09-13 run #16→#17，资源桶见底后连自定义池任务也不再派发（job 级 `套餐状态异常`、全 INIT）。恢复后正常跑评测几乎不碰这个桶——pipeline 已剥成 evaluate-only（自定义池），开关机走 FunctionGraph（纯 ECS API），关机靠 job 内 inline＋看门狗兜底——但桶空着不恢复时 FG 开多少次机也白搭（run #22/#23 实证：ECS ACTIVE，run 照样全 INIT）。
+- **看门狗是免费的**：Timer 每 10 分钟只做纯 API 查询（查有无 RUNNING run、无则关机），不占 pipeline 分钟；FG 调用量离免费额度差两个数量级。
+- **ECS 计费只认开机**：评测跑完必须关机；`SHUTOFF` 状态不烧钱，inline＋看门狗就是干这个的。
 
 ---
 
