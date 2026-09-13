@@ -79,6 +79,11 @@ def handler(event, context):
                  ak, sk, {"limit": 3}).get("pipeline_runs", [])
     if any(r.get("status") == "RUNNING" for r in runs):
         return {"action": "noop", "reason": "pipeline run active"}
+    import time as _t
+    now_ms = int(_t.time() * 1000)
+    latest = max([r.get("start_time") or 0 for r in runs] or [0])
+    if latest and now_ms - latest < 15 * 60 * 1000:
+        return {"action": "noop", "reason": "recent run, dispatch grace"}
     status = _call("GET", ECS_HOST, f"/v2.1/{IAM_PROJECT}/servers/{ECS_ID}",
                    ak, sk)["server"]["status"]
     if status != "ACTIVE":

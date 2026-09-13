@@ -22,7 +22,7 @@ PIPE_HOST = f"cloudpipeline-ext.{REGION}.myhuaweicloud.com"
 IAM_PROJECT = "9d2416900bf4420db96a939cc1bd161c"
 CA_PROJECT = "872f029c6e1646d19b0a3a248fbb26f8"
 PIPELINE_ID = "bc38ad5cbfe746c8b3d542665c387204"
-ECS_ID = "7f39cb83-7c29-4712-8975-ef437b617dfb"
+ECS_ID = "7f39cb83-1a5c-4792-b65e-e578d7ddb88d"
 
 DEFAULTS = {
     "BENCHMARKS": "libero_spatial",
@@ -172,6 +172,9 @@ def handler(event, context):
         time.sleep(15)
     if status != "ACTIVE":
         raise RuntimeError(f"ECS not ACTIVE in 10min, last={status}")
+    # 2b. agent grace: ACTIVE != agent online. The V100 custom agent needs
+    # minutes after boot to register; triggering earlier fails all-INIT.
+    time.sleep(180)
     # 3. trigger CodeArts run
     r = _call("POST", PIPE_HOST,
               f"/v5/{CA_PROJECT}/api/pipelines/{PIPELINE_ID}/run", ak, sk,
