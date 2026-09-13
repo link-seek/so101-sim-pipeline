@@ -18,7 +18,7 @@
 | 模型兼容性 | OBS 上有大量预训练模型 | 只有我们自己训练的模型 |
 | 社区基线 | 完善（LIBERO 论文原版结果） | 无 |
 
-**这一章的目标**：用 Franka 跑通 LIBERO 评测全流程，验证平台能力，建立基线。带着"对照"预期读——后面那个 47% 和 Ch4/Ch5 的不是一回事（见 §4.3 防火墙）。
+**这一章的目标**：用 Franka 跑通 LIBERO 评测全流程，验证平台能力，建立基线。带着"对照"预期读——后面那个 44% 和 Ch4/Ch5 的不是一回事（见 §4.3 注）。
 
 ---
 
@@ -71,7 +71,7 @@ hcloud CodeArtsPipeline RunPipeline --cli-region=cn-north-4 \
 | 参数 | 默认 | 什么时候调 |
 |------|------|-----------|
 | `BENCHMARKS` | `libero_spatial` | 空格分隔多选（`libero_object`/`libero_goal` 同镜像可跑；PRO 见 §3.3） |
-| `EPISODES_PER_TASK` | `1` | 冒烟用 1，全量对照用 10（SmolVLA 官方协议） |
+| `EPISODES_PER_TASK` | `1` | 冒烟用 1，全量用 10（SmolVLA 官方协议） |
 | `MODEL_CONFIG` | `smolvla_franka.yaml` | 换模型走这里（如 #18 的 Panda 变体 hardened 模型），或直接用 `MODEL_CHECKPOINT` 覆盖权重 |
 | `MODEL_CHECKPOINT` | 空（用 config 默认） | 直接覆盖模型权重（如 Panda 变体 checkpoint 路径），免新建 yaml；换考生，分数可比但须记录是谁 |
 | `RENDER_VIDEO` | `true` | `false` 关逐集 mp4（省时间/空间） |
@@ -94,11 +94,22 @@ hcloud CodeArtsPipeline RunPipeline --cli-region=cn-north-4 \
 2. `vla-eval run` 原地执行 benchmark（容器内运行时 harness 跳过自身 docker 拉起）；
 3. `vla-eval merge` + 诚实计分：直接读 `LIBEROBenchmark_*_aggregate.json` 统计成功/错误数——harness 即使 100 个 episode 全错也会 exit 0，**只能以 aggregate 为准**（`verdict` 步实现）。
 
-产物归档到 `obs://so101-sim-pipeline/eval/franka_codearts/`：aggregate json + `eval_summary.json` + console log + 逐集 mp4（文件名自带 `_success`/`_fail` 后缀，成功失败无差别录制）。
+产物归档到 `obs://so101-sim-pipeline/eval/franka_codearts/`：aggregate json + `eval_summary.json` + console log + 逐集 mp4（文件名自带 `_success`/`_fail` 后缀，成功失败无差别录制）。目录结构（以 `libero_spatial` 为例，PRO 同形、`LIBEROProBenchmark_` 前缀）：
+
+```
+obs://so101-sim-pipeline/eval/franka_codearts/
+├── eval_summary.json         # 诚实计分总表（verdict 读它）
+├── console.log               # run-eval 主日志
+└── libero_spatial/
+    ├── LIBEROBenchmark_libero_spatial_aggregate.json
+    └── episodes/LIBEROBenchmark_libero_spatial/
+        ├── task0000_ep0000_fail.mp4    # 另有同名 .jsonl 存单集明细
+        └── task0001_ep0000_success.mp4
+```
 
 > 镜像：`swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest`
 > （run #8 实测使用 pre-overlay 镜像；PRO 叠加后 digest `28924535`，见 §3.3）。
-> GHA `franka-eval.yml` 是前期技术验证（9-04 run `33829389761`），不对外交付，此处仅作基线对照。
+> GHA `franka-eval.yml` 是前期技术验证，不对外交付。
 
 ### 3.3 LIBERO-PRO：已支持（叠加进同一镜像）
 
@@ -120,7 +131,7 @@ BENCHMARKS=libero_pro_mug EPISODES_PER_TASK=1
 
 可选难度全景（以 BDDL 落地为准，fork 缺的 canonical 扰动名见 §3.3 第 1 条）：标准三件套（spatial/object/goal，需配对应 yaml）+ `with_mug` 系（mug/red_stick/yellow_book/blue_stick/milk/green_mug/alphabet_soup/red_box/diffpos/rotated/trigger）+ `_ood`/`_temp` 系。每个新难度只需加一个 bench yaml（一页纸，抄 `libero_pro_mug.yaml`），pipeline 零改动。
 
-叠加法本身（一句话）：底包保持官方 X-embodiment 不动，只搬 fork 新增部分——BDDL+init（874 文件，385 个重叠逐字节一致）、suite 注册（标准条目逐项一致）、assets（`cp -rn`，2 个 scene style 例外保留官方以保护 47% 视觉基线）、对象注册（含 fork 版 `base_object.py`，容忍 `RedAlphabetSoup` 重名定义）。细节与踩坑见 #19。
+叠加法本身（一句话）：底包保持官方 X-embodiment 不动，只搬 fork 新增部分——BDDL+init（874 文件，385 个重叠逐字节一致）、suite 注册（标准条目逐项一致）、assets（`cp -rn`，2 个 scene style 例外保留官方以保护视觉基线）、对象注册（含 fork 版 `base_object.py`，容忍 `RedAlphabetSoup` 重名定义）。细节与踩坑见 #19。
 
 **LIBERO-Plus 不在流水线里**：它要把整个 `libero` 包换成 Sylvest 的 fork（同名互斥，只能另起镜像），且与本章主线（平台可用性验证）无关——Ch5 原话"只出镜，不参演"，此处不展开。
 
@@ -183,38 +194,19 @@ gap = 0 说明鲁棒，gap 大说明脆弱。一个策略可以 LIBERO 80% 但 L
 
 ### 4.3 实测基线（本教程真实跑分）
 
-模型 `lerobot/smolvla_libero`，`libero_spatial` 10 tasks × 10 eps = **100 eps**，V100，2026-09-04（Actions run `33829389761`）：
+模型 `lerobot/smolvla_libero`，`libero_spatial` 10 tasks × 10 eps = **100 eps**，V100，CodeArts run #8（09-12）：
 
 | 指标 | 值 |
 |------|-----|
-| 成功率 | **47/100（47%）** |
+| 成功率 | **44/100（44%）** |
 | harness 错误数 | **0**（100 个 episode 全部正常 rollout，无异常） |
 | 单 suite 耗时 | ~2h（V100） |
 
-10 个任务全部 10/10 跑完，没有任何 `failure_reason: exception`——说明**评测管线本身是健康的**，47% 是策略的真实表现，不是框架 bug。
-
-### 4.4 全量对照：CodeArts vs GHA（同一协议）
-
-同一模型（`lerobot/smolvla_libero`）、同一协议（`libero_spatial` 10 tasks × 10 eps = 100 eps，seed 7）：
-
-| 渠道 | run | 成功率 | errors | 耗时（V100） |
-|------|-----|--------|--------|--------------|
-| GHA `franka-eval.yml` | `33829389761`（09-04） | **47/100（47%）** | 0 | ~2h |
-| CodeArts `franka-eval-pipeline` | run #8（09-12） | **44/100（44%）** | 0 | ~2h |
-
-差 3pp，在 100eps 噪声带内（~5pp）——**复刻通过**。两边 0 errors，管线健康结论与 §4.3 一致。CodeArts 侧另有冒烟记录：run #7（7/10）、run #10（8/10），同属噪声带。
+10 个任务全部 10/10 跑完，没有任何 `failure_reason: exception`——说明**评测管线本身是健康的**，44% 是策略的真实表现，不是框架 bug。CodeArts 侧另有冒烟记录：run #7（7/10）、run #10（8/10）、run #12（8/10，新镜像），同属小样本噪声带，互相印证。
 
 > 严谨性备注：run #8 用的是 PRO 叠加前的镜像；叠加后标准回归已在新镜像重验（CodeArts run #12，`libero_spatial × 1ep`，8/10 零 errors）。100eps 全量在新镜像上尚未重跑（按构造不应漂移：标准 suite 文件逐字节一致，见 §3.3），待排期。
 
-> **防火墙：别和另一对 47/45 混淆**——本教程三个相近数字，分属两把尺子：
->
-> | 数字 | 模型 | 尺子 | 出处 |
-> |------|------|------|------|
-> | 153/325 = 47% | 我们的 SO101 sim twin | Grid Sweep 网格 | Ch4/Ch5 |
-> | 145/325 = 45% | 同上，续到 20K | **同一把尺子**（掉 8 个 episode，噪声带内） | Ch4 尾声 |
-> | 47/100 = 47% | 官方 `smolvla_libero` | LIBERO spatial 考场，Franka 身体 | **本节** |
->
-> 前两个是一对（同模型同网格，讲"加步数没用"）；后一个是孤立的基线（讲"管线是通的"）。47 撞 47 是巧合。
+> **注：别和 Ch4/Ch5 的 47/45 混淆**——那是另一把尺子（SO101 sim twin 的 Grid Sweep 网格：153/325 与续到 20K 的 145/325，讲"加步数没用"）；本节是孤立的基线（官方 `smolvla_libero`、LIBERO spatial 考场、Franka 身体，讲"管线是通的"）。两者模型、考场、指标全都不同。
 
 与官方 ~90% 的差距说明（诚实记录，未掩盖）：
 - 官方数字的渲染/种子/解码配置与本流水线不完全一致（EGL 离屏渲染、seed 分布、`chunk_size=10`/`max_batch_size=1` 均为本工程选择）；
@@ -241,7 +233,7 @@ Franka 评测验证了平台的**评测管线**是通的——配置现成、镜
 
 Ch7 将展示：RoboSuite 已有 12 种机器人，改配置就能换。Ch8 将展示：SO101 作为自定义机器人，需要改镜像才能集成。
 
-> **本章 47% 的使命到此结束**：它只证明管线准，不证明我们模型行。我们模型行不行（SO101 身体、我们的数据），看 Ch7 §2.4 和 Ch8。
+> **本章 44% 的使命到此结束**：它只证明管线准，不证明我们模型行。我们模型行不行（SO101 身体、我们的数据），看 Ch7 §2.4 和 Ch8。
 
 ### 5.2 评测规模参考（实测）
 
