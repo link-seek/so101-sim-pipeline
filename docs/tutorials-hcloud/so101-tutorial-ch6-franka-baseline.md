@@ -94,7 +94,18 @@ hcloud CodeArtsPipeline RunPipeline --cli-region=cn-north-4 \
 2. `vla-eval run` 原地执行 benchmark（容器内运行时 harness 跳过自身 docker 拉起）；
 3. `vla-eval merge` + 诚实计分：直接读 `LIBEROBenchmark_*_aggregate.json` 统计成功/错误数——harness 即使 100 个 episode 全错也会 exit 0，**只能以 aggregate 为准**（`verdict` 步实现）。
 
-产物归档到 `obs://so101-sim-pipeline/eval/franka_codearts/`：aggregate json + `eval_summary.json` + console log + 逐集 mp4（文件名自带 `_success`/`_fail` 后缀，成功失败无差别录制）。
+产物归档到 `obs://so101-sim-pipeline/eval/franka_codearts/`：aggregate json + `eval_summary.json` + console log + 逐集 mp4（文件名自带 `_success`/`_fail` 后缀，成功失败无差别录制）。目录结构（以 `libero_spatial` 为例，PRO 同形、`LIBEROProBenchmark_` 前缀）：
+
+```
+obs://so101-sim-pipeline/eval/franka_codearts/
+├── eval_summary.json         # 诚实计分总表（verdict 读它）
+├── console.log               # run-eval 主日志
+└── libero_spatial/
+    ├── LIBEROBenchmark_libero_spatial_aggregate.json
+    └── episodes/LIBEROBenchmark_libero_spatial/
+        ├── task0000_ep0000_fail.mp4    # 另有同名 .jsonl 存单集明细
+        └── task0001_ep0000_success.mp4
+```
 
 > 镜像：`swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest`
 > （run #8 实测使用 pre-overlay 镜像；PRO 叠加后 digest `28924535`，见 §3.3）。
