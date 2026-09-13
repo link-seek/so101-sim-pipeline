@@ -47,7 +47,7 @@
 |------|--------|------|
 | `boot-ecs` | hcloud `BatchStartServers` 拉起 V100（`7f39cb83…`），断言 ACTIVE | 约 3 分钟 |
 | `evaluate` | `swr-login` → `fetch-scripts` → `run-eval` → `upload-obs` → `verdict`，下沉 V100 自定义执行机 | 见下 |
-| `stop-ecs` | 关机双保险 | ①evaluate 内 `stop-ecs-inline` 步骤（upload 后、verdict 前，`exit 0` 不影响诚实判分；失败 run #15 实测关机成功）②独立 stop-ecs 阶段（成功路径；失败时阶段不调度——job condition/缺省/`always()`/fail_fast/depends_on 沙箱 6 变体全灭，见 #19） |
+| `stop-ecs` | 关机双保险 | ①evaluate 内 `stop-ecs-inline` 步骤（upload 后、verdict 前，`exit 0` 不影响诚实判分；失败 run #15 实测关机成功）②独立 stop-ecs 阶段（成功路径；失败时阶段不调度——job condition/缺省/`always()`/fail_fast/depends_on/job 内后置步骤沙箱 6 变体全灭，见 #19）。另：默认资源池曾报"套餐状态异常或时长不足"（run #16 起），S1/S3 的 default-pool 步骤会因此失败——inline 关机不依赖 default pool，是计费兜底的最后防线；开/关机若失败先查套餐余量 |
 
 触发方式（二选一）：
 
@@ -69,9 +69,13 @@ hcloud CodeArtsPipeline RunPipeline --cli-region=cn-north-4 \
 |------|------|-----------|
 | `BENCHMARKS` | `libero_spatial` | 空格分隔多选（`libero_object`/`libero_goal` 同镜像可跑；PRO 见 §3.3） |
 | `EPISODES_PER_TASK` | `1` | 冒烟用 1，全量对照用 10（SmolVLA 官方协议） |
-| `MODEL_CONFIG` | `smolvla_franka.yaml` | 换模型走这里（如 #18 的 Panda 变体 hardened 模型） |
+| `MODEL_CONFIG` | `smolvla_franka.yaml` | 换模型走这里（如 #18 的 Panda 变体 hardened 模型），或直接用 `MODEL_CHECKPOINT` 覆盖权重 |
+| `MODEL_CHECKPOINT` | 空（用 config 默认） | 直接覆盖模型权重（如 Panda 变体 checkpoint 路径），免新建 yaml；换考生，分数可比但须记录是谁 |
 | `RENDER_VIDEO` | `true` | `false` 关逐集 mp4（省时间/空间） |
+| `RENDER_FPS` | `20` | 逐集视频帧率，展示层参数 |
 | `IMAGE` | `so101-eval:latest` | 镜像版本参数化：digest 金丝雀验证后切默认。API 落地（变量+4 处引用+pull），见 #19 |
+
+参数三级规则（对比的前提是"同考场同规则"）：🟢展示层随便调（`BENCHMARKS`/`EPISODES` 注明冒烟全量、`RENDER_*`、`IMAGE`）；🟡换考生（`checkpoint` 经 `MODEL_CONFIG` 或覆盖变量）分数可比正是评测目的，但须记录是谁；🔴换考场（`seed`/`chunk_size`/`max_batch_size`/`num_steps_wait`，见 §3.5）动了就不再是官方协议分数——改可以，改完要么重建基线（同配置 100eps 定新 anchor），要么明确标注非标。权重本身在评测中只读，改参数从不改模型，底气在这里。
 
 容器内做三件事（全部可复现，见仓库 `scripts/`）：
 
@@ -99,11 +103,17 @@ BENCHMARKS=libero_pro_mug EPISODES_PER_TASK=1
 1. **suite 名有个上游坑**：`{base}_{perturbation}`（如 `libero_pro_env`/`libero_spatial_env`）在 fork 里没有 BDDL 目录（`problem_folder=suite` 名，查无此目录）——上游自己也跑不通这个命名。能跑的是 `with_*`/`_ood` 系，本教程用 harness 默认 suite **`libero_spatial_with_mug`**（配置见 `configs/benchmarks/libero_pro_mug.yaml`）。`libero_pro_env.yaml` 等 5 个旧配置保留在仓库，仅作命名参考。
 2. **PRO 首跑成绩**：`libero_spatial_with_mug × 1ep`，10/10 跑完——GHA run `34710767224`（09-12）3 成功 0 errors；CodeArts run #13（09-13，新镜像+pull）4 成功 0 errors，10 个逐集 mp4 入库。两次同属小样本噪声带（3–4/10），互相印证。无外部基线可对照，这个数的意义是"扰动考场能开考"，robustness gap 等全量后再算。
 
+### 3.4 难度矩阵：同一模型 × 多难度（已验证）
+
+`BENCHMARKS` 支持空格分隔多选，一次 run 跑完矩阵、各 suite 独立 aggregate。CodeArts run #16（09-13）实证：`libero_spatial libero_pro_mug` 双 suite 同跑，spatial 6/10、mug 3/10，0 errors——标准与扰动同场可比，gap 当场可算（本例 spatial−mug gap = 3/10）。
+
+可选难度全景（以 BDDL 落地为准，fork 缺的 canonical 扰动名见 §3.3 第 1 条）：标准三件套（spatial/object/goal，需配对应 yaml）+ `with_mug` 系（mug/red_stick/yellow_book/blue_stick/milk/green_mug/alphabet_soup/red_box/diffpos/rotated/trigger）+ `_ood`/`_temp` 系。每个新难度只需加一个 bench yaml（一页纸，抄 `libero_pro_mug.yaml`），pipeline 零改动。
+
 叠加法本身（一句话）：底包保持官方 X-embodiment 不动，只搬 fork 新增部分——BDDL+init（874 文件，385 个重叠逐字节一致）、suite 注册（标准条目逐项一致）、assets（`cp -rn`，2 个 scene style 例外保留官方以保护 47% 视觉基线）、对象注册（含 fork 版 `base_object.py`，容忍 `RedAlphabetSoup` 重名定义）。细节与踩坑见 #19。
 
 **LIBERO-Plus 不在流水线里**：它要把整个 `libero` 包换成 Sylvest 的 fork（同名互斥，只能另起镜像），且与本章主线（平台可用性验证）无关——Ch5 原话"只出镜，不参演"，此处不展开。
 
-### 3.4 配置文件结构
+### 3.5 配置文件结构
 
 每个 benchmark 的 YAML 配置：
 
@@ -233,6 +243,7 @@ Ch7 将展示：RoboSuite 已有 12 种机器人，改配置就能换。Ch8 将�
 | CodeArts 全量（run #8） | 100 | ~2h |
 | CodeArts 标准回归（run #12，新镜像） | 10 | ~25min |
 | CodeArts PRO 冒烟 `libero_spatial_with_mug`（run #13） | 10 | ~25min |
+| CodeArts 难度矩阵 spatial+mug（run #16） | 20 | ~35min |
 | PRO 冒烟 `libero_spatial_with_mug`（GHA） | 10 | ~25min |
 
 > 旧版表格中的 500eps/suite（~8h）是按 `episodes_per_task=50` 估算的；官方 SmolVLA 协议是 10eps/task，上表以实测为准。
@@ -248,7 +259,7 @@ Ch7 将展示：RoboSuite 已有 12 种机器人，改配置就能换。Ch8 将�
    提示：见 §4.3 补丁表。想想哪个补丁依赖的是"读 sim 真值"这种实现细节，哪处是纯参数。
 
 3. **为什么是 10eps/task 而不是 50？**  
-   提示：10 是 SmolVLA 官方协议（见 §3.4 `episodes_per_task`）。50 跑不起吗？看 §5.2 的耗时表算一笔账。
+   提示：10 是 SmolVLA 官方协议（见 §3.5 `episodes_per_task`）。50 跑不起吗？看 §5.2 的耗时表算一笔账。
 
 4. **如果要在 SO101 上评测 LIBERO，需要解决什么问题？**  
    提示：SO101 不是 RoboSuite 原生机器人，需要添加机器人定义（XML + Python 类），适配 BDDL 任务文件，修改评测镜像。详见 Ch8。
