@@ -47,7 +47,7 @@
 |------|--------|------|
 | `boot-ecs` | hcloud `BatchStartServers` 拉起 V100（`7f39cb83…`），断言 ACTIVE | 约 3 分钟 |
 | `evaluate` | `swr-login` → `fetch-scripts` → `run-eval` → `upload-obs` → `verdict`，下沉 V100 自定义执行机 | 见下 |
-| `stop-ecs` | 关机兜底 | 失败 run 是否关机待验证（run #9/#11 失败后 ECS 仍 ACTIVE，已人工关机，见 #19） |
+| `stop-ecs` | 关机双保险 | ①evaluate 内 `stop-ecs-inline` 步骤（upload 后、verdict 前，`exit 0` 不影响诚实判分；失败 run #15 实测关机成功）②独立 stop-ecs 阶段（成功路径；失败时阶段不调度——job condition/缺省/`always()`/fail_fast/depends_on 沙箱 6 变体全灭，见 #19） |
 
 触发方式（二选一）：
 
@@ -71,7 +71,7 @@ hcloud CodeArtsPipeline RunPipeline --cli-region=cn-north-4 \
 | `EPISODES_PER_TASK` | `1` | 冒烟用 1，全量对照用 10（SmolVLA 官方协议） |
 | `MODEL_CONFIG` | `smolvla_franka.yaml` | 换模型走这里（如 #18 的 Panda 变体 hardened 模型） |
 | `RENDER_VIDEO` | `true` | `false` 关逐集 mp4（省时间/空间） |
-| `IMAGE` | （待控制台落地） | 镜像版本参数化：digest 金丝雀验证后切默认，见 #19 |
+| `IMAGE` | `so101-eval:latest` | 镜像版本参数化：digest 金丝雀验证后切默认。API 落地（变量+4 处引用+pull），见 #19 |
 
 容器内做三件事（全部可复现，见仓库 `scripts/`）：
 
@@ -97,7 +97,7 @@ BENCHMARKS=libero_pro_mug EPISODES_PER_TASK=1
 两处如实记录：
 
 1. **suite 名有个上游坑**：`{base}_{perturbation}`（如 `libero_pro_env`/`libero_spatial_env`）在 fork 里没有 BDDL 目录（`problem_folder=suite` 名，查无此目录）——上游自己也跑不通这个命名。能跑的是 `with_*`/`_ood` 系，本教程用 harness 默认 suite **`libero_spatial_with_mug`**（配置见 `configs/benchmarks/libero_pro_mug.yaml`）。`libero_pro_env.yaml` 等 5 个旧配置保留在仓库，仅作命名参考。
-2. **PRO 首跑成绩**（GHA，run `34710767224`，09-12）：`libero_spatial_with_mug × 1ep`，10/10 跑完，**3 成功 0 errors**。无外部基线可对照，这个数的意义是"扰动考场能开考"，robustness gap 等 CodeArts 全量后再算。CodeArts 侧 PRO 重跑待 pipeline 加 `docker pull` 落地（见 #19，否则跑的是缓存旧镜像）。
+2. **PRO 首跑成绩**：`libero_spatial_with_mug × 1ep`，10/10 跑完——GHA run `34710767224`（09-12）3 成功 0 errors；CodeArts run #13（09-13，新镜像+pull）4 成功 0 errors，10 个逐集 mp4 入库。两次同属小样本噪声带（3–4/10），互相印证。无外部基线可对照，这个数的意义是"扰动考场能开考"，robustness gap 等全量后再算。
 
 叠加法本身（一句话）：底包保持官方 X-embodiment 不动，只搬 fork 新增部分——BDDL+init（874 文件，385 个重叠逐字节一致）、suite 注册（标准条目逐项一致）、assets（`cp -rn`，2 个 scene style 例外保留官方以保护 47% 视觉基线）、对象注册（含 fork 版 `base_object.py`，容忍 `RedAlphabetSoup` 重名定义）。细节与踩坑见 #19。
 
@@ -183,7 +183,7 @@ gap = 0 说明鲁棒，gap 大说明脆弱。一个策略可以 LIBERO 80% 但 L
 
 差 3pp，在 100eps 噪声带内（~5pp）——**复刻通过**。两边 0 errors，管线健康结论与 §4.3 一致。CodeArts 侧另有冒烟记录：run #7（7/10）、run #10（8/10），同属噪声带。
 
-> 严谨性备注：run #8 用的是 PRO 叠加前的镜像；叠加只加文件（标准 suite 的 map 条目逐项一致、重叠 BDDL逐字节一致），标准行为按构造不变，GHA PRO-mug 烟（§3.3）已证明新镜像 env 构建+rollout 正常；新镜像上的标准全量重跑待 pipeline 加 `docker pull` 后补（见 #19）。
+> 严谨性备注：run #8 用的是 PRO 叠加前的镜像；叠加后标准回归已在新镜像重验（CodeArts run #12，`libero_spatial × 1ep`，8/10 零 errors）。100eps 全量在新镜像上尚未重跑（按构造不应漂移：标准 suite 文件逐字节一致，见 §3.3），待排期。
 
 > **防火墙：别和另一对 47/45 混淆**——本教程三个相近数字，分属两把尺子：
 >
@@ -231,6 +231,8 @@ Ch7 将展示：RoboSuite 已有 12 种机器人，改配置就能换。Ch8 将�
 | 冒烟（1ep/task） | 10 | ~15min |
 | CodeArts 冒烟（run #7/#10） | 10 | ~25min（含开关机） |
 | CodeArts 全量（run #8） | 100 | ~2h |
+| CodeArts 标准回归（run #12，新镜像） | 10 | ~25min |
+| CodeArts PRO 冒烟 `libero_spatial_with_mug`（run #13） | 10 | ~25min |
 | PRO 冒烟 `libero_spatial_with_mug`（GHA） | 10 | ~25min |
 
 > 旧版表格中的 500eps/suite（~8h）是按 `episodes_per_task=50` 估算的；官方 SmolVLA 协议是 10eps/task，上表以实测为准。
