@@ -163,6 +163,14 @@ benchmarks:
 
 运行时参数调不到的东西在文件里：`seed`（7，复现性命根子，别动）、`num_steps_wait`（10）、`chunk_size`（10）/`max_batch_size`（1，§4.3 补丁 #3，动了会炸）、`video_fps`（20，pipeline 没透出）。另：`eval_vla.py` 把 HF 缓存钉在 `/data/hf-cache`（宿主机挂载、跨 run 持久）——此前每次 run 全量重下模型，600s serve 健康检查成抛硬币（run #9 实证），修后首跑下载一次、之后常驻。
 
+两层分工（一句话版）：**yaml 是"菜单"（随镜像固化），运行时参数是"点菜"（每次可变）**。
+
+| | yaml（本节） | 流水线运行时变量（§3.2，`is_runtime=true`） |
+|---|---|---|
+| 管什么 | 能跑什么：benchmark 类、suite、seed 等结构定义 | 这次跑什么：`BENCHMARKS` 选哪几道菜、`EPISODES_PER_TASK` 跑多少、`MODEL_CONFIG` 用哪个模型、`RENDER_VIDEO` 录不录像 |
+| 何时生效 | 打镜像时 baked 进去，改它要重打镜像 | 每次点运行时刻填，不填就用默认值（冒烟配置） |
+| 覆盖关系 | `episodes_per_task` 在 yaml 里写多少都不作数，运行时变量来了就覆盖（所以冒烟=1、官方协议=10，50 从没真正跑过） | — |
+
 ---
 
 ## 4. 结果解读
