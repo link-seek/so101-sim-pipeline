@@ -163,6 +163,14 @@ benchmarks:
 
 运行时参数调不到的东西在文件里：`seed`（7，复现性命根子，别动）、`num_steps_wait`（10）、`chunk_size`（10）/`max_batch_size`（1，§4.3 补丁 #3，动了会炸）、`video_fps`（20，pipeline 没透出）。另：`eval_vla.py` 把 HF 缓存钉在 `/data/hf-cache`（宿主机挂载、跨 run 持久）——此前每次 run 全量重下模型，600s serve 健康检查成抛硬币（run #9 实证），修后首跑下载一次、之后常驻。
 
+两层分工（一句话版）：**yaml 是"菜单"（随镜像固化），运行时参数是"点菜"（每次可变）**。
+
+| | yaml（本节） | 流水线运行时变量（§3.2，`is_runtime=true`） |
+|---|---|---|
+| 管什么 | 能跑什么：benchmark 类、suite、seed 等结构定义 | 这次跑什么：`BENCHMARKS` 选哪几道菜、`EPISODES_PER_TASK` 跑多少、`MODEL_CONFIG` 用哪个模型、`RENDER_VIDEO` 录不录像 |
+| 何时生效 | 打镜像时 baked 进去，改它要重打镜像 | 每次点运行时刻填，不填就用默认值（冒烟配置） |
+| 覆盖关系 | `episodes_per_task` 在 yaml 里写多少都不作数，运行时变量来了就覆盖（所以冒烟=1、官方协议=10，50 从没真正跑过） | — |
+
 ---
 
 ## 4. 结果解读
@@ -250,6 +258,43 @@ Ch7 将展示：RoboSuite 已有 12 种机器人，改配置就能换。Ch8 将�
 | PRO 冒烟 `libero_spatial_with_mug`（GHA） | 10 | ~25min |
 
 > 旧版表格中的 500eps/suite（~8h）是按 `episodes_per_task=50` 估算的；官方 SmolVLA 协议是 10eps/task，上表以实测为准。
+
+## 6. 对比与迁移探讨：CloudRobo
+
+华为云具身智能开发平台 [CloudRobo](https://www.huaweicloud.com/product/cloudrobo.html) 是面向具身智能的一站式托管平台，覆盖资产管理、数据处理、模型训练、模型部署、模型评测及真机调测全流程。本节只做**技术对比和迁移可行性探讨**，不改变本教程的自建链路。
+
+### 6.1 自建链路 vs CloudRobo
+
+| | 本教程（自建链路） | CloudRobo（托管平台） |
+|---|---|---|
+| 评测执行 | CodeArts 流水线 + 自管 V100 ECS，MuJoCo/LIBERO 原生跑 | 平台"模型评测"作业（单任务/任务集），自研 ME 仿真引擎 + 3DGS 场景 |
+| 真机接入 | 直接跑 lerobot 代码 | 走 **R2C 协议**（配 `r2c.json` feature mapping）+ R2C SDK |
+| 模型 | 自带 `smolvla_franka.yaml`，权重、超参完全可控 | 具身广场预置模型（LeRobot_ACT、LeRobot-π₀.₅、自研 VLA0-libero）或上传自定义模型增训 |
+| 自由度 | 高，透明可控，自己拼链路 | 低一些，一站式省心，但按平台规则来 |
+
+匹配点不少：CloudRobo 官方最佳实践就是 **SO-ARM101 + LeRobot**（笔入笔筒，模型 `LeRobot_PI05-Base`），跟本教程的 SO101 真机是同一硬件；模型生态（ACT/π₀.₅）和 LIBERO 评价体系也跟 Ch6 在同一语境里（自研 `CloudRobo-VLA0-libero` 在 Libero 上 97.15% 成功率）。
+
+### 6.2 四条迁移路径与难度
+
+- **真机 R2C 接入——易**。官方有 SO101 现成路径：控制台"运行管理 > 机器人"接入拿 `cert_config_xxx.zip`，`python -m r2c_sdk.cloudroboclient` 启动，SO101 走 lerobot 硬件适配几乎不用写新代码。
+- **模型资产沉淀——易**。`smolvla_franka` checkpoint + 配好 `r2c.json` 传到工作空间 OBS，即可注册为空间资产（一键部署/训练/评测）。
+- **Franka 评测迁移——中**。平台有 LIBERO 任务体系和 VLA0-libero 参考，需要验证预置任务集与本教程 `libero_spatial` 的对等性，跑分才有可比性。
+- **SO101 仿真评测迁移——难**。两道坎：① 自定义仿真场景只收 `.fbx/.glb/.gltf/.stl` 网格格式，**MJCF/URDF 不在支持列表**，本教程的 `SO101_dual_arm.xml` 场景不能直搬；② 预置 15+ 仿真机器人是否含 SO101 尚不明确。SO101 上平台更适合走**真机 R2C 路线**，而不是仿真评测路线。
+
+### 6.3 集成现状：只能控制台体验，持续关注
+
+目前 CloudRobo **云侧管理接口没有公开**：`api-cloudrobo` 文档路径不存在（对比 ModelArts/CCE 都有完整 `api-xxx` 参考），API Explorer 产品列表里也找不到 CloudRobo。公开的只有**端侧 R2C SDK**（机器人接入）。产品白皮书确认控制台操作底层是 REST + Token，但接口未对外文档化。
+
+这意味着现阶段迁移只能在平台上**点点体验**（建作业、看结果），做不到本教程 §3.2 那种 pipeline 级"一键评测"集成。结论：**持续关注，开放集成接口后迁移上来**，届时自建 CodeArts 链路可退为备用/对照基线。
+
+### 6.4 迁移 checklist（验证项）
+
+1. 控制台预置仿真机器人列表是否含 Franka / SO101？
+2. 预置任务集里有没有与 `libero_spatial` 对等的任务（成功判定、相机视角一致）？
+3. `r2c.json` mapping 能否覆盖 smolvla 的 action chunk 输出（`chunk_size=50`）？
+4. 云侧 API（训练作业/评测任务/资产管理）是否已公开？
+
+延伸阅读：[CloudRobo 产品页](https://www.huaweicloud.com/product/cloudrobo.html) · [SO101 训练调优与真机推理最佳实践](https://support.huaweicloud.com/bestpractice-cloudrobo/cloudrobo_05_0003.html) · [创建自定义模型](https://support.huaweicloud.com/usermanual-cloudrobo/cloudrobo_02_0012.html) · [模型评测流程](https://support.huaweicloud.com/usermanual-cloudrobo/cloudrobo_02_0039.html)
 
 ---
 
