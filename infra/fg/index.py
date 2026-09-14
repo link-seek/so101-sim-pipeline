@@ -181,5 +181,24 @@ def handler(event, context):
               {"description": "via FG eval-lifecycle",
                "variables": [{"name": k, "value": str(v)}
                              for k, v in params.items()]})
-    return {"pipeline_run_id": r.get("pipeline_run_id"), "ecs": status,
+    run_id = r.get("pipeline_run_id")
+    # 4. visibility gate: ListPipelineRuns is eventually consistent; a fresh
+    # run may be invisible for minutes, during which the watchdog would see
+    # "no RUNNING" and stop the just-booted box (#26 lesson). Poll until the
+    # run is list-visible before returning.
+    visible = False
+    for _ in range(16):
+        time.sleep(30)
+        try:
+            runs = _call("POST", PIPE_HOST,
+                         f"/v5/{CA_PROJECT}/api/pipelines/{PIPELINE_ID}/pipeline-runs/list",
+                         ak, sk, {"limit": 3}).get("pipeline_runs", [])
+            if any(x.get("pipeline_run_id") == run_id for x in runs):
+                visible = True
+                break
+        except Exception:
+            pass
+    if not visible:
+        raise RuntimeError(f"run {run_id} not list-visible in 8min")
+    return {"pipeline_run_id": run_id, "ecs": status,
             "params": params}
