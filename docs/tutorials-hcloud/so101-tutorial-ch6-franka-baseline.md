@@ -64,7 +64,7 @@ hcloud CodeArtsPipeline RunPipeline --cli-region=cn-north-4 \
 # 方法 3：FunctionGraph 一键（开机→触发，细节见 #19）
 ```
 
-> 若 run 直接 FAILED 且步骤全 INIT、job message 为`套餐状态异常或时长不足`，是租户配额问题（非本章内容，排查见 #19）。
+> 若 run 直接 FAILED 且步骤全 INIT、job message 为`套餐状态异常或时长不足`，是租户配额问题（非本章内容，排查见 #19）。注意：自定义池上的 shell 步骤**同样计入** pipeline 资源桶（仅 Build/Check 类任务豁免），一次冒烟约 25 分钟、全量约 2 小时——1200 分钟/月 ≈ 48 次冒烟或 10 次全量，打超了照样全拦。
 
 运行时参数（点 run 时填，不改代码）：
 
