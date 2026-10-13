@@ -1,0 +1,78 @@
+name: Boot Franka CodeArts Eval
+
+# Free github-hosted runner boots the Huawei Cloud ECS (agent host),
+# then triggers the CodeArts franka-eval-pipeline via API.
+# Replaces the deleted FunctionGraph eval-lifecycle.
+# Needs repo secrets: HWC_AK / HWC_SK (same AK as 192.168.1.41 ~/.hcloud).
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmarks:
+        description: "Space-separated benchmark names"
+        required: false
+        default: "libero_spatial"
+      episodes_per_task:
+        description: "Episodes per task (smoke=1, official=10)"
+        required: false
+        default: "1"
+      model_config:
+        description: "Model server config file"
+        required: false
+        default: "smolvla_franka.yaml"
+      skip_trigger:
+        description: "Only boot ECS, do not trigger CodeArts run"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+env:
+  ECS_SERVER_ID: 7f39cb83-1a5c-4792-b65e-e578d7ddb88d
+  ECS_REGION: cn-north-4
+  CODEARTS_PROJECT_ID: 872f029c6e1646d19b0a3a248fbb26f8
+  CODEARTS_PIPELINE_ID: bc38ad5cbfe746c8b3d542665c387204
+
+jobs:
+  boot-and-trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Setup hcloud CLI
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+
+      - name: Boot ECS agent host
+        env:
+          HCLOUD_AGREE_PRIVACY: "true"
+        run: |
+          echo "y" | hcloud ECS BatchStartServers \
+            --cli-region="${{ env.ECS_REGION }}" \
+            --cli-access-key="${{ secrets.HWC_AK }}" \
+            --cli-secret-key="${{ secrets.HWC_SK }}" \
+            --os-start.servers.1.id="${{ env.ECS_SERVER_ID }}"
+
+      - name: Wait for agent online
+        run: sleep 180
+
+      - name: Trigger CodeArts franka-eval-pipeline
+        if: github.event.inputs.skip_trigger != 'true'
+        env:
+          HCLOUD_AGREE_PRIVACY: "true"
+        run: |
+          hcloud CodeArtsPipeline RunPipeline \
+            --cli-region="${{ env.ECS_REGION }}" \
+            --cli-access-key="${{ secrets.HWC_AK }}" \
+            --cli-secret-key="${{ secrets.HWC_SK }}" \
+            --project_id="${{ env.CODEARTS_PROJECT_ID }}" \
+            --pipeline_id="${{ env.CODEARTS_PIPELINE_ID }}" \
+            --description="triggered by GH boot workflow" \
+            --variables.1.name=BENCHMARKS \
+            --variables.1.value="${{ github.event.inputs.benchmarks }}" \
+            --variables.2.name=EPISODES_PER_TASK \
+            --variables.2.value="${{ github.event.inputs.episodes_per_task }}" \
+            --variables.3.name=MODEL_CONFIG \
+            --variables.3.value="${{ github.event.inputs.model_config }}"
