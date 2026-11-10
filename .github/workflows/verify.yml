@@ -48,17 +48,44 @@ jobs:
 
       - name: Verify SO101 + LIBERO integration
         run: |
-          mkdir -p "${RUNNER_TEMP}/scripts"
-          curl -sfL --max-time 60 -H "Authorization: token ${{ github.token }}" \
-            "https://api.github.com/repos/${{ github.repository }}/contents/scripts/verify_so101_libero.py?ref=smolvla-fresh" \
-            | python3 -c "import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)['content']).decode())" \
-            > "${RUNNER_TEMP}/scripts/verify_so101_libero.py"
-          wc -l "${RUNNER_TEMP}/scripts/verify_so101_libero.py"
+          mkdir -p "${RUNNER_TEMP}/scripts" "${RUNNER_TEMP}/pkg"
+          for f in verify_so101_libero.py run_libero_eval.py; do
+            curl -sfL --max-time 60 -H "Authorization: token ${{ github.token }}" \
+              "https://api.github.com/repos/${{ github.repository }}/contents/scripts/${f}?ref=smolvla-fresh" \
+              | python3 -c "import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)['content']).decode())" \
+              > "${RUNNER_TEMP}/scripts/${f}"
+          done
+          wc -l "${RUNNER_TEMP}/scripts/"*.py
+          # robosuite_so101 package: same bytes as smolvla-fresh (image lost the baked copy).
+          # Prefer sparse git clone; fall back to the API tarball (api.github.com is proven reachable).
+          if git clone --depth 1 --branch smolvla-fresh --filter=blob:none --sparse \
+              "https://github.com/${{ github.repository }}.git" "${RUNNER_TEMP}/pkg/so101pkg" 2>/dev/null; then
+            git -C "${RUNNER_TEMP}/pkg/so101pkg" sparse-checkout set robosuite_so101
+          else
+            curl -sfL --max-time 300 -H "Authorization: token ${{ github.token }}" \
+              "https://api.github.com/repos/${{ github.repository }}/tarball/smolvla-fresh" \
+              | tar -xz -C "${RUNNER_TEMP}/pkg" --strip-components=1 --wildcards '*/robosuite_so101'
+          fi
+          ls "${RUNNER_TEMP}/pkg/so101pkg/robosuite_so101" 2>/dev/null || ls "${RUNNER_TEMP}/pkg/robosuite_so101"
+          PKG=$(dirname $(find "${RUNNER_TEMP}/pkg" -maxdepth 2 -name so101_robot.py | head -n 1))
+          echo "PKG=$PKG"
           docker run --rm --gpus "device=0" --shm-size=8g \
             -v "${RUNNER_TEMP}/scripts/verify_so101_libero.py:/workspace/scripts/verify_so101_libero.py:ro" \
+            -v "${RUNNER_TEMP}/scripts/run_libero_eval.py:/workspace/scripts/run_libero_eval.py:ro" \
+            -v "${PKG}:/workspace/robosuite_so101:ro" \
             -e MUJOCO_GL=egl \
             ${{ env.EVAL_IMAGE }} \
-            python /workspace/scripts/verify_so101_libero.py
+            bash -c 'set -e
+              ROBOSUITE_ASSETS=$(python -c "import robosuite, os; print(os.path.join(os.path.dirname(robosuite.__file__), \"models\", \"assets\"))")
+              mkdir -p $ROBOSUITE_ASSETS/robots/so101 $ROBOSUITE_ASSETS/grippers/so101_gripper_meshes
+              cp /workspace/robosuite_so101/robots/so101/robot.xml $ROBOSUITE_ASSETS/robots/so101/
+              cp -r /workspace/robosuite_so101/robots/so101/meshes/* $ROBOSUITE_ASSETS/robots/so101/
+              cp /workspace/robosuite_so101/grippers/so101_gripper.xml $ROBOSUITE_ASSETS/grippers/
+              cp -r /workspace/robosuite_so101/grippers/meshes/* $ROBOSUITE_ASSETS/grippers/
+              ROBOSUITE_CTRL=$(python -c "import robosuite, os; print(os.path.join(os.path.dirname(robosuite.__file__), \"controllers\", \"configs\", \"robots\"))")
+              mkdir -p $ROBOSUITE_CTRL
+              cp /workspace/robosuite_so101/controllers/so101_basic.json $ROBOSUITE_CTRL/default_so101.json
+              python /workspace/scripts/verify_so101_libero.py'
 
   stop-ecs:
     needs: verify
