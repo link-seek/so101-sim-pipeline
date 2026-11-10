@@ -64,10 +64,11 @@ print(f"[2] Env created. obs keys: {sorted(obs.keys())}")
 # --- 3. Check robot model ---
 robot = env.robots[0]
 print(f"\n[3] Robot: {robot.robot_model}")
-jnt_names = robot.joint_names
+robot_model = robot.robot_model
+jnt_names = robot_model.joints
 print(f"    Joint names: {jnt_names}")
-print(f"    DoF: {robot.dof}")
-assert robot.dof == 5, f"Expected DoF=5 (arm joints; +1 gripper = 6D action), got {robot.dof}"
+print(f"    DoF: {robot_model.dof}")
+assert robot_model.dof == 5, f"Expected DoF=5 (arm joints; +1 gripper = 6D action), got {robot_model.dof}"
 print(f"    Action dim: {robot.action_dim}")
 
 # --- 4. Check observations ---
