@@ -108,9 +108,9 @@ jobs:
           wc -l "${RUNNER_TEMP}/scripts/"*.py
           date '+[%F %T] pkg fetch start'
           mkdir -p "${RUNNER_TEMP}/pkg"
-          if timeout 600 git clone --depth 1 --branch smolvla-fresh --filter=blob:none --sparse \
+          if timeout -k 60 600 git clone --depth 1 --branch smolvla-fresh --filter=blob:none --sparse \
               "https://github.com/${{ github.repository }}.git" "${RUNNER_TEMP}/pkg/so101pkg" 2>/dev/null; then
-            git -C "${RUNNER_TEMP}/pkg/so101pkg" sparse-checkout set robosuite_so101
+            timeout -k 60 600 git -C "${RUNNER_TEMP}/pkg/so101pkg" sparse-checkout set robosuite_so101
           else
             curl -sfL --max-time 300 -H "Authorization: token ${{ github.token }}" \
               "https://api.github.com/repos/${{ github.repository }}/tarball/smolvla-fresh" \
@@ -120,7 +120,7 @@ jobs:
           test -n "$PKG" && ls "$PKG"
           date '+[%F %T] pkg ready'
           date '+[%F %T] collect start'
-          timeout 1200 docker run --rm --gpus "device=${{ matrix.gpu }}" --shm-size=8g \
+          timeout -k 120 10800 docker run --rm --gpus "device=${{ matrix.gpu }}" --shm-size=8g \
             -v /data:/data \
             -v "${RUNNER_TEMP}/scripts/collect_libero_expert.py:/workspace/scripts/collect_libero_expert.py:ro" \
             -v "${RUNNER_TEMP}/scripts/run_libero_eval.py:/workspace/scripts/run_libero_eval.py:ro" \
