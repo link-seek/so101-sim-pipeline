@@ -72,6 +72,11 @@ jobs:
       - name: Pull latest image
         run: docker pull ${{ env.EVAL_IMAGE }}
 
+      - name: Configure obsutil
+        run: |
+          obsutil config -i "${{ secrets.OBS_AK }}" -k "${{ secrets.OBS_SK }}" -e https://obs.cn-north-4.myhuaweicloud.com
+          obsutil ls obs://${{ env.OBS_BUCKET }}/ 2>&1 | head -n 5 || true
+
       - name: Collect expert demonstrations (GPU ${{ matrix.gpu }})
         run: |
           TASKS="${{ inputs.tasks }}"
