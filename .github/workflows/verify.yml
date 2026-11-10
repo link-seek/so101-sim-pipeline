@@ -67,7 +67,7 @@ jobs:
               | tar -xz -C "${RUNNER_TEMP}/pkg" --strip-components=1 --wildcards '*/robosuite_so101'
           fi
           ls "${RUNNER_TEMP}/pkg/so101pkg/robosuite_so101" 2>/dev/null || ls "${RUNNER_TEMP}/pkg/robosuite_so101"
-          PKG=$(dirname $(find "${RUNNER_TEMP}/pkg" -maxdepth 2 -name so101_robot.py | head -n 1))
+          PKG=$(dirname $(find "${RUNNER_TEMP}/pkg" -maxdepth 3 -name so101_robot.py | head -n 1))
           echo "PKG=$PKG"
           docker run --rm --gpus "device=0" --shm-size=8g \
             -v "${RUNNER_TEMP}/scripts/verify_so101_libero.py:/workspace/scripts/verify_so101_libero.py:ro" \
