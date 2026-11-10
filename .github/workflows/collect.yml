@@ -123,7 +123,7 @@ jobs:
           test -n "$PKG" && ls "$PKG"
           date '+[%F %T] pkg ready'
           date '+[%F %T] collect start'
-          timeout -k 120 10800 docker run --rm --gpus "device=${{ matrix.gpu }}" --shm-size=8g \
+          timeout -k 300 18000 docker run --rm --gpus "device=${{ matrix.gpu }}" --shm-size=8g \
             -v /data:/data \
             -v "${RUNNER_TEMP}/scripts/collect_libero_expert.py:/workspace/scripts/collect_libero_expert.py:ro" \
             -v "${RUNNER_TEMP}/scripts/run_libero_eval.py:/workspace/scripts/run_libero_eval.py:ro" \
