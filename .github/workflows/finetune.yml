@@ -86,9 +86,11 @@ jobs:
       - name: Download dataset from OBS
         if: inputs.dataset_mode == 'obs'
         run: |
-          obsutil cp obs://${{ env.OBS_BUCKET }}/datasets/libero_so101_expert/ /data/datasets/libero_so101_expert/ -f -r -flat
+          # OBS 下行有 8 个对象系统性失败（待查）；本地已有数据则直接沿用，不被 OBS 卡死
+          obsutil cp obs://${{ env.OBS_BUCKET }}/datasets/libero_so101_expert/ /data/datasets/libero_so101_expert/ -f -r -flat || echo "OBS download partial/failed, fall back to on-disk data"
           find /data/datasets/libero_so101_expert/ -type f | head -10
           du -sh /data/datasets/libero_so101_expert/
+          test -n "$(find /data/datasets/libero_so101_expert/ -name '*.parquet' | head -n 1)" || { echo "NO LOCAL DATA either"; exit 1; }
           # Backfill camera axis names in dataset meta (v3.0 writer left names=None;
           # current lerobot requires names[2]=='channel'). Idempotent; also patched in OBS.
           python3 -c "
