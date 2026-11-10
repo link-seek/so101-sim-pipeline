@@ -45,11 +45,16 @@ bddl_file = os.path.join(bddl_root, task.problem_folder, task.bddl_file)
 print(f"\n[1] Benchmark: libero_object, task 0: {task.name}")
 
 # --- 2. Create env ---
+import robosuite as _suite
+_ctrl_path = os.path.join(
+    os.path.dirname(_suite.__file__),
+    "controllers", "configs", "robots", "default_so101.json"
+)
 env = OffScreenRenderEnv(
     bddl_file_name=bddl_file,
-    robot_type="so_follower",
-    render_mode="rgb_array",
-    camera_names=["eye_in_hand", "agentview", "birdview"],
+    robots=["SO101"],
+    controller=_ctrl_path,
+    camera_names=["agentview", "birdview", "robot0_eye_in_hand"],
     camera_heights=480,
     camera_widths=640,
 )
@@ -62,11 +67,11 @@ print(f"\n[3] Robot: {robot.robot_model}")
 jnt_names = robot.joint_names
 print(f"    Joint names: {jnt_names}")
 print(f"    DoF: {robot.dof}")
-assert robot.dof == 6, f"Expected DoF=6, got {robot.dof}"
+assert robot.dof == 5, f"Expected DoF=5 (arm joints; +1 gripper = 6D action), got {robot.dof}"
 print(f"    Action dim: {robot.action_dim}")
 
 # --- 4. Check observations ---
-for cam in ["eye_in_hand", "agentview", "birdview"]:
+for cam in ["agentview", "birdview", "robot0_eye_in_hand"]:
     key = f"{cam}_image"
     if key in obs:
         img = obs[key]
@@ -90,11 +95,15 @@ if "robot0_gripper_qpos" in obs:
 
 # --- 5. Robot responds to actions ---
 print(f"\n[5] Testing action response...")
-init_jp = obs["robot0_joint_pos"].copy()
+_jp_keys = [k for k in obs if "joint_pos" in k]
+assert _jp_keys, f"No joint_pos in obs keys: {sorted(obs.keys())}"
+_jp_key = sorted(_jp_keys)[0]
+print(f"    joint key: {_jp_key}")
+init_jp = obs[_jp_key].copy()
 action = np.zeros(6)
 for _ in range(10):
     obs, reward, done, info = env.step(action)
-after_jp = obs["robot0_joint_pos"]
+after_jp = obs[_jp_key]
 jp_delta = np.abs(after_jp - init_jp).max()
 print(f"    After 10 zero-actions: max joint delta = {jp_delta:.6f} rad ({np.degrees(jp_delta):.4f} deg)")
 
