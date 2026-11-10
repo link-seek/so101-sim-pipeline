@@ -78,6 +78,11 @@ jobs:
       - name: Pull latest image
         run: docker pull ${{ env.EVAL_IMAGE }}
 
+      - name: Configure obsutil
+        run: |
+          obsutil config -i "${{ secrets.OBS_AK }}" -k "${{ secrets.OBS_SK }}" -e https://obs.cn-north-4.myhuaweicloud.com
+          obsutil ls obs://${{ env.OBS_BUCKET }}/ 2>&1 | head -n 5 || true
+
       - name: Download dataset from OBS
         if: inputs.dataset_mode == 'obs'
         run: |
@@ -121,7 +126,8 @@ jobs:
           fi
           # NOTE: do NOT mkdir OUTDIR here — lerobot-train treats an existing
           # output dir as an error (resume=False), even when empty.
-          docker run --rm --gpus "device=0" --shm-size=16g \
+          date '+[%F %T] train start'
+          timeout 28800 docker run --rm --gpus "device=0" --shm-size=16g \
             -v /data:/data \
             -e CUDA_VISIBLE_DEVICES=0 \
             -e HF_ENDPOINT=https://hf-mirror.com \
@@ -140,6 +146,7 @@ jobs:
                 --save_freq=1000 \
                 --log_freq=50 \
                 --num_workers=4"
+          date '+[%F %T] train done'
 
       - name: Upload checkpoints to OBS
         run: |
