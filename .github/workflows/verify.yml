@@ -48,7 +48,7 @@ jobs:
 
       - name: Verify SO101 + LIBERO integration
         run: |
-          mkdir -p /data/scripts
+          sudo mkdir -p /data/scripts && sudo chown "$(whoami)" /data/scripts
           curl -sfL --max-time 60 -H "Authorization: token ${{ github.token }}" \
             "https://api.github.com/repos/${{ github.repository }}/contents/scripts/verify_so101_libero.py?ref=smolvla-fresh" \
             | python3 -c "import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)['content']).decode())" \
