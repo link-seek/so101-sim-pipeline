@@ -126,7 +126,7 @@ jobs:
             -e HF_ENDPOINT=https://hf-mirror.com \
             ${{ env.EVAL_IMAGE }} \
             bash -c ' set -e;
-              date '+[%F %T] asset install';
+              date "+[%F %T] asset install";
               ROBOSUITE_ASSETS=$(python -c "import robosuite, os; print(os.path.join(os.path.dirname(robosuite.__file__), \"models\", \"assets\"))");
               mkdir -p $ROBOSUITE_ASSETS/robots/so101 $ROBOSUITE_ASSETS/grippers/so101_gripper_meshes;
               cp /workspace/robosuite_so101/robots/so101/robot.xml $ROBOSUITE_ASSETS/robots/so101/;
@@ -136,7 +136,7 @@ jobs:
               ROBOSUITE_CTRL=$(python -c "import robosuite, os; print(os.path.join(os.path.dirname(robosuite.__file__), \"controllers\", \"configs\", \"robots\"))");
               mkdir -p $ROBOSUITE_CTRL;
               cp /workspace/robosuite_so101/controllers/so101_basic.json $ROBOSUITE_CTRL/default_so101.json;
-              date '+[%F %T] asset done'; pip install -q "lerobot[dataset]" && python /workspace/scripts/collect_libero_expert.py \
+              date "+[%F %T] asset done"; pip install -q "lerobot[dataset]" && python /workspace/scripts/collect_libero_expert.py \
               --suite "${{ inputs.suite }}" \
               --tasks "$MY" \
               --episodes_per_task ${{ inputs.episodes_per_task }} \
