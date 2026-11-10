@@ -72,6 +72,7 @@ jobs:
           docker run --rm --gpus "device=0" --shm-size=8g \
             -v "${RUNNER_TEMP}/scripts/verify_so101_libero.py:/workspace/scripts/verify_so101_libero.py:ro" \
             -v "${RUNNER_TEMP}/scripts/run_libero_eval.py:/workspace/scripts/run_libero_eval.py:ro" \
+            -v "${RUNNER_TEMP}/scripts/collect_libero_expert.py:/workspace/scripts/collect_libero_expert.py:ro" \
             -v "${PKG}:/workspace/robosuite_so101:ro" \
             -e MUJOCO_GL=egl \
             ${{ env.EVAL_IMAGE }} \
