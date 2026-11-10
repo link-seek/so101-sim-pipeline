@@ -93,7 +93,8 @@ jobs:
           test -n "$(find /data/datasets/libero_so101_expert/ -name '*.parquet' | head -n 1)" || { echo "NO LOCAL DATA either"; exit 1; }
           # Backfill camera axis names in dataset meta (v3.0 writer left names=None;
           # current lerobot requires names[2]=='channel'). Idempotent; also patched in OBS.
-          python3 -c "
+          # Runs as container-root: dataset files are root-owned (runner has no sudo).
+          docker run --rm -v /data:/data ${{ env.EVAL_IMAGE }} python3 -c "
           import json, glob
           for p in glob.glob('/data/datasets/libero_so101_expert/*/meta/info.json'):
               d = json.load(open(p))
