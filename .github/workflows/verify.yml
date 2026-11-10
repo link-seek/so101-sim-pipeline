@@ -48,14 +48,15 @@ jobs:
 
       - name: Verify SO101 + LIBERO integration
         run: |
-          sudo mkdir -p /data/scripts && sudo chown "$(whoami)" /data/scripts
+          mkdir -p "${RUNNER_TEMP}/scripts"
           curl -sfL --max-time 60 -H "Authorization: token ${{ github.token }}" \
             "https://api.github.com/repos/${{ github.repository }}/contents/scripts/verify_so101_libero.py?ref=smolvla-fresh" \
             | python3 -c "import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)['content']).decode())" \
-            > /data/scripts/verify_so101_libero.py
-          wc -l /data/scripts/verify_so101_libero.py
+            > "${RUNNER_TEMP}/scripts/verify_so101_libero.py"
+          wc -l "${RUNNER_TEMP}/scripts/verify_so101_libero.py"
           docker run --rm --gpus "device=0" --shm-size=8g \
-            -v /data/scripts/verify_so101_libero.py:/workspace/scripts/verify_so101_libero.py:ro \
+            -v "${RUNNER_TEMP}/scripts/verify_so101_libero.py:/workspace/scripts/verify_so101_libero.py:ro" \
+            -v "${RUNNER_TEMP}/scripts/verify_so101_libero.py:/workspace/scripts/verify_so101_libero.py:ro" \
             -e MUJOCO_GL=egl \
             ${{ env.EVAL_IMAGE }} \
             python /workspace/scripts/verify_so101_libero.py
