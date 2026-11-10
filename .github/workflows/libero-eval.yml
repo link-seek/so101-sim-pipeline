@@ -100,13 +100,13 @@ jobs:
             ${{ env.EVAL_IMAGE }} \
             bash -c 'set -e;
               date "+[%F %T] asset install";
-              ROBOSUITE_ASSETS=$(python -c "import robosuite, os; print(os.path.join(os.path.dirname(robosuite.__file__), "models", "assets"))");
+              ROBOSUITE_ASSETS="$(dirname $(python -c "import robosuite; print(robosuite.__file__)"))/models/assets";
               mkdir -p $ROBOSUITE_ASSETS/robots/so101 $ROBOSUITE_ASSETS/grippers/so101_gripper_meshes;
               cp /workspace/robosuite_so101/robots/so101/robot.xml $ROBOSUITE_ASSETS/robots/so101/;
               cp -r /workspace/robosuite_so101/robots/so101/meshes/* $ROBOSUITE_ASSETS/robots/so101/;
               cp /workspace/robosuite_so101/grippers/so101_gripper.xml $ROBOSUITE_ASSETS/grippers/;
               cp -r /workspace/robosuite_so101/grippers/meshes/* $ROBOSUITE_ASSETS/grippers/;
-              ROBOSUITE_CTRL=$(python -c "import robosuite, os; print(os.path.join(os.path.dirname(robosuite.__file__), "controllers", "configs", "robots"))");
+              ROBOSUITE_CTRL="$(dirname $(python -c "import robosuite; print(robosuite.__file__)"))/controllers/configs/robots";
               mkdir -p $ROBOSUITE_CTRL;
               cp /workspace/robosuite_so101/controllers/so101_basic.json $ROBOSUITE_CTRL/default_so101.json;
               date "+[%F %T] asset done";
