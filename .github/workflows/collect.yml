@@ -54,7 +54,10 @@ jobs:
     timeout-minutes: 600
     strategy:
       matrix:
-        gpu: [0, 1]
+        # TEMP single-leg: save_dataset() rmtree(out_dir) per leg; two legs sharing
+        # one suite dir yank each other's files mid-flush. Per-leg dirs + merge
+        # before any 200-ep full run.
+        gpu: [0]
     steps:
       - name: Login to SWR
         run: |
