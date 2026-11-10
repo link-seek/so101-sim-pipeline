@@ -59,10 +59,10 @@ jobs:
           # robosuite_so101 package: same bytes as smolvla-fresh (image lost the baked copy).
           # Prefer sparse git clone; fall back to the API tarball (api.github.com is proven reachable).
           date '+[%F %T] clone start'
-          if timeout 600 git clone --depth 1 --branch smolvla-fresh --filter=blob:none --sparse \
+          if timeout -k 60 600 git clone --depth 1 --branch smolvla-fresh --filter=blob:none --sparse \
               "https://github.com/${{ github.repository }}.git" "${RUNNER_TEMP}/pkg/so101pkg" 2>/dev/null; then
             date '+[%F %T] clone done (git)'
-            git -C "${RUNNER_TEMP}/pkg/so101pkg" sparse-checkout set robosuite_so101
+            timeout -k 60 600 git -C "${RUNNER_TEMP}/pkg/so101pkg" sparse-checkout set robosuite_so101
           else
             curl -sfL --max-time 300 -H "Authorization: token ${{ github.token }}" \
               "https://api.github.com/repos/${{ github.repository }}/tarball/smolvla-fresh" \
@@ -73,7 +73,7 @@ jobs:
           PKG=$(dirname $(find "${RUNNER_TEMP}/pkg" -maxdepth 3 -name so101_robot.py | head -n 1))
           echo "PKG=$PKG"
           date '+[%F %T] docker run start'
-          timeout 1200 docker run --rm --gpus "device=0" --shm-size=8g \
+          timeout -k 120 10800 docker run --rm --gpus "device=0" --shm-size=8g \
             -v "${RUNNER_TEMP}/scripts/verify_so101_libero.py:/workspace/scripts/verify_so101_libero.py:ro" \
             -v "${RUNNER_TEMP}/scripts/run_libero_eval.py:/workspace/scripts/run_libero_eval.py:ro" \
             -v "${RUNNER_TEMP}/scripts/collect_libero_expert.py:/workspace/scripts/collect_libero_expert.py:ro" \
