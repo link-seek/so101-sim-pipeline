@@ -49,7 +49,7 @@ jobs:
       - name: Verify SO101 + LIBERO integration
         run: |
           mkdir -p "${RUNNER_TEMP}/scripts" "${RUNNER_TEMP}/pkg"
-          for f in verify_so101_libero.py run_libero_eval.py; do
+          for f in verify_so101_libero.py run_libero_eval.py collect_libero_expert.py; do
             curl -sfL --max-time 60 -H "Authorization: token ${{ github.token }}" \
               "https://api.github.com/repos/${{ github.repository }}/contents/scripts/${f}?ref=smolvla-fresh" \
               | python3 -c "import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)['content']).decode())" \
