@@ -129,7 +129,7 @@ jobs:
           # NOTE: do NOT mkdir OUTDIR here — lerobot-train treats an existing
           # output dir as an error (resume=False), even when empty.
           date '+[%F %T] train start'
-          timeout 28800 docker run --rm --gpus "device=0" --shm-size=16g \
+          timeout -k 300 28800 docker run --rm --gpus "device=0" --shm-size=16g \
             -v /data:/data \
             -e CUDA_VISIBLE_DEVICES=0 \
             -e HF_ENDPOINT=https://hf-mirror.com \
