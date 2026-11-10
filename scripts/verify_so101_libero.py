@@ -86,7 +86,7 @@ for cam in ["agentview", "birdview", "robot0_eye_in_hand"]:
 if "robot0_joint_pos" in obs:
     jp = obs["robot0_joint_pos"]
     print(f"    joint_pos: {jp} (len={len(jp)})")
-    assert len(jp) == 6
+    assert len(jp) == 5, f"arm joints len=5 (gripper is separate key robot0_gripper_qpos), got {len(jp)}"
 if "robot0_eef_pos" in obs:
     eef = obs["robot0_eef_pos"]
     print(f"    eef_pos: {eef}")
@@ -108,8 +108,8 @@ after_jp = obs[_jp_key]
 jp_delta = np.abs(after_jp - init_jp).max()
 print(f"    After 10 zero-actions: max joint delta = {jp_delta:.6f} rad ({np.degrees(jp_delta):.4f} deg)")
 
-action2 = init_jp.copy()
-action2[0] += 0.1
+action2 = np.zeros(6)
+action2[0] += 0.1  # nudge arm joint 0; gripper channel stays 0
 for _ in range(20):
     obs, reward, done, info = env.step(action2)
 moved_jp = obs["robot0_joint_pos"]
