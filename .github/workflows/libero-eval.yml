@@ -84,6 +84,7 @@ jobs:
           fi
           PKG=$(dirname $(find "${RUNNER_TEMP}/pkg" -maxdepth 3 -name so101_robot.py | head -n 1))
           test -n "$PKG" && ls "$PKG"
+          echo "PKG=$PKG" >> "$GITHUB_ENV"
           date '+[%F %T] pkg ready'
 
       - name: Run LIBERO evaluation
@@ -92,7 +93,7 @@ jobs:
           timeout 2400 docker run --rm --gpus all --shm-size=8g \
             -v /data:/data \
             -v "${RUNNER_TEMP}/scripts/run_libero_eval.py:/workspace/scripts/run_libero_eval.py:ro" \
-            -v "${PKG}:/workspace/robosuite_so101:ro" \
+            -v "${{ env.PKG }}:/workspace/robosuite_so101:ro" \
             -e MUJOCO_GL=egl \
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e HF_HUB_DISABLE_XET=1 \
