@@ -89,31 +89,59 @@ jobs:
           else
             MY=""
           fi
-          rm -rf /data/datasets/libero_so101_expert/'${{ inputs.suite }}'
-          mkdir -p /data/datasets/libero_so101_expert /data/scripts
-          # Fetch the latest collection script so script fixes skip the 1.5h image sync.
-          # Fallback: extract the image-baked copy if the GitHub fetch fails.
-          if ! curl -sfL --max-time 60 -H "Authorization: token ${{ github.token }}" \
-            "https://api.github.com/repos/${{ github.repository }}/contents/scripts/collect_libero_expert.py?ref=smolvla-fresh" \
-            | python3 -c "import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)['content']).decode())" \
-            > /data/scripts/collect_libero_expert.py; then
-            echo "script fetch failed; using image-baked copy"
-            docker run --rm --entrypoint cat ${{ env.EVAL_IMAGE }} /workspace/scripts/collect_libero_expert.py > /data/scripts/collect_libero_expert.py
+          # stale root-owned output? clear via container-as-root (runner has no sudo)
+          rm -rf /data/datasets/libero_so101_expert/'${{ inputs.suite }}' 2>/dev/null || \
+            docker run --rm -v /data:/data ${{ env.EVAL_IMAGE }} rm -rf /data/datasets/libero_so101_expert/'${{ inputs.suite }}'
+          mkdir -p /data/datasets/libero_so101_expert
+          mkdir -p "${RUNNER_TEMP}/scripts"
+          for f in collect_libero_expert.py run_libero_eval.py; do
+            curl -sfL --max-time 60 -H "Authorization: token ${{ github.token }}" \
+              "https://api.github.com/repos/${{ github.repository }}/contents/scripts/${f}?ref=smolvla-fresh" \
+              | python3 -c "import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)['content']).decode())" \
+              > "${RUNNER_TEMP}/scripts/${f}"
+          done
+          wc -l "${RUNNER_TEMP}/scripts/"*.py
+          date '+[%F %T] pkg fetch start'
+          mkdir -p "${RUNNER_TEMP}/pkg"
+          if timeout 600 git clone --depth 1 --branch smolvla-fresh --filter=blob:none --sparse \
+              "https://github.com/${{ github.repository }}.git" "${RUNNER_TEMP}/pkg/so101pkg" 2>/dev/null; then
+            git -C "${RUNNER_TEMP}/pkg/so101pkg" sparse-checkout set robosuite_so101
+          else
+            curl -sfL --max-time 300 -H "Authorization: token ${{ github.token }}" \
+              "https://api.github.com/repos/${{ github.repository }}/tarball/smolvla-fresh" \
+              | tar -xz -C "${RUNNER_TEMP}/pkg" --strip-components=1 --wildcards '*/robosuite_so101'
           fi
-          wc -l /data/scripts/collect_libero_expert.py
-          docker run --rm --gpus "device=${{ matrix.gpu }}" --shm-size=8g \
+          PKG=$(dirname $(find "${RUNNER_TEMP}/pkg" -maxdepth 3 -name so101_robot.py | head -n 1))
+          test -n "$PKG" && ls "$PKG"
+          date '+[%F %T] pkg ready'
+          date '+[%F %T] collect start'
+          timeout 1200 docker run --rm --gpus "device=${{ matrix.gpu }}" --shm-size=8g \
             -v /data:/data \
-            -v /data/scripts/collect_libero_expert.py:/workspace/scripts/collect_libero_expert.py:ro \
+            -v "${RUNNER_TEMP}/scripts/collect_libero_expert.py:/workspace/scripts/collect_libero_expert.py:ro" \
+            -v "${RUNNER_TEMP}/scripts/run_libero_eval.py:/workspace/scripts/run_libero_eval.py:ro" \
+            -v "${PKG}:/workspace/robosuite_so101:ro" \
             -e MY="$MY" \
             -e CUDA_VISIBLE_DEVICES=0 \
             -e MUJOCO_GL=egl \
             -e HF_ENDPOINT=https://hf-mirror.com \
             ${{ env.EVAL_IMAGE }} \
-            bash -c 'pip install -q "lerobot[dataset]" && python /workspace/scripts/collect_libero_expert.py \
+            bash -c ' set -e;
+              date '+[%F %T] asset install';
+              ROBOSUITE_ASSETS=$(python -c "import robosuite, os; print(os.path.join(os.path.dirname(robosuite.__file__), \"models\", \"assets\"))");
+              mkdir -p $ROBOSUITE_ASSETS/robots/so101 $ROBOSUITE_ASSETS/grippers/so101_gripper_meshes;
+              cp /workspace/robosuite_so101/robots/so101/robot.xml $ROBOSUITE_ASSETS/robots/so101/;
+              cp -r /workspace/robosuite_so101/robots/so101/meshes/* $ROBOSUITE_ASSETS/robots/so101/;
+              cp /workspace/robosuite_so101/grippers/so101_gripper.xml $ROBOSUITE_ASSETS/grippers/;
+              cp -r /workspace/robosuite_so101/grippers/meshes/* $ROBOSUITE_ASSETS/grippers/;
+              ROBOSUITE_CTRL=$(python -c "import robosuite, os; print(os.path.join(os.path.dirname(robosuite.__file__), \"controllers\", \"configs\", \"robots\"))");
+              mkdir -p $ROBOSUITE_CTRL;
+              cp /workspace/robosuite_so101/controllers/so101_basic.json $ROBOSUITE_CTRL/default_so101.json;
+              date '+[%F %T] asset done'; pip install -q "lerobot[dataset]" && python /workspace/scripts/collect_libero_expert.py \
               --suite "${{ inputs.suite }}" \
               --tasks "$MY" \
               --episodes_per_task ${{ inputs.episodes_per_task }} \
-              --output_dir /data/datasets/libero_so101_expert' 
+              --output_dir /data/datasets/libero_so101_expert'
+          date '+[%F %T] collect done' 
 
       - name: Upload dataset to OBS
         run: |
