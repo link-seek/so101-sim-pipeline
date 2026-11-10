@@ -56,7 +56,6 @@ jobs:
           wc -l "${RUNNER_TEMP}/scripts/verify_so101_libero.py"
           docker run --rm --gpus "device=0" --shm-size=8g \
             -v "${RUNNER_TEMP}/scripts/verify_so101_libero.py:/workspace/scripts/verify_so101_libero.py:ro" \
-            -v "${RUNNER_TEMP}/scripts/verify_so101_libero.py:/workspace/scripts/verify_so101_libero.py:ro" \
             -e MUJOCO_GL=egl \
             ${{ env.EVAL_IMAGE }} \
             python /workspace/scripts/verify_so101_libero.py
