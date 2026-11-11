@@ -44,6 +44,9 @@ def _read_video_frames(root, cam, ep):
 
 
 def read_dataset(root):
+    """Read a v3 dataset: parquet gives episode boundaries, mp4s give frames (one file per chunk)."""
+    import av
+    import glob as _glob
     root = Path(root)
     info = json.load(open(root / "meta" / "info.json"))
     feats = info["features"]
@@ -51,53 +54,46 @@ def read_dataset(root):
     robot_type = info.get("robot_type", "so_follower")
     tasks = {r["task_index"]: r["task"] for r in pq.read_table(root / "meta" / "tasks.parquet").to_pylist()}
 
-    data_files = sorted(glob.glob(str(root / "data" / "chunk-*" / "*.parquet")))
+    data_files = sorted(_glob.glob(str(root / "data" / "chunk-*" / "*.parquet")))
     assert data_files, f"no data parquet in {root}"
-    table = None
-    for f in data_files:
-        t = pq.read_table(f)
-        table = t if table is None else __import__("pyarrow").concat_tables([table, t])
+    table = pq.concat_tables([pq.read_table(f) for f in data_files])
     ep_idx = np.asarray(table.column("episode_index").to_pylist())
-    episodes = []
-    for ep in sorted(set(ep_idx.tolist())):
-        mask = ep_idx == ep
-        idxs = np.where(mask)[0]
-        task_idx = int(table.column("task_index")[idxs[0]].as_py())
-        import glob as _glob
-        global _PROBED
-        try:
-            _PROBED
-        except NameError:
-            _PROBED = set()
-        if str(root) not in _PROBED:
-            _PROBED.add(str(root))
-            print(f"[merge] layout probe for {root}:")
-            for probe in sorted(_glob.glob(str(root / "images" / "*" / "*")))[:8]:
-                print(f"    probe: {probe}")
-            for probe in sorted(_glob.glob(str(root / "videos" / "*" / "*" / "*")))[:8]:
-                print(f"    probe: {probe}")
+    ep_ids = sorted(set(ep_idx.tolist()))
+    counts = [(ep_idx == ep).sum() for ep in ep_ids]
+    print(f"[merge] {root}: {len(ep_ids)} episodes, {len(table)} rows")
+
+    frames_by_cam = {}
+    for cam in CAM_KEYS:
+        vdir = root / "videos" / cam
+        mp4s = []
+        for chunk in sorted(vdir.glob("chunk-*")):
+            mp4s.extend(sorted(chunk.glob("*.mp4")))
+        assert mp4s, f"no mp4 under {vdir}"
         frames = []
-        ep_dir = f"episode-{ep:06d}"
-        for cam in CAM_KEYS:
-            img_dir = root / "images" / cam / ep_dir
-            pngs = sorted(img_dir.glob("frame-*.png")) or sorted(img_dir.glob("*.png"))
-            if pngs:
-                arrs = [np.asarray(Image.open(p).convert("RGB")) for p in pngs]
-            else:
-                arrs = _read_video_frames(root, cam, ep)
-            frames.append(arrs)
-        n = len(frames[0])
-        assert all(len(a) == n for a in frames), "camera frame counts differ"
-        states = np.asarray(table.column(STATE_KEY).to_pylist())[mask]
-        acts = np.asarray(table.column(ACTION_KEY).to_pylist())[mask]
-        assert len(states) == n and len(acts) == n, (len(states), len(acts), n)
+        for m in mp4s:
+            with av.open(str(m)) as cont:
+                frames.extend(f.to_ndarray(format="rgb24") for f in cont.decode(video=0))
+        print(f"[merge] {root} {cam}: {len(mp4s)} mp4s -> {len(frames)} frames")
+        assert len(frames) == len(table), (cam, len(frames), len(table))
+        frames_by_cam[cam] = frames
+
+    states = np.asarray(table.column(STATE_KEY).to_pylist())
+    acts = np.asarray(table.column(ACTION_KEY).to_pylist())
+    task_of_row = np.asarray(table.column("task_index").to_pylist())
+    episodes, off = [], 0
+    for ep, n in zip(ep_ids, counts):
         ep_frames = []
         for t in range(n):
+            i = off + t
             ep_frames.append({
-                "camera1": frames[0][t], "camera2": frames[1][t], "camera3": frames[2][t],
-                "state": np.asarray(states[t], dtype=np.float32),
+                "camera1": frames_by_cam[CAM_KEYS[0]][i],
+                "camera2": frames_by_cam[CAM_KEYS[1]][i],
+                "camera3": frames_by_cam[CAM_KEYS[2]][i],
+                "state": np.asarray(states[i], dtype=np.float32),
             })
-        episodes.append((ep_frames, np.asarray(acts, dtype=np.float32), tasks.get(task_idx, "")))
+        episodes.append((ep_frames, np.asarray(acts[off:off + n], dtype=np.float32),
+                         tasks.get(int(task_of_row[off]), "")))
+        off += n
     return feats, fps, robot_type, episodes
 
 
