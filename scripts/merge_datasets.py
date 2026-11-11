@@ -64,7 +64,13 @@ def read_dataset(root):
         idxs = np.where(mask)[0]
         task_idx = int(table.column("task_index")[idxs[0]].as_py())
         import glob as _glob
-        if ep == 0 and root == roots[0]:
+        global _PROBED
+        try:
+            _PROBED
+        except NameError:
+            _PROBED = set()
+        if str(root) not in _PROBED:
+            _PROBED.add(str(root))
             print(f"[merge] layout probe for {root}:")
             for probe in sorted(_glob.glob(str(root / "images" / "*" / "*")))[:8]:
                 print(f"    probe: {probe}")
