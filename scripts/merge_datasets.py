@@ -1,0 +1,91 @@
+name: Inspect Data State (read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: read
+
+env:
+  ECS_SERVER_ID: 7f39cb83-1a5c-4792-b65e-e578d7ddb88d
+  ECS_REGION: cn-north-4
+  OBS_BUCKET: so101-sim-pipeline
+
+jobs:
+  start-ecs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Setup hcloud CLI
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+      - name: Start ECS
+        env:
+          HCLOUD_AGREE_PRIVACY: "true"
+        run: |
+          echo "y" | hcloud ECS BatchStartServers \
+            --cli-region="${{ env.ECS_REGION }}" \
+            --cli-access-key="${{ secrets.OBS_AK }}" \
+            --cli-secret-key="${{ secrets.OBS_SK }}" \
+            --os-start.servers.1.id="${{ env.ECS_SERVER_ID }}"
+          # BatchStartServers returns accepted (async): verify power state, or the
+          # self-hosted job queues forever on a stopped box with zero diagnostics.
+          for i in $(seq 1 30); do
+            # NOTE: read calls need the same explicit keys (runner has no hcloud profile).
+            ST=$(hcloud ECS ListServersDetails --cli-region="${{ env.ECS_REGION }}" --limit=50 \
+              --cli-access-key="${{ secrets.OBS_AK }}" --cli-secret-key="${{ secrets.OBS_SK }}" 2>&1 \
+              | python3 -c "import json,sys; raw=sys.stdin.read(); d=json.loads(raw[raw.find('{'):]); print([ (s['status'],s['OS-EXT-STS:vm_state']) for s in d.get('servers',[]) if s.get('id')=='${{ env.ECS_SERVER_ID }}' ][0][1])" 2>/dev/null || echo unknown)
+            echo "power_state=$ST (try $i/30)"
+            [ "$ST" = "active" ] && break
+            sleep 20
+          done
+          [ "$ST" = "active" ] || { echo "V100 did not reach active"; exit 1; }
+
+  inspect:
+    needs: start-ecs
+    runs-on: [self-hosted, Linux, X64, V100]
+    timeout-minutes: 15
+    steps:
+      - name: Configure obsutil
+        run: |
+          obsutil config -i "${{ secrets.OBS_AK }}" -k "${{ secrets.OBS_SK }}" -e https://obs.cn-north-4.myhuaweicloud.com
+      - name: Local disk state
+        run: |
+          echo "=== /data/datasets ==="
+          find /data/datasets -maxdepth 4 2>/dev/null | head -n 40
+          echo "=== du ==="
+          du -sh /data/datasets/* 2>/dev/null || true
+          echo "=== checkpoints ==="
+          ls /data/checkpoints/ 2>/dev/null || true
+      - name: OBS bucket state
+        run: |
+          echo "=== OBS datasets ==="
+          obsutil ls obs://${{ env.OBS_BUCKET }}/datasets/libero_so101_expert/ 2>&1 | head -n 40
+          echo "=== OBS checkpoints ==="
+          obsutil ls obs://${{ env.OBS_BUCKET }}/checkpoints/ 2>&1 | head -n 10
+
+  stop-ecs:
+    needs: inspect
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 10
+    steps:
+      - name: Setup hcloud CLI
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp/
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+      - name: Stop ECS
+        env:
+          HCLOUD_AGREE_PRIVACY: "true"
+        run: |
+          echo "y" | hcloud ECS BatchStopServers \
+            --cli-region="${{ env.ECS_REGION }}" \
+            --cli-access-key="${{ secrets.OBS_AK }}" \
+            --cli-secret-key="${{ secrets.OBS_SK }}" \
+            --os-stop.servers.1.id="${{ env.ECS_SERVER_ID }}"
+          sleep 60
+          exit 0
