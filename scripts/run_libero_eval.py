@@ -400,17 +400,21 @@ def libero_obs_to_policy_obs(obs, task_description, device="cuda"):
         "observation.state": state,
     }
 
+    # Camera order MUST match training (collect_libero_expert.py):
+    # camera1=birdview, camera2=eye_in_hand, camera3=agentview.
+    # (A swapped order here was the cause of the Sept 0/300 + pilot 0/10:
+    #  model fit the data fine — loss 0.015 — but saw permuted views at eval.)
     if "robot0_eye_in_hand_image" in obs:
         frame["observation.images.camera1"] = np.asarray(
-            obs["agentview_image"] if "agentview_image" in obs else obs["robot0_eye_in_hand_image"], dtype=np.uint8
+            obs["birdview_image"] if "birdview_image" in obs else obs["agentview_image"], dtype=np.uint8
         )
         frame["observation.images.camera2"] = np.asarray(
             obs["robot0_eye_in_hand_image"], dtype=np.uint8
         )
-        if "birdview_image" in obs:
-            frame["observation.images.camera3"] = np.asarray(obs["birdview_image"], dtype=np.uint8)
-        elif "agentview_image" in obs:
+        if "agentview_image" in obs:
             frame["observation.images.camera3"] = np.asarray(obs["agentview_image"], dtype=np.uint8)
+        elif "birdview_image" in obs:
+            frame["observation.images.camera3"] = np.asarray(obs["birdview_image"], dtype=np.uint8)
 
     frame = prepare_observation_for_inference(
         frame, device, task=task_description, robot_type="so_follower"
