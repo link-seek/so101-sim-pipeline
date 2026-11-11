@@ -106,11 +106,11 @@ jobs:
             bash -c 'set -e;
               date "+[%F %T] asset install";
               ROBOSUITE_ASSETS="$(dirname $(python -c "import robosuite; print(robosuite.__file__)"))/models/assets";
-              mkdir -p $ROBOSUITE_ASSETS/robots/so101 $ROBOSUITE_ASSETS/grippers/so101_gripper_meshes;
+              mkdir -p $ROBOSUITE_ASSETS/robots/so101/meshes $ROBOSUITE_ASSETS/grippers/meshes/so101_gripper;
               cp /workspace/robosuite_so101/robots/so101/robot.xml $ROBOSUITE_ASSETS/robots/so101/;
-              cp -r /workspace/robosuite_so101/robots/so101/meshes/* $ROBOSUITE_ASSETS/robots/so101/;
+              cp -r /workspace/robosuite_so101/robots/so101/meshes/* $ROBOSUITE_ASSETS/robots/so101/meshes/;
               cp /workspace/robosuite_so101/grippers/so101_gripper.xml $ROBOSUITE_ASSETS/grippers/;
-              cp -r /workspace/robosuite_so101/grippers/meshes/* $ROBOSUITE_ASSETS/grippers/;
+              cp -r /workspace/robosuite_so101/grippers/meshes/so101_gripper/* $ROBOSUITE_ASSETS/grippers/meshes/so101_gripper/;
               ROBOSUITE_CTRL="$(dirname $(python -c "import robosuite; print(robosuite.__file__)"))/controllers/configs/robots";
               mkdir -p $ROBOSUITE_CTRL;
               cp /workspace/robosuite_so101/controllers/so101_basic.json $ROBOSUITE_CTRL/default_so101.json;
