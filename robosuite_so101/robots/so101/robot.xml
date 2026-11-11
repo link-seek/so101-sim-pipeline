@@ -3,7 +3,7 @@
 <!-- Based on robot_descriptions.so_arm101_mj_description (Apache 2.0) -->
 <!-- Adapted from onshape-to-robot MJCF to RoboSuite format -->
 <mujoco model="so101">
-  <compiler angle="radian" meshdir="." autolimits="true"/>
+  <compiler angle="radian" autolimits="true"/>
   <visual>
     <global ellipsoidinertia="true"/>
   </visual>
@@ -11,18 +11,18 @@
     <material name="arm_white" rgba="0.964706 0.964706 0.952941 1"/>
     <material name="arm_gray" rgba="0.627451 0.627451 0.627451 1"/>
 
-    <mesh name="base_motor_holder_so101_v1" file="base_motor_holder_so101_v1.stl"/>
-    <mesh name="base_so101_v2" file="base_so101_v2.stl"/>
-    <mesh name="sts3215_03a_v1" file="sts3215_03a_v1.stl"/>
-    <mesh name="waveshare_mounting_plate_so101_v2" file="waveshare_mounting_plate_so101_v2.stl"/>
-    <mesh name="rotation_pitch_so101_v1" file="rotation_pitch_so101_v1.stl"/>
-    <mesh name="motor_holder_so101_base_v1" file="motor_holder_so101_base_v1.stl"/>
-    <mesh name="upper_arm_so101_v1" file="upper_arm_so101_v1.stl"/>
-    <mesh name="under_arm_so101_v1" file="under_arm_so101_v1.stl"/>
-    <mesh name="motor_holder_so101_wrist_v1" file="motor_holder_so101_wrist_v1.stl"/>
-    <mesh name="sts3215_03a_no_horn_v1" file="sts3215_03a_no_horn_v1.stl"/>
-    <mesh name="wrist_roll_pitch_so101_v2" file="wrist_roll_pitch_so101_v2.stl"/>
-    <mesh name="wrist_roll_follower_so101_v1" file="wrist_roll_follower_so101_v1.stl"/>
+    <mesh name="base_motor_holder_so101_v1" file="meshes/base_motor_holder_so101_v1.stl"/>
+    <mesh name="base_so101_v2" file="meshes/base_so101_v2.stl"/>
+    <mesh name="sts3215_03a_v1" file="meshes/sts3215_03a_v1.stl"/>
+    <mesh name="waveshare_mounting_plate_so101_v2" file="meshes/waveshare_mounting_plate_so101_v2.stl"/>
+    <mesh name="rotation_pitch_so101_v1" file="meshes/rotation_pitch_so101_v1.stl"/>
+    <mesh name="motor_holder_so101_base_v1" file="meshes/motor_holder_so101_base_v1.stl"/>
+    <mesh name="upper_arm_so101_v1" file="meshes/upper_arm_so101_v1.stl"/>
+    <mesh name="under_arm_so101_v1" file="meshes/under_arm_so101_v1.stl"/>
+    <mesh name="motor_holder_so101_wrist_v1" file="meshes/motor_holder_so101_wrist_v1.stl"/>
+    <mesh name="sts3215_03a_no_horn_v1" file="meshes/sts3215_03a_no_horn_v1.stl"/>
+    <mesh name="wrist_roll_pitch_so101_v2" file="meshes/wrist_roll_pitch_so101_v2.stl"/>
+    <mesh name="wrist_roll_follower_so101_v1" file="meshes/wrist_roll_follower_so101_v1.stl"/>
   </asset>
   <worldbody>
     <body name="base" pos="0 0 0" quat="1 0 0 0">
