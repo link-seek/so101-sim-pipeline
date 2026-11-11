@@ -112,9 +112,9 @@ jobs:
             MY=""
           fi
           # stale root-owned output? clear via container-as-root (runner has no sudo)
-          rm -rf /data/datasets/libero_so101_expert${{ inputs.output_suffix }}/'${{ inputs.suite }}' 2>/dev/null || \
-            docker run --rm -v /data:/data ${{ env.EVAL_IMAGE }} rm -rf /data/datasets/libero_so101_expert${{ inputs.output_suffix }}/'${{ inputs.suite }}'
-          mkdir -p /data/datasets/libero_so101_expert${{ inputs.output_suffix }}
+          rm -rf /data/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }}/'${{ inputs.suite }}' 2>/dev/null || \
+            docker run --rm -v /data:/data ${{ env.EVAL_IMAGE }} rm -rf /data/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }}/'${{ inputs.suite }}'
+          mkdir -p /data/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }}
           mkdir -p "${RUNNER_TEMP}/scripts"
           for f in collect_libero_expert.py run_libero_eval.py; do
             curl -sfL --max-time 60 -H "Authorization: token ${{ github.token }}" \
@@ -162,12 +162,12 @@ jobs:
               --suite "${{ inputs.suite }}" \
               --tasks "$MY" \
               --episodes_per_task ${{ inputs.episodes_per_task }} \
-              --output_dir /data/datasets/libero_so101_expert${{ inputs.output_suffix }}'
+              --output_dir /data/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }}'
           date '+[%F %T] collect done' 
 
       - name: Upload dataset to OBS
         run: |
-          obsutil cp /data/datasets/libero_so101_expert${{ inputs.output_suffix }}/ obs://${{ env.OBS_BUCKET }}/datasets/libero_so101_expert${{ inputs.output_suffix }}/ -f -r -flat || true
+          obsutil cp /data/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }}/ obs://${{ env.OBS_BUCKET }}/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }}/ -f -r -flat || true
 
   stop-ecs:
     needs: collect
