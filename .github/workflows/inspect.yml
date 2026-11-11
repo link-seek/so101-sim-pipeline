@@ -55,7 +55,7 @@ jobs:
       - name: Local disk state
         run: |
           echo "=== /data/datasets ==="
-          find /data/datasets -maxdepth 4 2>/dev/null | head -n 40
+          find /data/datasets/libero_so101_expert_w0 /data/datasets/libero_so101_expert/libero_object -maxdepth 5 2>/dev/null; echo '=== DU ==='; du -sh /data/datasets/libero_so101_expert_w0 2>/dev/null || true 2>/dev/null | head -n 40
           echo "=== du ==="
           du -sh /data/datasets/* 2>/dev/null || true
           echo "=== checkpoints ==="
