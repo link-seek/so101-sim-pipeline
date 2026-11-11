@@ -140,7 +140,12 @@ def main():
                 "task": lang,
             })
         out.save_episode()
-    print("[merge] done")
+    out.finalize()
+    print("[merge] finalized; verifying by reopen...")
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset as _LDS2
+    check = _LDS2(repo_id=args.repo_id, root=args.output)
+    assert check.num_episodes == len(all_eps), (check.num_episodes, len(all_eps))
+    print(f"[merge] verified: {check.num_episodes} episodes, meta on disk, done")
 
 
 if __name__ == "__main__":
