@@ -159,7 +159,7 @@ jobs:
               ROBOSUITE_CTRL=$(python -c "import robosuite, os; print(os.path.join(os.path.dirname(robosuite.__file__), \"controllers\", \"configs\", \"robots\"))");
               mkdir -p $ROBOSUITE_CTRL;
               cp /workspace/robosuite_so101/controllers/so101_basic.json $ROBOSUITE_CTRL/default_so101.json;
-              date "+[%F %T] asset done"; pip install -q "lerobot[dataset]" && python /workspace/scripts/collect_libero_expert.py \
+              date "+[%F %T] asset done"; pip install -q "lerobot[dataset]==0.6.1" && python /workspace/scripts/collect_libero_expert.py \
               --suite "${{ inputs.suite }}" \
               --tasks "$MY" \
               --episodes_per_task ${{ inputs.episodes_per_task }} \
