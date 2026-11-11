@@ -67,10 +67,6 @@ class MountedSO101(ManipulatorModel):
         return {"right": "SO101Gripper"}
 
     @property
-    def default_controller_config(self):
-        return {"right": "default_so101"}
-
-    @property
     def init_qpos(self):
         return np.array([0.0, 0.0, 0.0, 0.0, 0.0])
 
