@@ -153,7 +153,7 @@ jobs:
             -e WANDB_MODE=offline \
             -e PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
             ${{ env.EVAL_IMAGE }} \
-            bash -c "pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple 'lerobot[dataset,training]' && \
+            bash -c "pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple 'lerobot[dataset,training]==0.6.1' && \
               lerobot-train \
                 $POLICY_ARG \
                 $DATASET_ARGS \
