@@ -1,7 +1,12 @@
 import numpy as np
 from robosuite.models.robots.manipulators.manipulator_model import ManipulatorModel
+from robosuite.robots import register_robot_class
 
-from robosuite.utils.mjcf_utils import xml_path_completion
+try:
+    # Upstream path (robosuite_models installed): resolve inside the package.
+    from robosuite_models import robosuite_model_path_completion as _path_completion
+except ImportError:  # standalone / evaluation image: resolve inside robosuite assets
+    from robosuite.utils.mjcf_utils import xml_path_completion as _path_completion
 
 
 class _DualInterfaceOffset:
@@ -23,6 +28,7 @@ class _DualInterfaceOffset:
         return self._fixed[idx]
 
 
+@register_robot_class("FixedBaseRobot")
 class MountedSO101(ManipulatorModel):
     """SO-ARM101: 5-DoF low-cost robotic arm by TheRobotCompany.
 
@@ -37,7 +43,7 @@ class MountedSO101(ManipulatorModel):
 
     def __init__(self, idn=0):
         super().__init__(
-            xml_path_completion("robots/so101/robot.xml"),
+            _path_completion("robots/so101/robot.xml"),
             idn=idn,
         )
 
