@@ -77,6 +77,10 @@ jobs:
           obsutil ls obs://${{ env.OBS_BUCKET }}/ 2>&1 | head -n 5 || true
       - name: Pull latest image
         run: docker pull ${{ env.EVAL_IMAGE }}
+      - name: Clear stale output (root-owned from prior runs)
+        run: |
+          docker run --rm -v /data:/data ${{ env.EVAL_IMAGE }} rm -rf "${{ inputs.dst }}" || true
+
       - name: Merge datasets (CPU, no GPU needed)
         run: |
           date '+[%F %T] merge fetch'
