@@ -27,6 +27,22 @@ STATE_KEY = "observation.state"
 ACTION_KEY = "action"
 
 
+def _read_video_frames(root, cam, ep):
+    """Fallback: decode episode mp4 (pyav). Probes common v3 layouts."""
+    import av
+    vdir = root / "videos" / cam
+    cands = sorted(vdir.rglob(f"*episode-{ep:06d}*.mp4")) or sorted(vdir.rglob("*.mp4"))
+    assert cands, f"no mp4 for {cam} ep {ep} under {vdir}"
+    path = cands[ep % len(cands)] if len(cands) > 1 else cands[0]
+    print(f"    [video-fallback] {cam} ep {ep}: {path}")
+    frames = []
+    with av.open(str(path)) as cont:
+        for frame in cont.decode(video=0):
+            frames.append(frame.to_ndarray(format="rgb24"))
+    assert frames, f"empty video {path}"
+    return frames
+
+
 def read_dataset(root):
     root = Path(root)
     info = json.load(open(root / "meta" / "info.json"))
@@ -47,13 +63,22 @@ def read_dataset(root):
         mask = ep_idx == ep
         idxs = np.where(mask)[0]
         task_idx = int(table.column("task_index")[idxs[0]].as_py())
+        import glob as _glob
+        if ep == 0 and root == roots[0]:
+            print(f"[merge] layout probe for {root}:")
+            for probe in sorted(_glob.glob(str(root / "images" / "*" / "*")))[:8]:
+                print(f"    probe: {probe}")
+            for probe in sorted(_glob.glob(str(root / "videos" / "*" / "*" / "*")))[:8]:
+                print(f"    probe: {probe}")
         frames = []
         ep_dir = f"episode-{ep:06d}"
         for cam in CAM_KEYS:
             img_dir = root / "images" / cam / ep_dir
-            pngs = sorted(img_dir.glob("frame-*.png"))
-            assert pngs, f"no PNGs in {img_dir} (episode {ep})"
-            arrs = [np.asarray(Image.open(p).convert("RGB")) for p in pngs]
+            pngs = sorted(img_dir.glob("frame-*.png")) or sorted(img_dir.glob("*.png"))
+            if pngs:
+                arrs = [np.asarray(Image.open(p).convert("RGB")) for p in pngs]
+            else:
+                arrs = _read_video_frames(root, cam, ep)
             frames.append(arrs)
         n = len(frames[0])
         assert all(len(a) == n for a in frames), "camera frame counts differ"
