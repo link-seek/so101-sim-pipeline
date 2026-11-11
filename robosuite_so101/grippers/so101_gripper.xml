@@ -2,7 +2,7 @@
 <!-- SO101 parallel jaw gripper for RoboSuite -->
 <!-- Based on robot_descriptions moving_jaw (Apache 2.0) -->
 <mujoco model="so101_gripper">
-  <compiler angle="radian" meshdir="." autolimits="true"/>
+  <compiler angle="radian" autolimits="true"/>
   <default>
     <default class="so101_gripper">
       <joint damping="0.60" frictionloss="0.052" armature="0.028"/>
@@ -10,7 +10,7 @@
   </default>
   <asset>
     <material name="gripper_white" rgba="0.964706 0.964706 0.952941 1"/>
-    <mesh name="moving_jaw_so101_v1" file="moving_jaw_so101_v1.stl"/>
+    <mesh name="moving_jaw_so101_v1" file="meshes/so101_gripper/moving_jaw_so101_v1.stl"/>
   </asset>
   <worldbody>
     <body name="right_hand" pos="0 0 0">
