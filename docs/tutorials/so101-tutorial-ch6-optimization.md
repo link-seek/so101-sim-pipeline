@@ -20,7 +20,7 @@
 
 | | 我们的 SmolVLA | LIBERO 环境 |
 |--|----------------|-------------|
-| 机器人 | SO101（6 DoF） | Franka Panda（7 DoF） |
+| 机器人 | SO101（5 臂关节 + 1 夹爪） | Franka Panda（7 DoF） |
 | 训练数据 | SO101 真机/仿真演示 | LIBERO 仿真演示（RoboSuite） |
 | 观测空间 | SO101 关节状态 + SO101 相机图像 | Franka 关节状态 + RoboSuite 相机图像 |
 | 动作空间 | SO101 6 维（5 arm + 1 gripper） | Franka 7 维（7 arm + 1 gripper） |
@@ -87,7 +87,7 @@ Week 2: 评测与归档
 | 风险 | 缓解措施 |
 |------|----------|
 | SO101 工作空间 < Panda，部分 BDDL 任务物体不可达 | 缩小放置范围（×0.7） |
-| SO101 6 DoF vs Panda 7 DoF，部分任务需 7 自由度 | 跳过不可解任务 |
+| SO101（5+1）vs Panda 7 自由度，部分任务需 7 自由度 | 跳过不可解任务 |
 | Zero-shot 性能极低 | 预期的——这正是泛化差距的量化 |
 
 ---
@@ -95,7 +95,7 @@ Week 2: 评测与归档
 ## 思考题
 
 1. **为什么不能直接把 SO101 模型放到 LIBERO 的 Franka 环境里跑？**  
-   提示：机器人不同——SO101（6 DoF）vs Franka（7 DoF），关节定义、观测空间、动作语义都不匹配。详见 [Discussion #9](https://github.com/link-seek/so101-sim-pipeline/discussions/9)。
+   提示：机器人不同——SO101（5 臂关节 + 1 夹爪）vs Franka（7 DoF），关节定义、观测空间、动作语义都不匹配。详见 [Discussion #9](https://github.com/link-seek/so101-sim-pipeline/discussions/9)。
 
 2. **在 LIBERO 中添加 SO101 机器人后，评测的是哪个模型？**  
    提示：是我们现有的 `xieyucheng123/so101-smolvla`，在 SO101 数据上训练的 SO101 模型——不是新训练的 Franka 模型。
