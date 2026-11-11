@@ -114,7 +114,8 @@ jobs:
           # stale root-owned output? clear via container-as-root (runner has no sudo)
           rm -rf /data/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }}/'${{ inputs.suite }}' 2>/dev/null || \
             docker run --rm -v /data:/data ${{ env.EVAL_IMAGE }} rm -rf /data/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }}/'${{ inputs.suite }}'
-          mkdir -p /data/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }}
+          # /data is root-owned: new per-leg dirs must be created as root (runner has no sudo)
+          docker run --rm -v /data:/data ${{ env.EVAL_IMAGE }} mkdir -p /data/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }}/'${{ inputs.suite }}'
           mkdir -p "${RUNNER_TEMP}/scripts"
           for f in collect_libero_expert.py run_libero_eval.py; do
             curl -sfL --max-time 60 -H "Authorization: token ${{ github.token }}" \
