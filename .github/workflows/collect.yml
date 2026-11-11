@@ -18,7 +18,7 @@ on:
       output_suffix:
         description: "Suffix for output dir (per-leg sharding, e.g. _g0). Empty = legacy path"
         required: false
-        default: "
+        default: ""
 
 permissions:
   contents: write
