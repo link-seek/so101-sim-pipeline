@@ -56,7 +56,8 @@ def read_dataset(root):
 
     data_files = sorted(_glob.glob(str(root / "data" / "chunk-*" / "*.parquet")))
     assert data_files, f"no data parquet in {root}"
-    table = pq.concat_tables([pq.read_table(f) for f in data_files])
+    import pyarrow as pa
+    table = pa.concat_tables([pq.read_table(f) for f in data_files])
     ep_idx = np.asarray(table.column("episode_index").to_pylist())
     ep_ids = sorted(set(ep_idx.tolist()))
     counts = [(ep_idx == ep).sum() for ep in ep_ids]
