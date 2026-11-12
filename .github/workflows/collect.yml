@@ -50,7 +50,7 @@ jobs:
           # This loop: waits for quiescence, issues start (re-issues every ~4min if
           # dropped), and fails loudly if not active within 20min.
           ECS="${{ env.ECS_SERVER_ID }}"; AK="${{ secrets.OBS_AK }}"; SK="${{ secrets.OBS_SK }}"; RG="${{ env.ECS_REGION }}"
-          st() { OUT=$(hcloud ECS ListServersDetails --cli-region="$RG" --limit=50 --cli-access-key="$AK" --cli-secret-key="$SK" 2>&1); if ! echo "$OUT" | grep -q '"servers"'; then echo "hcloud-bad: $(echo "$OUT" | head -c 200)" >&2; echo unknown; return 0; fi; echo "$OUT" | python3 -c "import json,sys; raw=sys.stdin.read(); d=json.loads(raw[raw.find(chr(123)):]); s=[x for x in d.get('servers',[]) if x.get('id')=='$ECS']; print((s[0].get('OS-EXT-STS:vm_state','?')+'/'+str(s[0].get('OS-EXT-STS:task_state') or '')) if s else 'unknown')" 2>&1 || echo unknown; }
+          st() { OUT=$(echo "y" | hcloud ECS ListServersDetails --cli-region="$RG" --limit=50 --cli-access-key="$AK" --cli-secret-key="$SK" 2>&1); echo "$OUT" | grep -q "{" || { echo "hcloud-bad: $(echo "$OUT" | head -c 200)" >&2; echo unknown; return 0; }; echo "$OUT" | python3 -c "import json,sys; raw=sys.stdin.read(); d=json.loads(raw[raw.find(chr(123)):]); s=[x for x in d.get('servers',[]) if x.get('id')=='$ECS']; print((s[0].get('OS-EXT-STS:vm_state','?')+'/'+str(s[0].get('OS-EXT-STS:task_state') or '')) if s else 'unknown')" 2>&1 || echo unknown; }
           LAST_START=-100; N=0; ST=unknown
           for i in $(seq 1 60); do
             ST=$(st); echo "[$i/60] $ST"
