@@ -113,15 +113,12 @@ def main():
     except ImportError:
         from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 
-    all_eps, feats, fps, robot_type = [], None, None, None
-    for r in roots:
-        f, fp, rt, eps = read_dataset(r)
-        if feats is None:
-            feats, fps, robot_type = f, fp, rt
-        print(f"[merge] {r}: {len(eps)} episodes")
-        all_eps.extend(eps)
-    print(f"[merge] total {len(all_eps)} episodes -> {args.output}")
-
+    # Stream: read one input, write its episodes immediately, then free.
+    # (Loading all inputs at once OOMs the box past ~100 episodes; exit 137.)
+    first = roots[0]
+    import pyarrow.parquet as _pq
+    _info = json.load(open(Path(first) / "meta" / "info.json"))
+    feats, fps, robot_type = _info["features"], _info.get("fps", 20), _info.get("robot_type", "so_follower")
     create_feats = {k: {"dtype": v["dtype"], "shape": list(v["shape"]),
                         "names": v.get("names") or (["height", "width", "channel"] if v["dtype"] in ("video", "image") else None)}
                     for k, v in feats.items() if k in CAM_KEYS + [STATE_KEY, ACTION_KEY]}
@@ -129,22 +126,31 @@ def main():
         repo_id=args.repo_id, fps=fps, features=create_feats,
         root=args.output, robot_type=robot_type, use_videos=True,
     )
-    for frames, acts, lang in all_eps:
-        for t in range(len(acts)):
-            out.add_frame({
-                "observation.images.camera1": frames[t]["camera1"],
-                "observation.images.camera2": frames[t]["camera2"],
-                "observation.images.camera3": frames[t]["camera3"],
-                "observation.state": frames[t]["state"],
-                "action": acts[t],
-                "task": lang,
-            })
-        out.save_episode()
+    total = 0
+    for r in roots:
+        _, _, _, eps = read_dataset(r)
+        print(f"[merge] {r}: {len(eps)} episodes -> writing...")
+        for frames, acts, lang in eps:
+            for t in range(len(acts)):
+                out.add_frame({
+                    "observation.images.camera1": frames[t]["camera1"],
+                    "observation.images.camera2": frames[t]["camera2"],
+                    "observation.images.camera3": frames[t]["camera3"],
+                    "observation.state": frames[t]["state"],
+                    "action": acts[t],
+                    "task": lang,
+                })
+            out.save_episode()
+            total += 1
+        del eps
+        import gc; gc.collect()
+        print(f"[merge] {r} done, running total {total}")
+    print(f"[merge] total {total} episodes -> {args.output}")
     out.finalize()
     print("[merge] finalized; verifying by reopen...")
     from lerobot.datasets.lerobot_dataset import LeRobotDataset as _LDS2
     check = _LDS2(repo_id=args.repo_id, root=args.output)
-    assert check.num_episodes == len(all_eps), (check.num_episodes, len(all_eps))
+    assert check.num_episodes == total, (check.num_episodes, total)
     print(f"[merge] verified: {check.num_episodes} episodes, meta on disk, done")
 
 
