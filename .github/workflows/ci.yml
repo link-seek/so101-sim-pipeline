@@ -46,6 +46,7 @@ jobs:
           python-version: "3.12"
       - name: Validate all workflow files parse and expose triggers
         run: |
+          pip install -q pyyaml
           python3 - <<'EOF'
           import glob, sys
           import yaml
