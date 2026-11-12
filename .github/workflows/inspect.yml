@@ -72,7 +72,12 @@ jobs:
           du -sh /data/checkpoints/* 2>/dev/null || true
       - name: "Backfill OBS upload (one-off)"
         run: |
-          docker run --rm -v /data:/data ${{ env.EVAL_IMAGE }} chmod -R a+rX /data/datasets/libero_so101_expert /data/datasets/libero_so101_expert_w0-g0 /data/datasets/libero_so101_expert_w0-g1 /data/datasets/libero_so101_expert_w1-g0 /data/datasets/libero_so101_expert_w1-g1 /data/datasets/libero_so101_expert_w1m 2>&1 | tail -n 2 || true
+          LOGIN_KEY=$(printf "${{ secrets.OBS_AK }}" | openssl dgst -binary -sha256 -hmac "${{ secrets.OBS_SK }}" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//')
+          docker login -u "cn-north-4@${{ secrets.OBS_AK }}" -p "$LOGIN_KEY" swr.cn-north-4.myhuaweicloud.com
+          docker pull ${{ env.EVAL_IMAGE }}
+          docker run --rm -v /data:/data ${{ env.EVAL_IMAGE }} chmod -R a+rX /data/datasets/libero_so101_expert /data/datasets/libero_so101_expert_w0-g0 /data/datasets/libero_so101_expert_w0-g1 /data/datasets/libero_so101_expert_w1-g0 /data/datasets/libero_so101_expert_w1-g1 /data/datasets/libero_so101_expert_w1m
+          echo "CHMOD-EXIT:$?"
+          ls -la /data/datasets/libero_so101_expert_w1m/libero_object/videos/observation.images.camera1/chunk-000/ | head -n 5
           for d in libero_so101_expert_w1m libero_so101_expert_w1-g0 libero_so101_expert_w1-g1 libero_so101_expert_w0-g0 libero_so101_expert_w0-g1 libero_so101_expert; do
             [ -d /data/datasets/$d ] || continue
             echo "=== backfill $d ==="
