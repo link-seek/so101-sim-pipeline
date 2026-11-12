@@ -44,7 +44,7 @@ jobs:
         env:
           HCLOUD_AGREE_PRIVACY: "true"
         run: |
-                    # BatchStartServers is async AND silently drops the request if the box is
+          # BatchStartServers is async AND silently drops the request if the box is
           # mid-transition (seen 3x: start lands in a stop window, run queues forever).
           # This loop: waits for quiescence, issues start (re-issues every ~4min if
           # dropped), and fails loudly if not active within 20min.
