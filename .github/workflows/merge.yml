@@ -100,6 +100,10 @@ jobs:
             ${{ env.EVAL_IMAGE }} \
             bash -c 'set -e; pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple "lerobot[dataset]==0.6.1" && python /workspace/scripts/merge_datasets.py --inputs "${{ inputs.srcs }}" --output "${{ inputs.dst }}" --repo-id "${{ inputs.repo_id }}"'
           date '+[%F %T] merge done'
+      - name: Fix perms (container wrote root-only 0600; runner uploads)
+        run: |
+          docker run --rm -v /data:/data ${{ env.EVAL_IMAGE }} chmod -R a+rX "${{ inputs.dst }}"
+
       - name: Upload merged dataset to OBS
         run: |
           obsutil cp ${{ inputs.dst }}/ obs://${{ env.OBS_BUCKET }}/datasets/$(basename ${{ inputs.dst }})/ -f -r -flat || true
