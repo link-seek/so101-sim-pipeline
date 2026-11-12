@@ -36,6 +36,35 @@ jobs:
         run: |
           pytest tests/ -v --tb=short || true
 
+  validate-workflows:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate all workflow files parse and expose triggers
+        run: |
+          python3 - <<'EOF'
+          import glob, sys
+          import yaml
+          bad = []
+          for p in sorted(glob.glob('.github/workflows/*.yml')):
+              try:
+                  d = yaml.safe_load(open(p))
+              except Exception as e:
+                  bad.append(f"{p}: YAML parse error: {e}")
+                  continue
+              trig = d.get(True, d.get('on'))
+              if not isinstance(trig, dict) or not trig:
+                  bad.append(f"{p}: no triggers found")
+          if bad:
+              print("\n".join(bad))
+              sys.exit(1)
+          print("all workflow files valid")
+          EOF
+
   docker-build:
     runs-on: ubuntu-22.04
     steps:
