@@ -44,23 +44,24 @@ jobs:
         env:
           HCLOUD_AGREE_PRIVACY: "true"
         run: |
-          echo "y" | hcloud ECS BatchStartServers \
-            --cli-region="${{ env.ECS_REGION }}" \
-            --cli-access-key="${{ secrets.OBS_AK }}" \
-            --cli-secret-key="${{ secrets.OBS_SK }}" \
-            --os-start.servers.1.id="${{ env.ECS_SERVER_ID }}"
-          # BatchStartServers returns accepted (async): verify power state, or the
-          # self-hosted job queues forever on a stopped box with zero diagnostics.
-          for i in $(seq 1 30); do
-            # NOTE: read calls need the same explicit keys (runner has no hcloud profile).
-            ST=$(hcloud ECS ListServersDetails --cli-region="${{ env.ECS_REGION }}" --limit=50 \
-              --cli-access-key="${{ secrets.OBS_AK }}" --cli-secret-key="${{ secrets.OBS_SK }}" 2>&1 \
-              | python3 -c "import json,sys; raw=sys.stdin.read(); d=json.loads(raw[raw.find('{'):]); print([ (s['status'],s['OS-EXT-STS:vm_state']) for s in d.get('servers',[]) if s.get('id')=='${{ env.ECS_SERVER_ID }}' ][0][1])" 2>/dev/null || echo unknown)
-            echo "power_state=$ST (try $i/30)"
-            [ "$ST" = "active" ] && break
-            sleep 20
+                    # BatchStartServers is async AND silently drops the request if the box is
+          # mid-transition (seen 3x: start lands in a stop window, run queues forever).
+          # This loop: waits for quiescence, issues start (re-issues every ~4min if
+          # dropped), and fails loudly if not active within 20min.
+          ECS="${{ env.ECS_SERVER_ID }}"; AK="${{ secrets.OBS_AK }}"; SK="${{ secrets.OBS_SK }}"; RG="${{ env.ECS_REGION }}"
+          st() { hcloud ECS ListServersDetails --cli-region="$RG" --limit=50 --cli-access-key="$AK" --cli-secret-key="$SK" 2>/dev/null | python3 -c "import json,sys; raw=sys.stdin.read(); d=json.loads(raw[raw.find('{'):]); s=[x for x in d.get('servers',[]) if x.get('id')=='$ECS']; print((s[0].get('OS-EXT-STS:vm_state','?')+'/'+str(s[0].get('OS-EXT-STS:task_state') or '')) if s else 'unknown')" 2>/dev/null || echo unknown; }
+          LAST_START=-100; N=0; ST=unknown
+          for i in $(seq 1 60); do
+            ST=$(st); echo "[$i/60] $ST"
+            case "$ST" in
+              active/) echo "V100 active"; break ;;
+              stopped/) if [ $((N-LAST_START)) -ge 12 ] || [ $N -eq 0 ]; then echo "issuing start"; echo "y" | hcloud ECS BatchStartServers --cli-region="$RG" --cli-access-key="$AK" --cli-secret-key="$SK" --os-start.servers.1.id="$ECS" >/dev/null 2>&1 || echo "start call failed, will retry"; LAST_START=$N; else echo "start already requested, waiting"; fi ;;
+              */?*) echo "transition in progress, waiting" ;;
+              *) echo "state unreadable, waiting" ;;
+            esac
+            N=$((N+1)); sleep 20
           done
-          [ "$ST" = "active" ] || { echo "V100 did not reach active"; exit 1; }
+          [ "$(st)" = "active/" ] || { echo "V100 did not reach active"; exit 1; }
 
   merge:
     needs: start-ecs
