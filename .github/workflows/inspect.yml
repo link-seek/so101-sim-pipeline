@@ -55,12 +55,26 @@ jobs:
           obsutil config -i "${{ secrets.OBS_AK }}" -k "${{ secrets.OBS_SK }}" -e https://obs.cn-north-4.myhuaweicloud.com
       - name: Local disk state
         run: |
-          echo "=== /data/datasets ==="
-          find /data/datasets/libero_so101_expert_w0 /data/datasets/libero_so101_expert/libero_object -maxdepth 5 2>/dev/null; echo '=== DU ==='; du -sh /data/datasets/libero_so101_expert_w0 2>/dev/null || true 2>/dev/null | head -n 40
-          echo "=== du ==="
+          echo "=== datasets tree (depth 3) ==="
+          find /data/datasets -maxdepth 3 2>/dev/null | head -n 60
+          echo "=== du per dir ==="
           du -sh /data/datasets/* 2>/dev/null || true
           echo "=== checkpoints ==="
-          ls /data/checkpoints/ 2>/dev/null || true
+          ls -la /data/checkpoints/ 2>/dev/null || true
+          du -sh /data/checkpoints/* 2>/dev/null || true
+      - name: OBS upload probe (one big file, full error)
+        run: |
+          echo "=== checkpoint dir writability ==="
+          ls -ld /home/runner/.obsutil_checkpoint 2>&1 || echo "no checkpoint dir"
+          touch /home/runner/.obsutil_checkpoint/_wtest 2>&1 && echo "checkpoint dir writable" || echo "CHECKPOINT DIR NOT WRITABLE"
+          echo "=== biggest mp4 in w1m ==="
+          BIG=$(ls -S /data/datasets/libero_so101_expert_w1m/libero_object/videos/observation.images.camera1/chunk-000/*.mp4 2>/dev/null | head -n 1)
+          [ -z "$BIG" ] && BIG=$(find /data/datasets/libero_so101_expert_w1m -name "*.mp4" 2>/dev/null | head -n 1)
+          echo "BIG=$BIG"; ls -la "$BIG"
+          echo "=== single-file upload (no || true, capture exit) ==="
+          obsutil cp "$BIG" obs://${{ env.OBS_BUCKET }}/datasets/_diag/probe.mp4 -f; echo "PROBE-EXIT:$?"
+          echo "=== also try with explicit partsize/threshold ==="
+          obsutil cp "$BIG" obs://${{ env.OBS_BUCKET }}/datasets/_diag/probe-ps.mp4 -f -ps=auto -threshold=50MB; echo "PROBE2-EXIT:$?"
       - name: OBS bucket state
         run: |
           echo "=== OBS datasets ==="
