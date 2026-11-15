@@ -108,7 +108,10 @@ def main():
     args = ap.parse_args()
     roots = [r for r in args.inputs.split(",") if r]
     assert len(roots) >= 2
-    assert not Path(args.output).exists(), f"refuse to clobber {args.output}"
+    if not args.resume:
+        assert not Path(args.output).exists(), f"refuse to clobber {args.output}"
+    else:
+        assert Path(args.output).exists(), f"nothing to resume at {args.output}"
 
     try:
         from lerobot.datasets.lerobot_dataset import LeRobotDataset
