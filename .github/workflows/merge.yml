@@ -19,6 +19,11 @@ on:
         description: "LeRobot repo id for the merged dataset"
         required: false
         default: "libero_so101_expert"
+      resume:
+        description: "Append into existing dst (resume) instead of fresh create"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -87,6 +92,7 @@ jobs:
       - name: Pull latest image
         run: docker pull ${{ env.EVAL_IMAGE }}
       - name: Clear stale output (root-owned from prior runs)
+        if: ${{ !inputs.resume }}
         run: |
           docker run --rm -v /data:/data ${{ env.EVAL_IMAGE }} rm -rf "${{ inputs.dst }}" || true
 
@@ -106,7 +112,7 @@ jobs:
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
             ${{ env.EVAL_IMAGE }} \
-            bash -c 'set -e; pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple "lerobot[dataset]==0.6.1" && python /workspace/scripts/merge_datasets.py --inputs "${{ inputs.srcs }}" --output "${{ inputs.dst }}" --repo-id "${{ inputs.repo_id }}"'
+            bash -c 'set -e; pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple "lerobot[dataset]==0.6.1" && python /workspace/scripts/merge_datasets.py --inputs "${{ inputs.srcs }}" --output "${{ inputs.dst }}" --repo-id "${{ inputs.repo_id }}" ${{ inputs.resume && '--resume' || '' }}'
           date '+[%F %T] merge done'
       - name: Fix perms (container wrote root-only 0600; runner uploads)
         run: |
@@ -114,7 +120,7 @@ jobs:
 
       - name: Upload merged dataset to OBS
         run: |
-          obsutil cp ${{ inputs.dst }}/ obs://${{ env.OBS_BUCKET }}/datasets/$(basename ${{ inputs.dst }})/ -f -r -flat || true
+          obsutil cp ${{ inputs.dst }}/ obs://${{ env.OBS_BUCKET }}/datasets/$(basename ${{ inputs.dst }})/ -f -r -flat -u || true
 
   stop-ecs:
     needs: merge
