@@ -103,6 +103,8 @@ def main():
     ap.add_argument("--inputs", required=True)
     ap.add_argument("--output", required=True)
     ap.add_argument("--repo-id", default="libero_so101_expert")
+    ap.add_argument("--resume", action="store_true",
+                    help="append into existing dataset at output (LeRobotDataset.resume) instead of create")
     args = ap.parse_args()
     roots = [r for r in args.inputs.split(",") if r]
     assert len(roots) >= 2
@@ -115,6 +117,15 @@ def main():
 
     # Stream: read one input, write its episodes immediately, then free.
     # (Loading all inputs at once OOMs the box past ~100 episodes; exit 137.)
+    if args.resume:
+        from lerobot.datasets.lerobot_dataset import LeRobotDataset as _LDSR
+        out = _LDSR.resume(repo_id=args.repo_id, root=args.output)
+        feats = out.features
+        print(f"[merge] resumed {args.output}: {out.num_episodes} episodes already on disk")
+        total = out.num_episodes
+    else:
+        out = None
+        total = 0
     first = roots[0]
     import pyarrow.parquet as _pq
     _info = json.load(open(Path(first) / "meta" / "info.json"))
@@ -122,15 +133,15 @@ def main():
     create_feats = {k: {"dtype": v["dtype"], "shape": list(v["shape"]),
                         "names": v.get("names") or (["height", "width", "channel"] if v["dtype"] in ("video", "image") else None)}
                     for k, v in feats.items() if k in CAM_KEYS + [STATE_KEY, ACTION_KEY]}
-    out = LeRobotDataset.create(
+    if out is None:
+        out = LeRobotDataset.create(
         repo_id=args.repo_id, fps=fps, features=create_feats,
         root=args.output, robot_type=robot_type, use_videos=True,
         # Bound writer memory: small chunks + serial per-episode encode.
         # (Defaults buffer whole-dataset chunks and fork N parallel encoders;
         # 492 eps OOM-killed at finalize with exit 137.)
         data_files_size_in_mb=100, video_files_size_in_mb=100,
-    )
-    total = 0
+        )
     for r in roots:
         _, _, _, eps = read_dataset(r)
         print(f"[merge] {r}: {len(eps)} episodes -> writing...")
