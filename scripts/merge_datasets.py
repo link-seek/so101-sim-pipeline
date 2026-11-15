@@ -125,6 +125,10 @@ def main():
     out = LeRobotDataset.create(
         repo_id=args.repo_id, fps=fps, features=create_feats,
         root=args.output, robot_type=robot_type, use_videos=True,
+        # Bound writer memory: small chunks + serial per-episode encode.
+        # (Defaults buffer whole-dataset chunks and fork N parallel encoders;
+        # 492 eps OOM-killed at finalize with exit 137.)
+        data_files_size_in_mb=100, video_files_size_in_mb=100,
     )
     total = 0
     for r in roots:
@@ -140,7 +144,7 @@ def main():
                     "action": acts[t],
                     "task": lang,
                 })
-            out.save_episode()
+            out.save_episode(parallel_encoding=False)
             total += 1
         del eps
         import gc; gc.collect()
