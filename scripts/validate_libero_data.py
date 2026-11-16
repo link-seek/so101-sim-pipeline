@@ -39,13 +39,17 @@ def main():
     import pyarrow.parquet as _pq
     task_of = {r["task_index"]: r["task"] for r in
                _pq.read_table(Path(args.root) / "meta" / "tasks.parquet").to_pylist()}
-    ep_table = _pq.read_table(Path(args.root) / "meta" / "episodes" / "chunk-000",
-                              columns=["episode_index", "task_index", "length"]).to_pylist()
+    ep_table = _pq.read_table(Path(args.root) / "meta" / "episodes").to_pylist()
     assert len(ep_table) == ds.num_episodes, (len(ep_table), ds.num_episodes)
     tasks = defaultdict(list)   # task -> [(ep_idx, length)]
     ep_lens = {}
     for r in ep_table:
-        ep, ln = int(r["episode_index"]), int(r["length"])
+        if "episode_index" not in r or "task_index" not in r:
+            raise KeyError(f"episodes row missing keys, have: {sorted(r.keys())}")
+        ep = int(r["episode_index"])
+        ln = int(r.get("length", r.get("episode_length", 0)) or 0)
+        if ln == 0:
+            raise KeyError(f"no length column, have: {sorted(r.keys())}")
         ep_lens[ep] = ln
         tasks[str(task_of.get(int(r["task_index"]), "UNK"))].append((ep, ln))
 
