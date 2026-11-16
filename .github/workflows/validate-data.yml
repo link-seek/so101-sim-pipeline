@@ -51,10 +51,34 @@ jobs:
           ROOT=$(dirname "$(dirname "$INFO")")
           echo "DATASET_ROOT=$ROOT"
           python3 "${RUNNER_TEMP}/scripts/validate_libero_data.py" --root "$ROOT" --out-dir /tmp/report --min-eps "${{ inputs.min_eps }}"
+      - name: Build markdown report
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import json, glob, os
+          r = json.load(open('/tmp/report/report.json'))
+          L = [f"# 数据质量报告：{os.environ.get('SRC_PREFIX', 'wfinal')}", "",
+               f"- 条数：{r['num_episodes']}，帧数：{r['num_frames']}，fps：{r['fps']}", "",
+               "| 任务 | 条数 | 条长 min-均值-max |", "|---|---|---|"]
+          for task, s in sorted(r['tasks'].items()):
+              L.append(f"| {task} | {s['episodes']} | {s['len_min']}-{s['len_mean']}-{s['len_max']} |")
+          L += ["", f"坏条：{len(r['bad_episodes'])}"]
+          for b in r.get('bad_episodes', [])[:20]:
+              L.append(f"- ep={b['ep']} {b['reason']}")
+          L += ["", "## 抽帧（一任务三张：首/中/尾）", ""]
+          for f in sorted(glob.glob('/tmp/report/samples/*.png')):
+              L.append(f"- {os.path.basename(f)}")
+          L += ["", "结论：PASS 可训" if not r.get('bad_episodes') else "结论：有坏条，见上表"]
+          open('/tmp/report/validation-report.md', 'w').write('\n'.join(L))
+          print('\n'.join(L))
+          EOF
       - name: Upload report
         if: always()
         run: |
-          obsutil cp /tmp/report/ obs://${{ env.OBS_BUCKET }}/reports/validation/ -f -r -flat || true
+          obsutil cp /tmp/report/ obs://${{ env.OBS_BUCKET }}/reports/validation/ -f -r || true
+          obsutil config -i "${{ secrets.OBS_AK }}" -k "${{ secrets.OBS_SK }}" -e https://obs.cn-north-9.myhuaweicloud.com
+          obsutil cp /tmp/report/validation-report.md obs://xieyucheng/模拟/报告/validation-report.md -f || true
+          obsutil cp /tmp/report/samples/ obs://xieyucheng/模拟/报告/samples/ -f -r -flat || true
       - name: Upload samples
         if: always()
         uses: actions/upload-artifact@v4
