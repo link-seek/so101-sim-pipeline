@@ -161,7 +161,8 @@ jobs:
           RESUME_ARGS=""
           if [ -n "${{ inputs.resume_from }}" ]; then
             echo "Resuming from ${{ inputs.resume_from }}"
-            RESUME_ARGS="--resume=true --checkpoint-path=${{ inputs.resume_from }}"
+            RESUME_ARGS="--resume=true --config_path=${{ inputs.resume_from }}/pretrained_model"
+            POLICY_ARG=""
           fi
           timeout -k 600 57600 docker run --rm --gpus "device=0" --shm-size=16g \
             -v /data:/data \
