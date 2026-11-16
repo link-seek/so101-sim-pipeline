@@ -34,7 +34,7 @@ jobs:
       - name: Download dataset from OBS
         run: |
           mkdir -p /tmp/data
-          obsutil cp obs://${{ env.OBS_BUCKET }}/${{ inputs.src_prefix }}/ /tmp/data/ -f -r -flat
+          obsutil cp obs://${{ env.OBS_BUCKET }}/${{ inputs.src_prefix }}/ /tmp/data/ -f -r
           find /tmp/data -maxdepth 2 | head -n 20
       - name: Fetch validator script
         run: |
