@@ -50,6 +50,14 @@ def main():
     report = {"num_episodes": ds.num_episodes, "num_frames": ds.num_frames,
               "fps": ds.fps, "tasks": {}, "bad_episodes": []}
     hard_fail = False
+    for task, eps in sorted(tasks.items()):
+        lens = [ln for _, ln in eps]
+        report["tasks"][task] = {"episodes": len(eps), "len_min": min(lens),
+                                 "len_mean": round(float(sum(lens)) / len(lens), 1),
+                                 "len_max": max(lens)}
+        if len(eps) < args.min_eps:
+            print(f"[validate] FAIL: task {task!r} has {len(eps)} < {args.min_eps} eps")
+            hard_fail = True
     # per-episode action variance (cheap: read action column via hf dataset slices)
     print("[validate] scanning actions ...", flush=True)
     acts = np.asarray(ds.hf_dataset["action"])
