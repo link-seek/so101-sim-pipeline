@@ -45,7 +45,7 @@ jobs:
             > "${RUNNER_TEMP}/scripts/validate_libero_data.py"
       - name: Run validation
         run: |
-          pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple "lerobot[dataset]==0.6.1" pillow
+          pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple "lerobot[dataset]==0.6.1" pillow || pip install -q "lerobot[dataset]==0.6.1" pillow
           INFO=$(find /tmp/data -path "*meta/info.json" | head -n 1)
           [ -n "$INFO" ] || { echo "no meta/info.json under /tmp/data"; exit 1; }
           ROOT=$(dirname "$(dirname "$INFO")")
