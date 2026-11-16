@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       src_prefix:
-        description: "OBS datasets/ prefix to validate (e.g. datasets/libero_so101_expert_wfinal)"
+        description: "OBS datasets/ prefix to validate (merge uploads basename libero_object)"
         required: false
-        default: "datasets/libero_so101_expert_wfinal"
+        default: "datasets/libero_object"
       min_eps:
         description: "Min episodes per task"
         required: false
