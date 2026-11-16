@@ -1,0 +1,59 @@
+name: Validate Dataset Quality (CPU)
+
+on:
+  workflow_dispatch:
+    inputs:
+      src_prefix:
+        description: "OBS datasets/ prefix to validate (e.g. datasets/libero_so101_expert_wfinal)"
+        required: false
+        default: "datasets/libero_so101_expert_wfinal"
+      min_eps:
+        description: "Min episodes per task"
+        required: false
+        default: "1"
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  OBS_BUCKET: so101-sim-pipeline
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Setup obsutil
+        run: |
+          curl -sSL "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz || true
+          curl -sSL "https://obs-community.obs.cn-north-1.myhuaweicloud.com/obsutil/current/obsutil_linux_amd64.tar.gz" -o /tmp/obsutil.tar.gz
+          tar -xzf /tmp/obsutil.tar.gz -C /tmp/
+          sudo mv /tmp/obsutil_linux_amd64_*/obsutil /usr/local/bin/obsutil
+          obsutil config -i "${{ secrets.OBS_AK }}" -k "${{ secrets.OBS_SK }}" -e https://obs.cn-north-4.myhuaweicloud.com
+      - name: Download dataset from OBS
+        run: |
+          mkdir -p /tmp/data
+          obsutil cp obs://${{ env.OBS_BUCKET }}/${{ inputs.src_prefix }}/ /tmp/data/ -f -r -flat
+          find /tmp/data -maxdepth 2 | head -n 20
+      - name: Fetch validator script
+        run: |
+          mkdir -p "${RUNNER_TEMP}/scripts"
+          curl -sfL --max-time 60 -H "Authorization: token ${{ github.token }}" \
+            "https://api.github.com/repos/${{ github.repository }}/contents/scripts/validate_libero_data.py?ref=smolvla-fresh" \
+            | python3 -c "import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)['content']).decode())" \
+            > "${RUNNER_TEMP}/scripts/validate_libero_data.py"
+      - name: Run validation
+        run: |
+          pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple "lerobot[dataset]==0.6.1" pillow
+          python3 "${RUNNER_TEMP}/scripts/validate_libero_data.py" --root /tmp/data --out-dir /tmp/report --min-eps "${{ inputs.min_eps }}"
+      - name: Upload report
+        if: always()
+        run: |
+          obsutil cp /tmp/report/ obs://${{ env.OBS_BUCKET }}/reports/validation/ -f -r -flat || true
+      - name: Upload samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-samples
+          path: /tmp/report/
