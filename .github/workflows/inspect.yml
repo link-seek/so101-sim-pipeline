@@ -57,7 +57,7 @@ jobs:
   inspect:
     needs: start-ecs
     runs-on: [self-hosted, Linux, X64, V100]
-    timeout-minutes: 120
+    timeout-minutes: 15
     steps:
       - name: Configure obsutil
         run: |
@@ -71,14 +71,6 @@ jobs:
           echo "=== checkpoints ==="
           ls -la /data/checkpoints/ 2>/dev/null || true
           du -sh /data/checkpoints/* 2>/dev/null || true
-      - name: "Retry wfinal to xieyucheng (one-off)"
-        run: |
-          obsutil config -i "${{ secrets.OBS_AK }}" -k "${{ secrets.OBS_SK }}" -e https://obs.cn-north-9.myhuaweicloud.com
-          docker run --rm -v /data:/data ${{ env.EVAL_IMAGE }} chmod -R a+rX /data/datasets/libero_so101_expert_wfinal
-          obsutil cp /data/datasets/libero_so101_expert_wfinal/ obs://xieyucheng/模拟/datasets/libero_so101_expert_wfinal/ -f -r -u -o /home/runner/wfinal-retry 2>&1 | tail -n 30
-          echo "=== failed file details ==="
-          ls /home/runner/wfinal-retry/ 2>/dev/null
-          find /home/runner/.obsutil_output -newer /tmp -name "*.txt" 2>/dev/null | head -n 5
       - name: OBS bucket state
         run: |
           echo "=== OBS datasets ==="
