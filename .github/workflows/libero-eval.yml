@@ -71,7 +71,7 @@ jobs:
   evaluate:
     needs: start-ecs
     runs-on: [self-hosted, Linux, X64, V100]
-    timeout-minutes: 120
+    timeout-minutes: 240
     steps:
       - name: Login to SWR
         run: |
@@ -115,7 +115,7 @@ jobs:
       - name: Run LIBERO evaluation
         run: |
           date '+[%F %T] eval start'
-          timeout -k 120 2400 docker run --rm --gpus all --shm-size=8g \
+          timeout -k 300 7200 docker run --rm --gpus all --shm-size=8g \
             -v /data:/data \
             -v "${RUNNER_TEMP}/scripts/run_libero_eval.py:/workspace/scripts/run_libero_eval.py:ro" \
             -v "${{ env.PKG }}:/workspace/robosuite_so101:ro" \
