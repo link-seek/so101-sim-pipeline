@@ -57,7 +57,7 @@ jobs:
   inspect:
     needs: start-ecs
     runs-on: [self-hosted, Linux, X64, V100]
-    timeout-minutes: 15
+    timeout-minutes: 120
     steps:
       - name: Configure obsutil
         run: |
