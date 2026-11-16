@@ -36,13 +36,18 @@ def main():
     if ds.num_episodes == 0:
         print("[validate] FAIL: zero episodes"); return 1
 
+    import pyarrow.parquet as _pq
+    task_of = {r["task_index"]: r["task"] for r in
+               _pq.read_table(Path(args.root) / "meta" / "tasks.parquet").to_pylist()}
+    ep_table = _pq.read_table(Path(args.root) / "meta" / "episodes" / "chunk-000",
+                              columns=["episode_index", "task_index", "length"]).to_pylist()
+    assert len(ep_table) == ds.num_episodes, (len(ep_table), ds.num_episodes)
     tasks = defaultdict(list)   # task -> [(ep_idx, length)]
     ep_lens = {}
-    for ep in range(ds.num_episodes):
-        meta = ds.meta.episodes[ep]
-        ln = int(meta["length"])
+    for r in ep_table:
+        ep, ln = int(r["episode_index"]), int(r["length"])
         ep_lens[ep] = ln
-        tasks[str(meta.get("task", "UNK"))].append((ep, ln))
+        tasks[str(task_of.get(int(r["task_index"]), "UNK"))].append((ep, ln))
 
     report = {"num_episodes": ds.num_episodes, "num_frames": ds.num_frames,
               "fps": ds.fps, "tasks": {}, "bad_episodes": []}
