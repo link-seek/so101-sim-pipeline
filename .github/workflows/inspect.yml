@@ -78,7 +78,7 @@ jobs:
           echo "=== dest bucket check ==="
           obsutil ls obs://xieyucheng/ 2>&1 | head -n 10
           echo "=== server-side copy ==="
-          obsutil cp obs://${{ env.OBS_BUCKET }}/datasets/ obs://xieyucheng/\u6a21\u62df/datasets/ -f -r -u || true
+          obsutil cp obs://${{ env.OBS_BUCKET }}/datasets/ obs://xieyucheng/模拟/datasets/ -f -r -u || true
       - name: OBS bucket state
         run: |
           echo "=== OBS datasets ==="
