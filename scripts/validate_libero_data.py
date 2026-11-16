@@ -47,6 +47,9 @@ def main():
         ep_lens[ep] = ln
         ti = m.get("task_index")
         tasks[str(task_of.get(int(ti), "UNK") if ti is not None else "UNK")].append((ep, ln))
+    report = {"num_episodes": ds.num_episodes, "num_frames": ds.num_frames,
+              "fps": ds.fps, "tasks": {}, "bad_episodes": []}
+    hard_fail = False
     # per-episode action variance (cheap: read action column via hf dataset slices)
     print("[validate] scanning actions ...", flush=True)
     acts = np.asarray(ds.hf_dataset["action"])
