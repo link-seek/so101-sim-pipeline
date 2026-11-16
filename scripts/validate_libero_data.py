@@ -41,12 +41,19 @@ def main():
                _pq.read_table(Path(args.root) / "meta" / "tasks.parquet").to_pylist()}
     tasks = defaultdict(list)   # task -> [(ep_idx, length)]
     ep_lens = {}
+    print(f"[validate] episode row keys: {sorted(ds.meta.episodes[0].keys())}", flush=True)
     for ep in range(ds.num_episodes):
         m = ds.meta.episodes[ep]
         ln = int(m["length"])
         ep_lens[ep] = ln
-        ti = m.get("task_index")
-        tasks[str(task_of.get(int(ti), "UNK") if ti is not None else "UNK")].append((ep, ln))
+        tis = m.get("tasks", m.get("task_index"))
+        try:
+            ti = int(tis[0] if isinstance(tis, (list, tuple)) else tis)
+            if hasattr(tis, "tolist"):
+                ti = int(tis.tolist()[0] if len(tis.tolist()) else -1)
+        except Exception:
+            ti = None
+        tasks[str(task_of.get(ti, "UNK") if ti is not None else "UNK")].append((ep, ln))
     report = {"num_episodes": ds.num_episodes, "num_frames": ds.num_frames,
               "fps": ds.fps, "tasks": {}, "bad_episodes": []}
     hard_fail = False
