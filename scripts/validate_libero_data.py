@@ -42,6 +42,8 @@ def main():
     tasks = defaultdict(list)   # task -> [(ep_idx, length)]
     ep_lens = {}
     print(f"[validate] episode row keys: {sorted(ds.meta.episodes[0].keys())}", flush=True)
+    print(f"[validate] task_of size={len(task_of)} sample={dict(list(task_of.items())[:3])}", flush=True)
+    print(f"[validate] ep0 tasks raw={repr(ds.meta.episodes[0].get('tasks'))[:200]}", flush=True)
     for ep in range(ds.num_episodes):
         m = ds.meta.episodes[ep]
         ln = int(m["length"])
