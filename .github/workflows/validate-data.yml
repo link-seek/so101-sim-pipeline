@@ -46,7 +46,11 @@ jobs:
       - name: Run validation
         run: |
           pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple "lerobot[dataset]==0.6.1" pillow
-          python3 "${RUNNER_TEMP}/scripts/validate_libero_data.py" --root /tmp/data --out-dir /tmp/report --min-eps "${{ inputs.min_eps }}"
+          INFO=$(find /tmp/data -path "*meta/info.json" | head -n 1)
+          [ -n "$INFO" ] || { echo "no meta/info.json under /tmp/data"; exit 1; }
+          ROOT=$(dirname "$(dirname "$INFO")")
+          echo "DATASET_ROOT=$ROOT"
+          python3 "${RUNNER_TEMP}/scripts/validate_libero_data.py" --root "$ROOT" --out-dir /tmp/report --min-eps "${{ inputs.min_eps }}"
       - name: Upload report
         if: always()
         run: |
