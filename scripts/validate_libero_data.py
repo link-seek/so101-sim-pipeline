@@ -41,21 +41,21 @@ def main():
                _pq.read_table(Path(args.root) / "meta" / "tasks.parquet").to_pylist()}
     tasks = defaultdict(list)   # task -> [(ep_idx, length)]
     ep_lens = {}
-    print(f"[validate] episode row keys: {sorted(ds.meta.episodes[0].keys())}", flush=True)
-    print(f"[validate] task_of size={len(task_of)} sample={dict(list(task_of.items())[:3])}", flush=True)
-    print(f"[validate] ep0 tasks raw={repr(ds.meta.episodes[0].get('tasks'))[:200]}", flush=True)
     for ep in range(ds.num_episodes):
         m = ds.meta.episodes[ep]
         ln = int(m["length"])
         ep_lens[ep] = ln
+        # v3 episodes rows carry the task STRING in `tasks` (no task_index here)
         tis = m.get("tasks", m.get("task_index"))
+        if hasattr(tis, "tolist"):
+            tis = tis.tolist()
+        label = None
         try:
-            ti = int(tis[0] if isinstance(tis, (list, tuple)) else tis)
-            if hasattr(tis, "tolist"):
-                ti = int(tis.tolist()[0] if len(tis.tolist()) else -1)
+            first = tis[0] if isinstance(tis, (list, tuple)) else tis
+            label = first if isinstance(first, str) else task_of.get(int(first))
         except Exception:
-            ti = None
-        tasks[str(task_of.get(ti, "UNK") if ti is not None else "UNK")].append((ep, ln))
+            label = None
+        tasks[str(label or "UNK")].append((ep, ln))
     report = {"num_episodes": ds.num_episodes, "num_frames": ds.num_frames,
               "fps": ds.fps, "tasks": {}, "bad_episodes": []}
     hard_fail = False
