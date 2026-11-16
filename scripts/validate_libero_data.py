@@ -31,7 +31,7 @@ def main():
 
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
     print(f"[validate] opening {args.root} ...", flush=True)
-    ds = LeRobotDataset(repo_id=args.repo_id, root=args.root)
+    ds = LeRobotDataset(repo_id=args.repo_id, root=args.root, video_backend="pyav")
     print(f"[validate] episodes={ds.num_episodes} frames={ds.num_frames} fps={ds.fps}", flush=True)
     if ds.num_episodes == 0:
         print("[validate] FAIL: zero episodes"); return 1
@@ -73,15 +73,24 @@ def main():
 
     # sample frames: first ep of each task
     samples = out / "samples"; samples.mkdir(exist_ok=True)
+    from PIL import Image
     for task, eps in sorted(tasks.items()):
         ep = eps[0][0]
         a, b = idx_of_ep[ep]
         for tag, idx in [("first", a), ("mid", (a + b) // 2), ("last", b - 1)]:
-            row = ds[idx]
-            img = np.asarray(row["observation.images.camera1"])
-            from PIL import Image
-            safe = "".join(c if c.isalnum() else "_" for c in task)[:40]
-            Image.fromarray(img).save(samples / f"{safe}_ep{ep}_{tag}.png")
+            try:
+                row = ds[idx]
+                img = np.asarray(row["observation.images.camera1"])
+                if img.dtype != np.uint8:
+                    img = np.clip(img, 0, 255).astype(np.uint8) if img.max() > 1 else (img * 255).astype(np.uint8)
+                if img.ndim == 3 and img.shape[0] in (1, 3, 4) and img.shape[2] not in (1, 3, 4):
+                    img = np.transpose(img, (1, 2, 0))
+                if img.ndim != 3 or img.shape[2] not in (3, 4) or min(img.shape[:2]) < 16:
+                    raise ValueError(f"bad frame shape {img.shape} {img.dtype}")
+                safe = "".join(c if c.isalnum() else "_" for c in task)[:40]
+                Image.fromarray(img[:, :, :3]).save(samples / f"{safe}_ep{ep}_{tag}.png")
+            except Exception as e:
+                print(f"[validate] WARN: sample {task[:30]} ep={ep} {tag} failed: {e}", flush=True)
     report["sample_dir"] = "samples"
 
     (out / "report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False))
