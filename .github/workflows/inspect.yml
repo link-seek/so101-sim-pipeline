@@ -71,6 +71,14 @@ jobs:
           echo "=== checkpoints ==="
           ls -la /data/checkpoints/ 2>/dev/null || true
           du -sh /data/checkpoints/* 2>/dev/null || true
+      - name: "Copy datasets to xieyucheng sim dir (one-off)"
+        run: |
+          echo "=== source ==="
+          obsutil ls obs://${{ env.OBS_BUCKET }}/datasets/ 2>&1 | head -n 10
+          echo "=== dest bucket check ==="
+          obsutil ls obs://xieyucheng/ 2>&1 | head -n 10
+          echo "=== server-side copy ==="
+          obsutil cp obs://${{ env.OBS_BUCKET }}/datasets/ obs://xieyucheng/\u6a21\u62df/datasets/ -f -r -u || true
       - name: OBS bucket state
         run: |
           echo "=== OBS datasets ==="
