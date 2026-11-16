@@ -27,6 +27,10 @@ on:
         description: "Checkpoint subdir under /data/checkpoints/"
         required: false
         default: "smolvla_finetune"
+      resume_from:
+        description: "Step checkpoint dir to resume from (empty = fresh). e.g. /data/checkpoints/X/checkpoints/029000"
+        required: false
+        default: ""
       dataset_root:
         description: "Local dataset root containing the suite subdir (merged or single-leg)"
         required: false
@@ -154,7 +158,12 @@ jobs:
           # NOTE: do NOT mkdir OUTDIR here — lerobot-train treats an existing
           # output dir as an error (resume=False), even when empty.
           date '+[%F %T] train start'
-          timeout -k 300 28800 docker run --rm --gpus "device=0" --shm-size=16g \
+          RESUME_ARGS=""
+          if [ -n "${{ inputs.resume_from }}" ]; then
+            echo "Resuming from ${{ inputs.resume_from }}"
+            RESUME_ARGS="--resume=true --checkpoint-path=${{ inputs.resume_from }}"
+          fi
+          timeout -k 600 57600 docker run --rm --gpus "device=0" --shm-size=16g \
             -v /data:/data \
             -e CUDA_VISIBLE_DEVICES=0 \
             -e HF_ENDPOINT=https://hf-mirror.com \
@@ -172,7 +181,7 @@ jobs:
                 --batch_size=${{ inputs.batch_size }} \
                 --save_freq=1000 \
                 --log_freq=50 \
-                --num_workers=4"
+                --num_workers=4 $RESUME_ARGS"
           date '+[%F %T] train done'
 
       - name: Upload checkpoints to OBS
