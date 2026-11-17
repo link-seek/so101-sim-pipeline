@@ -182,8 +182,12 @@ jobs:
             -e PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
             ${{ env.EVAL_IMAGE }} \
             bash -c "pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple 'lerobot[dataset,training]==0.6.1' && \
+              TYPE_ARG=""
+              if [ "$POLICY_TYPE" != "smolvla" ]; then
+                TYPE_ARG="--policy.type=$POLICY_TYPE"
+              fi
               lerobot-train \
-                --policy.type=$POLICY_TYPE \
+                $TYPE_ARG \
                 $POLICY_ARG \
                 $DATASET_ARGS \
                 --policy.push_to_hub=false \
