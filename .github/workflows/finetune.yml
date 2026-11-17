@@ -15,6 +15,10 @@ on:
         description: "Base checkpoint path on ECS (empty = lerobot/smolvla_base from HF)"
         required: false
         default: "/data/checkpoints/smolvla-sim/checkpoints/015000/pretrained_model"
+      policy_type:
+        description: "Policy type (smolvla or act)"
+        required: false
+        default: "smolvla"
       dataset_mode:
         description: "Dataset source: obs (libero_so101_expert from OBS) or hf (LeRobot dataset from HF mirror)"
         required: false
@@ -162,6 +166,7 @@ jobs:
           if [ -n "${{ inputs.resume_from }}" ]; then
             echo "Resuming from ${{ inputs.resume_from }}"
             RESUME_ARGS="--resume=true --config_path=${{ inputs.resume_from }}/pretrained_model"
+            POLICY_TYPE="${{ inputs.policy_type }}"
             POLICY_ARG=""
           fi
           timeout -k 600 57600 docker run --rm --gpus "device=0" --shm-size=16g \
@@ -174,6 +179,7 @@ jobs:
             ${{ env.EVAL_IMAGE }} \
             bash -c "pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple 'lerobot[dataset,training]==0.6.1' && \
               lerobot-train \
+                --policy.type=$POLICY_TYPE \
                 $POLICY_ARG \
                 $DATASET_ARGS \
                 --policy.push_to_hub=false \
