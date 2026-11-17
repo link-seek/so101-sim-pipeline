@@ -10,7 +10,7 @@ on:
       batch_size:
         description: "Batch size"
         required: false
-        default: "8"
+        default: "64"
       base_checkpoint:
         description: "Base checkpoint path on ECS (empty = lerobot/smolvla_base from HF)"
         required: false
