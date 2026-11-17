@@ -19,6 +19,10 @@ on:
         description: "LeRobot repo id for the merged dataset"
         required: false
         default: "libero_so101_expert"
+      tasks:
+        description: "Task substring filter (empty = all)"
+        required: false
+        default: ""
       resume:
         description: "Append into existing dst (resume) instead of fresh create"
         required: false
@@ -112,7 +116,7 @@ jobs:
             -e HF_ENDPOINT=https://hf-mirror.com \
             -e PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
             ${{ env.EVAL_IMAGE }} \
-            bash -c 'set -e; pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple "lerobot[dataset]==0.6.1" && python /workspace/scripts/merge_datasets.py --inputs "${{ inputs.srcs }}" --output "${{ inputs.dst }}" --repo-id "${{ inputs.repo_id }}" ${{ inputs.resume && '--resume' || '' }}'
+            bash -c 'set -e; pip install -q -i https://pypi.tuna.tsinghua.edu.cn/simple "lerobot[dataset]==0.6.1" && python /workspace/scripts/merge_datasets.py --inputs "${{ inputs.srcs }}" --output "${{ inputs.dst }}" --repo-id "${{ inputs.repo_id }}" ${{ inputs.resume && '--resume' || '' }} --tasks "${{ inputs.tasks }}"'
           date '+[%F %T] merge done'
       - name: Fix perms (container wrote root-only 0600; runner uploads)
         run: |
