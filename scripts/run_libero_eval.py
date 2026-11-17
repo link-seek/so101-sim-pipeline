@@ -558,9 +558,9 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
                         ctrl.update()
                         grip_pos = float(np.asarray(raw_action).reshape(-1)[5])
                         if ctrl.attached:
-                            if grip_pos > 55:
+                            if grip_pos > 80:
                                 ctrl.detach()
-                        elif grip_pos < 45:
+                        elif grip_pos < 60:
                             if ctrl.maybe_attach(gripper_closed=True):
                                 print(f"      [snap-grasp] ATTACHED at step {steps}")
                         success = success or env.check_success()
