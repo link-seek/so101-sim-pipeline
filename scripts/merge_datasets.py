@@ -44,10 +44,11 @@ def _read_video_frames(root, cam, ep):
 
 
 def read_dataset(root, only=()):
-    """Read a v3 dataset: parquet gives episode boundaries, mp4s give frames (one file per chunk).
+    """Read a v3 dataset with INDEXED per-episode video decode (peak = 1 episode).
 
-    only: optional lowercase substrings; episodes whose task matches none are skipped
-    WITHOUT decoding their video (bounds peak memory for single-task subsets).
+    Build order: parquet (row counts per episode) -> per-cam mp4 frame counts
+    (header-only, no decode) -> global frame offsets -> decode ONLY the frame
+    ranges of kept episodes. only: lowercase task substrings to keep.
     """
     import av
     import glob as _glob
@@ -65,58 +66,79 @@ def read_dataset(root, only=()):
     ep_idx = np.asarray(table.column("episode_index").to_pylist())
     ep_ids = sorted(set(ep_idx.tolist()))
     task_of_row = np.asarray(table.column("task_index").to_pylist())
-    # episode -> (count, task string); filter BEFORE touching video
-    ep_info = []
+    counts = {ep: int((ep_idx == ep).sum()) for ep in ep_ids}
+    # global row offset of each episode
+    off_of, _off = {}, 0
     for ep in ep_ids:
-        mask = (ep_idx == ep)
-        n = int(mask.sum())
-        first = int(np.argmax(mask)) if n else 0
-        lang = tasks.get(int(task_of_row[first]), "") if n else ""
-        if only and not any(s in lang.lower() for s in only):
-            continue
-        ep_info.append((ep, n, lang))
-    kept_rows = sum(n for _, n, _ in ep_info)
-    print(f"[merge] {root}: {len(ep_info)}/{len(ep_ids)} episodes kept, {kept_rows}/{len(table)} rows")
+        off_of[ep] = _off; _off += counts[ep]
+    total_rows = len(table)
+    # task string of each episode (from its first row)
+    lang_of = {}
+    for ep in ep_ids:
+        first = int(np.argmax(ep_idx == ep))
+        lang_of[ep] = tasks.get(int(task_of_row[first]), "")
+    keep = [ep for ep in ep_ids if (not only) or any(s in lang_of[ep].lower() for s in only)]
+    print(f"[merge] {root}: {len(keep)}/{len(ep_ids)} episodes kept ({sum(counts[e] for e in keep)}/{total_rows} rows)")
 
-    frames_by_cam = {}
+    states = np.asarray(table.column(STATE_KEY).to_pylist())
+    acts = np.asarray(table.column(ACTION_KEY).to_pylist())
+    del table
+    import gc; gc.collect()
+
+    # per-cam: list of (mp4 path, nframes) + cumulative offsets, header-only probe
+    cam_index = {}
     for cam in CAM_KEYS:
         vdir = root / "videos" / cam
         mp4s = []
         for chunk in sorted(vdir.glob("chunk-*")):
             mp4s.extend(sorted(chunk.glob("*.mp4")))
         assert mp4s, f"no mp4 under {vdir}"
-        frames = []
+        entries, acc = [], 0
         for m in mp4s:
             with av.open(str(m)) as cont:
-                frames.extend(f.to_ndarray(format="rgb24") for f in cont.decode(video=0))
-                if len(frames) >= len(table):
-                    break
-            if len(frames) >= len(table):
-                break
-        assert len(frames) == len(table), (cam, len(frames), len(table))
-        frames_by_cam[cam] = frames
+                n = sum(1 for _ in cont.decode(video=0))
+            entries.append((m, acc, n)); acc += n
+        print(f"[merge] {root} {cam}: {len(mp4s)} mp4s -> {acc} frames")
+        assert acc == total_rows, (cam, acc, total_rows)
+        cam_index[cam] = entries
 
-    states = np.asarray(table.column(STATE_KEY).to_pylist())
-    acts = np.asarray(table.column(ACTION_KEY).to_pylist())
-    episodes, off = [], 0
-    for ep, n in zip(ep_ids, [(ep_idx == e).sum() for e in ep_ids]):
-        keep = any(e == ep for e, _, _ in [(a, b, c) for a, b, c in ep_info])
-        if keep:
-            ep_frames = []
-            for t in range(n):
-                i = off + t
-                ep_frames.append({
-                    "camera1": frames_by_cam[CAM_KEYS[0]][i],
-                    "camera2": frames_by_cam[CAM_KEYS[1]][i],
-                    "camera3": frames_by_cam[CAM_KEYS[2]][i],
-                    "state": np.asarray(states[i], dtype=np.float32),
-                })
-            lang = next(l for e, _, l in ep_info if e == ep)
-            episodes.append((ep_frames, np.asarray(acts[off:off + n], dtype=np.float32), lang))
-        off += n
-    # free the full-frame buffers before returning (subset keeps only its own eps)
-    del frames_by_cam, states, acts, table
-    import gc; gc.collect()
+    def decode_range(cam, start, n):
+        """Decode global frames [start, start+n) for one camera."""
+        out = []
+        need_end = start + n
+        for (m, base, cnt) in cam_index[cam]:
+            if base + cnt <= start or base >= need_end:
+                continue
+            with av.open(str(m)) as cont:
+                for i, frame in enumerate(cont.decode(video=0)):
+                    g = base + i
+                    if g >= start and g < need_end:
+                        out.append(frame.to_ndarray(format="rgb24"))
+                    if g + 1 >= need_end:
+                        break
+            if len(out) >= n:
+                break
+        assert len(out) == n, (cam, start, n, len(out))
+        return out
+
+    episodes = []
+    for ep in keep:
+        n, off = counts[ep], off_of[ep]
+        by_cam = {cam: decode_range(cam, off, n) for cam in CAM_KEYS}
+        ep_frames = []
+        for k in range(n):
+            i = off + k
+            ep_frames.append({
+                "camera1": by_cam[CAM_KEYS[0]][k],
+                "camera2": by_cam[CAM_KEYS[1]][k],
+                "camera3": by_cam[CAM_KEYS[2]][k],
+                "state": np.asarray(states[i], dtype=np.float32),
+            })
+        episodes.append((ep_frames, np.asarray(acts[off:off + n], dtype=np.float32), lang_of[ep]))
+        del ep_frames, by_cam
+        gc.collect()
+    del states, acts
+    gc.collect()
     return feats, fps, robot_type, episodes
 
 
