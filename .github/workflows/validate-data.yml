@@ -95,6 +95,15 @@ jobs:
           obsutil config -i "${{ secrets.OBS_AK }}" -k "${{ secrets.OBS_SK }}" -e https://obs.cn-north-9.myhuaweicloud.com
           obsutil cp /tmp/report/validation-report.md obs://xieyucheng/模拟/报告/validation-report.md -f || true
           obsutil cp /tmp/report/samples/ obs://xieyucheng/模拟/报告/samples/ -f -r -flat || true
+      - name: Stitch sample videos
+        if: always()
+        run: |
+          sudo apt-get install -y -q ffmpeg 2>&1 | tail -n 1 || true
+          for d in /tmp/report/samples/*/; do
+            n=$(basename "$d")
+            ffmpeg -y -framerate 5 -pattern_type glob -i "$d/*.png" -c:v libx264 -pix_fmt yuv420p /tmp/report/samples-$n.mp4 2>&1 | tail -n 1 || true
+          done
+          ls /tmp/report/*.mp4 2>/dev/null || echo "no videos (samples flat layout, skip)"
       - name: Upload samples
         if: always()
         uses: actions/upload-artifact@v4
