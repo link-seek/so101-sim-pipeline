@@ -142,14 +142,19 @@ jobs:
 
       - name: Finetune SmolVLA
         run: |
-          BASE="${{ inputs.base_checkpoint }}"
+          POLICY_TYPE="${{ inputs.policy_type }}"
           POLICY_ARG=""
-          if [ -n "$BASE" ] && [ -d "$BASE" ]; then
-            echo "Using local base checkpoint: $BASE"
-            POLICY_ARG="--policy.path=$BASE"
+          if [ "$POLICY_TYPE" = "smolvla" ]; then
+            BASE="${{ inputs.base_checkpoint }}"
+            if [ -n "$BASE" ] && [ -d "$BASE" ]; then
+              echo "Using local base checkpoint: $BASE"
+              POLICY_ARG="--policy.path=$BASE"
+            else
+              echo "Using lerobot/smolvla_base from HF"
+              POLICY_ARG="--policy.path=lerobot/smolvla_base"
+            fi
           else
-            echo "Using lerobot/smolvla_base from HF"
-            POLICY_ARG="--policy.path=lerobot/smolvla_base"
+            echo "Training $POLICY_TYPE from scratch (no base checkpoint)"
           fi
           OUTDIR="/data/checkpoints/${{ inputs.output_name }}"
           DATASET_ARGS=""
@@ -166,7 +171,6 @@ jobs:
           if [ -n "${{ inputs.resume_from }}" ]; then
             echo "Resuming from ${{ inputs.resume_from }}"
             RESUME_ARGS="--resume=true --config_path=${{ inputs.resume_from }}/pretrained_model"
-            POLICY_TYPE="${{ inputs.policy_type }}"
             POLICY_ARG=""
           fi
           timeout -k 600 57600 docker run --rm --gpus "device=0" --shm-size=16g \
