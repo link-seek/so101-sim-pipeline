@@ -43,8 +43,12 @@ def _read_video_frames(root, cam, ep):
     return frames
 
 
-def read_dataset(root):
-    """Read a v3 dataset: parquet gives episode boundaries, mp4s give frames (one file per chunk)."""
+def read_dataset(root, only=()):
+    """Read a v3 dataset: parquet gives episode boundaries, mp4s give frames (one file per chunk).
+
+    only: optional lowercase substrings; episodes whose task matches none are skipped
+    WITHOUT decoding their video (bounds peak memory for single-task subsets).
+    """
     import av
     import glob as _glob
     root = Path(root)
@@ -60,8 +64,19 @@ def read_dataset(root):
     table = pa.concat_tables([pq.read_table(f) for f in data_files])
     ep_idx = np.asarray(table.column("episode_index").to_pylist())
     ep_ids = sorted(set(ep_idx.tolist()))
-    counts = [(ep_idx == ep).sum() for ep in ep_ids]
-    print(f"[merge] {root}: {len(ep_ids)} episodes, {len(table)} rows")
+    task_of_row = np.asarray(table.column("task_index").to_pylist())
+    # episode -> (count, task string); filter BEFORE touching video
+    ep_info = []
+    for ep in ep_ids:
+        mask = (ep_idx == ep)
+        n = int(mask.sum())
+        first = int(np.argmax(mask)) if n else 0
+        lang = tasks.get(int(task_of_row[first]), "") if n else ""
+        if only and not any(s in lang.lower() for s in only):
+            continue
+        ep_info.append((ep, n, lang))
+    kept_rows = sum(n for _, n, _ in ep_info)
+    print(f"[merge] {root}: {len(ep_info)}/{len(ep_ids)} episodes kept, {kept_rows}/{len(table)} rows")
 
     frames_by_cam = {}
     for cam in CAM_KEYS:
@@ -74,27 +89,34 @@ def read_dataset(root):
         for m in mp4s:
             with av.open(str(m)) as cont:
                 frames.extend(f.to_ndarray(format="rgb24") for f in cont.decode(video=0))
-        print(f"[merge] {root} {cam}: {len(mp4s)} mp4s -> {len(frames)} frames")
+                if len(frames) >= len(table):
+                    break
+            if len(frames) >= len(table):
+                break
         assert len(frames) == len(table), (cam, len(frames), len(table))
         frames_by_cam[cam] = frames
 
     states = np.asarray(table.column(STATE_KEY).to_pylist())
     acts = np.asarray(table.column(ACTION_KEY).to_pylist())
-    task_of_row = np.asarray(table.column("task_index").to_pylist())
     episodes, off = [], 0
-    for ep, n in zip(ep_ids, counts):
-        ep_frames = []
-        for t in range(n):
-            i = off + t
-            ep_frames.append({
-                "camera1": frames_by_cam[CAM_KEYS[0]][i],
-                "camera2": frames_by_cam[CAM_KEYS[1]][i],
-                "camera3": frames_by_cam[CAM_KEYS[2]][i],
-                "state": np.asarray(states[i], dtype=np.float32),
-            })
-        episodes.append((ep_frames, np.asarray(acts[off:off + n], dtype=np.float32),
-                         tasks.get(int(task_of_row[off]), "")))
+    for ep, n in zip(ep_ids, [(ep_idx == e).sum() for e in ep_ids]):
+        keep = any(e == ep for e, _, _ in [(a, b, c) for a, b, c in ep_info])
+        if keep:
+            ep_frames = []
+            for t in range(n):
+                i = off + t
+                ep_frames.append({
+                    "camera1": frames_by_cam[CAM_KEYS[0]][i],
+                    "camera2": frames_by_cam[CAM_KEYS[1]][i],
+                    "camera3": frames_by_cam[CAM_KEYS[2]][i],
+                    "state": np.asarray(states[i], dtype=np.float32),
+                })
+            lang = next(l for e, _, l in ep_info if e == ep)
+            episodes.append((ep_frames, np.asarray(acts[off:off + n], dtype=np.float32), lang))
         off += n
+    # free the full-frame buffers before returning (subset keeps only its own eps)
+    del frames_by_cam, states, acts, table
+    import gc; gc.collect()
     return feats, fps, robot_type, episodes
 
 
@@ -149,7 +171,7 @@ def main():
         )
     only = [s.strip().lower() for s in args.tasks.split(",") if s.strip()]
     for r in roots:
-        _, _, _, eps = read_dataset(r)
+        _, _, _, eps = read_dataset(r, tuple(only))
         if only:
             before = len(eps)
             eps = [(f, a, l) for (f, a, l) in eps if any(s in l.lower() for s in only)]
