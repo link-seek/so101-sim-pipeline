@@ -19,6 +19,9 @@ def main():
     policy = SmolVLAPolicy.from_pretrained(args.checkpoint).to(device).eval()
     pre, post = make_pre_post_processors(policy.config, args.checkpoint,
         preprocessor_overrides={"device_processor": {"device": device}})
+    # NOTE: mirror run_libero_eval.predict_action exactly (prepare BEFORE pre,
+    # raw uint8 HWC frames, not preprocessed tensors)
+    from lerobot.policies.utils import prepare_observation_for_inference as _prep
     rng = np.random.default_rng(0)
     idxs = rng.choice(len(ds), size=min(args.n, len(ds)), replace=False)
     preds = []
@@ -28,7 +31,10 @@ def main():
                  "observation.images.camera1": np.asarray(row["observation.images.camera1"]),
                  "observation.images.camera2": np.asarray(row["observation.images.camera2"]),
                  "observation.images.camera3": np.asarray(row["observation.images.camera3"])}
-        frame = prepare_observation_for_inference(frame, device, task=str(row.get("task", "")))
+        task = row.get("task", "")
+        if isinstance(task, (list, tuple)):
+            task = task[0] if task else ""
+        frame = _prep(frame, device, task=str(task), robot_type="so_follower")
         frame = pre(frame)
         with torch.inference_mode():
             a = policy.select_action(frame)
