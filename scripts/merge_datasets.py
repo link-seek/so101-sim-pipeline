@@ -103,6 +103,8 @@ def main():
     ap.add_argument("--inputs", required=True)
     ap.add_argument("--output", required=True)
     ap.add_argument("--repo-id", default="libero_so101_expert")
+    ap.add_argument("--tasks", default="",
+                    help="comma-separated substrings; only episodes whose task contains one are kept")
     ap.add_argument("--resume", action="store_true",
                     help="append into existing dataset at output (LeRobotDataset.resume) instead of create")
     args = ap.parse_args()
@@ -145,9 +147,15 @@ def main():
         # 492 eps OOM-killed at finalize with exit 137.)
         data_files_size_in_mb=100, video_files_size_in_mb=100,
         )
+    only = [s.strip().lower() for s in args.tasks.split(",") if s.strip()]
     for r in roots:
         _, _, _, eps = read_dataset(r)
-        print(f"[merge] {r}: {len(eps)} episodes -> writing...")
+        if only:
+            before = len(eps)
+            eps = [(f, a, l) for (f, a, l) in eps if any(s in l.lower() for s in only)]
+            print(f"[merge] {r}: {len(eps)}/{before} episodes after task filter {only}")
+        else:
+            print(f"[merge] {r}: {len(eps)} episodes -> writing...")
         for frames, acts, lang in eps:
             for t in range(len(acts)):
                 out.add_frame({
