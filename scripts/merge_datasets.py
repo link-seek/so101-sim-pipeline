@@ -109,7 +109,7 @@ def main():
                     help="append into existing dataset at output (LeRobotDataset.resume) instead of create")
     args = ap.parse_args()
     roots = [r for r in args.inputs.split(",") if r]
-    assert len(roots) >= 2
+    assert len(roots) >= 1
     if not args.resume:
         assert not Path(args.output).exists(), f"refuse to clobber {args.output}"
     else:
