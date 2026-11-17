@@ -51,6 +51,22 @@ jobs:
           ROOT=$(dirname "$(dirname "$INFO")")
           echo "DATASET_ROOT=$ROOT"
           python3 "${RUNNER_TEMP}/scripts/validate_libero_data.py" --root "$ROOT" --out-dir /tmp/report --min-eps "${{ inputs.min_eps }}"
+      - name: Dump normalization stats
+        run: |
+          INFO=$(find /tmp/data -path "*meta/info.json" | head -n 1)
+          ROOT=$(dirname "$(dirname "$INFO")")
+          echo "DATASET_ROOT=$ROOT"
+          python3 -c "
+          import json
+          s = json.load(open('$ROOT/meta/stats.json'))
+          for k in ['action', 'observation.state']:
+              if k in s:
+                  v = s[k]
+                  print(f'== {k} ==')
+                  for stat in ['mean', 'std', 'min', 'max', 'q01', 'q99']:
+                      if stat in v:
+                          print(f'  {stat}: {v[stat]}')
+          "
       - name: Build markdown report
         if: always()
         run: |
