@@ -531,6 +531,7 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
                 success = False
                 total_reward = 0.0
                 steps = 0
+                grip_vals = []
                 num_steps_wait = 10
 
                 while not done and steps < max_steps + num_steps_wait:
@@ -544,6 +545,7 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
                     raw_action = predict_action(
                         policy, preprocess, postprocess, obs, task_desc, device
                     )
+                    grip_vals.append(float(np.asarray(raw_action).reshape(-1)[5]))
                     action = _env_action_from_policy(raw_action)
                     if steps % 50 == 0:
                         jp = np.asarray(obs.get("robot0_joint_pos", np.zeros(5)), dtype=np.float64).reshape(-1)[:5]
@@ -568,12 +570,23 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
                         success = success or env.check_success()
                     steps += 1
 
+                g = np.asarray(grip_vals, dtype=np.float64)
+                grip_stat = {
+                    "mean": float(g.mean()) if g.size else 0.0,
+                    "std": float(g.std()) if g.size else 0.0,
+                    "min": float(g.min()) if g.size else 0.0,
+                    "max": float(g.max()) if g.size else 0.0,
+                }
                 results.append({
                     "suite": suite_name, "task": task_name, "task_idx": task_id,
                     "episode": ep_idx, "success": bool(success),
                     "reward": float(total_reward), "steps": steps,
+                    "grip_mean": grip_stat["mean"], "grip_std": grip_stat["std"],
+                    "grip_min": grip_stat["min"], "grip_max": grip_stat["max"],
                 })
-                print(f"    ep {ep_idx}: success={success}, reward={total_reward:.3f}, steps={steps}")
+                print(f"    ep {ep_idx}: success={success}, reward={total_reward:.3f}, steps={steps}, "
+                      f"grip_mean={grip_stat['mean']:.1f} grip_std={grip_stat['std']:.1f} "
+                      f"grip_min={grip_stat['min']:.1f} grip_max={grip_stat['max']:.1f}")
             except Exception as e:
                 print(f"    ep {ep_idx}: ERROR {e}")
                 results.append({
