@@ -123,12 +123,12 @@ jobs:
           echo "GPU0 suites: [$B0] GPU1 suites: [$B1]"
           run_one() {
             local GPU="$1" BENCH="$2" OUT="$3"
-            timeout -k 300 7200 docker run --rm --gpus "device=$GPU" --shm-size=8g \
+            timeout -k 300 12600 docker run --rm --gpus "device=$GPU" --shm-size=8g \
               -v /data:/data \
               -v "${RUNNER_TEMP}/scripts/run_libero_eval.py:/workspace/scripts/run_libero_eval.py:ro" \
               -v "${{ env.PKG }}:/workspace/robosuite_so101:ro" \
               -e MUJOCO_GL=egl \
-              -e CUDA_VISIBLE_DEVICES="$GPU" \
+              -e NVIDIA_VISIBLE_DEVICES="$GPU" \
               -e EVAL_BENCH="$BENCH" \
               -e EVAL_OUT="$OUT" \
               -e HF_ENDPOINT=https://hf-mirror.com \
