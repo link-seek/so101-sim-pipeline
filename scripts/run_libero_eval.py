@@ -442,7 +442,8 @@ def predict_action(policy, preprocess, postprocess, obs, task_description, devic
 
 
 def run_libero_suite(suite_name, policy, preprocess, postprocess,
-                     episodes_per_task, output_dir, device="cuda", force_prompt=None):
+                     episodes_per_task, output_dir, device="cuda", force_prompt=None,
+                     tasks=None, episode_offset=0):
     """Run evaluation on a single LIBERO suite."""
     from libero.libero import benchmark, get_libero_path
     from libero.libero.envs import OffScreenRenderEnv
@@ -469,6 +470,9 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
     for task_id in range(num_tasks):
         task = task_suite.get_task(task_id)
         task_name = task.name
+        if tasks and not any(t in task_name for t in tasks):
+            print(f"  Task {task_id}: {task_name} (skipped by --tasks filter)")
+            continue
         task_desc = task.language
         if force_prompt:
             task_desc = force_prompt
@@ -498,15 +502,18 @@ def run_libero_suite(suite_name, policy, preprocess, postprocess,
             import traceback
             print(f"    ERROR creating env: {e}")
             traceback.print_exc()
-            for ep_idx in range(episodes_per_task):
+            for i in range(episodes_per_task):
                 results.append({
                     "suite": suite_name, "task": task_name, "task_idx": task_id,
-                    "episode": ep_idx, "success": False, "reward": 0.0,
+                    "episode": episode_offset + i, "success": False, "reward": 0.0,
                     "steps": 0, "error": str(e),
                 })
             continue
 
-        for ep_idx in range(min(episodes_per_task, len(init_states))):
+        for i in range(episodes_per_task):
+            ep_idx = episode_offset + i
+            if ep_idx >= len(init_states):
+                break
             try:
                 policy.reset()
                 env.reset()
@@ -608,17 +615,21 @@ def main():
     parser.add_argument("--checkpoint", required=True, help="Checkpoint path")
     parser.add_argument("--benchmarks", required=True, help="Comma-separated benchmark names")
     parser.add_argument("--episodes_per_task", type=int, default=50)
+    parser.add_argument("--episode_offset", type=int, default=0, help="Start episode index (for multi-GPU sharding)")
+    parser.add_argument("--tasks", default="", help="Comma-separated task name substrings (empty = all tasks)")
     parser.add_argument("--output_dir", default="/data/eval/libero_results")
     parser.add_argument("--force_prompt", default="", help="Override task language instruction")
     args = parser.parse_args()
 
     benchmarks = [b.strip() for b in args.benchmarks.split(",")]
+    task_filter = [t.strip() for t in args.tasks.split(",") if t.strip()] or None
     os.makedirs(args.output_dir, exist_ok=True)
 
     print(f"=== SO101 LIBERO Evaluation ===")
     print(f"Checkpoint: {args.checkpoint}")
     print(f"Benchmarks: {benchmarks}")
-    print(f"Episodes per task: {args.episodes_per_task}")
+    print(f"Episodes per task: {args.episodes_per_task} (offset {args.episode_offset})")
+    print(f"Task filter: {task_filter}")
 
     print("\n--- Setting up LIBERO config ---")
     setup_libero_config()
@@ -638,6 +649,7 @@ def main():
             suite_name, policy, preprocess, postprocess,
             args.episodes_per_task, args.output_dir,
             force_prompt=(args.force_prompt or None),
+            tasks=task_filter, episode_offset=args.episode_offset,
         )
         all_results.extend(results)
 
@@ -650,6 +662,8 @@ def main():
     summary = {
         "checkpoint": args.checkpoint,
         "benchmarks": benchmarks,
+        "tasks": task_filter,
+        "episode_offset": args.episode_offset,
         "episodes_per_task": args.episodes_per_task,
         "total_episodes": len(all_results),
         "total_successes": sum(r["success"] for r in all_results),
