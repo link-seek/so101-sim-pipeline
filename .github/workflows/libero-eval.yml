@@ -112,40 +112,66 @@ jobs:
           echo "PKG=$PKG" >> "$GITHUB_ENV"
           date '+[%F %T] pkg ready'
 
-      - name: Run LIBERO evaluation
+      - name: Run LIBERO evaluation (dual-GPU)
         run: |
           date '+[%F %T] eval start'
-          timeout -k 300 7200 docker run --rm --gpus all --shm-size=8g \
-            -v /data:/data \
-            -v "${RUNNER_TEMP}/scripts/run_libero_eval.py:/workspace/scripts/run_libero_eval.py:ro" \
-            -v "${{ env.PKG }}:/workspace/robosuite_so101:ro" \
-            -e MUJOCO_GL=egl \
-            -e HF_ENDPOINT=https://hf-mirror.com \
-            -e HF_HUB_DISABLE_XET=1 \
-            ${{ env.EVAL_IMAGE }} \
-            bash -c 'set -e;
-              date "+[%F %T] asset install";
-              ROBOSUITE_ASSETS="$(dirname $(python -c "import robosuite; print(robosuite.__file__)"))/models/assets";
-              mkdir -p $ROBOSUITE_ASSETS/robots/so101/meshes $ROBOSUITE_ASSETS/grippers/meshes/so101_gripper;
-              cp /workspace/robosuite_so101/robots/so101/robot.xml $ROBOSUITE_ASSETS/robots/so101/;
-              cp -r /workspace/robosuite_so101/robots/so101/meshes/* $ROBOSUITE_ASSETS/robots/so101/meshes/;
-              cp /workspace/robosuite_so101/grippers/so101_gripper.xml $ROBOSUITE_ASSETS/grippers/;
-              cp -r /workspace/robosuite_so101/grippers/meshes/so101_gripper/* $ROBOSUITE_ASSETS/grippers/meshes/so101_gripper/;
-              ROBOSUITE_CTRL="$(dirname $(python -c "import robosuite; print(robosuite.__file__)"))/controllers/configs/robots";
-              mkdir -p $ROBOSUITE_CTRL;
-              cp /workspace/robosuite_so101/controllers/so101_basic.json $ROBOSUITE_CTRL/default_so101.json;
-              date "+[%F %T] asset done";
-              python /workspace/scripts/run_libero_eval.py \
-              --checkpoint '"'"'${{ inputs.checkpoint }}'"'"' \
-              --benchmarks '"'"'${{ inputs.benchmarks }}'"'"' \
-              --episodes_per_task ${{ inputs.episodes_per_task }} \
-              --output_dir /data/eval/libero_results'
-          date '+[%F %T] eval done' 
+          IFS=',' read -ra SUITES <<< "${{ inputs.benchmarks }}"
+          N=${#SUITES[@]}
+          MID=$(( (N+1)/2 ))
+          B0=$(IFS=,; echo "${SUITES[*]:0:MID}")
+          B1=$(IFS=,; echo "${SUITES[*]:MID}")
+          echo "GPU0 suites: [$B0] GPU1 suites: [$B1]"
+          run_one() {
+            local GPU="$1" BENCH="$2" OUT="$3"
+            timeout -k 300 7200 docker run --rm --gpus "device=$GPU" --shm-size=8g \
+              -v /data:/data \
+              -v "${RUNNER_TEMP}/scripts/run_libero_eval.py:/workspace/scripts/run_libero_eval.py:ro" \
+              -v "${{ env.PKG }}:/workspace/robosuite_so101:ro" \
+              -e MUJOCO_GL=egl \
+              -e CUDA_VISIBLE_DEVICES="$GPU" \
+              -e EVAL_BENCH="$BENCH" \
+              -e EVAL_OUT="$OUT" \
+              -e HF_ENDPOINT=https://hf-mirror.com \
+              -e HF_HUB_DISABLE_XET=1 \
+              ${{ env.EVAL_IMAGE }} \
+              bash -c 'set -e;
+                date "+[%F %T] asset install";
+                ROBOSUITE_ASSETS="$(dirname $(python -c "import robosuite; print(robosuite.__file__)"))/models/assets";
+                mkdir -p $ROBOSUITE_ASSETS/robots/so101/meshes $ROBOSUITE_ASSETS/grippers/meshes/so101_gripper;
+                cp /workspace/robosuite_so101/robots/so101/robot.xml $ROBOSUITE_ASSETS/robots/so101/;
+                cp -r /workspace/robosuite_so101/robots/so101/meshes/* $ROBOSUITE_ASSETS/robots/so101/meshes/;
+                cp /workspace/robosuite_so101/grippers/so101_gripper.xml $ROBOSUITE_ASSETS/grippers/;
+                cp -r /workspace/robosuite_so101/grippers/meshes/so101_gripper/* $ROBOSUITE_ASSETS/grippers/meshes/so101_gripper/;
+                ROBOSUITE_CTRL="$(dirname $(python -c "import robosuite; print(robosuite.__file__)"))/controllers/configs/robots";
+                mkdir -p $ROBOSUITE_CTRL;
+                cp /workspace/robosuite_so101/controllers/so101_basic.json $ROBOSUITE_CTRL/default_so101.json;
+                date "+[%F %T] asset done";
+                python /workspace/scripts/run_libero_eval.py \
+                --checkpoint '"'"'${{ inputs.checkpoint }}'"'"' \
+                --benchmarks "$EVAL_BENCH" \
+                --episodes_per_task ${{ inputs.episodes_per_task }} \
+                --output_dir "$EVAL_OUT"'
+          }
+          set +e
+          if [ -z "$B1" ]; then
+            echo "single suite, GPU0 only"
+            run_one 0 "$B0" /data/eval/libero_results/gpu0; RC=$?
+            [ $RC -eq 0 ] || { echo "gpu0 failed rc=$RC"; exit $RC; }
+          else
+            run_one 1 "$B1" /data/eval/libero_results/gpu1 &
+            PID1=$!
+            run_one 0 "$B0" /data/eval/libero_results/gpu0; RC0=$?
+            wait $PID1; RC1=$?
+            echo "gpu0 rc=$RC0 gpu1 rc=$RC1"
+            { [ $RC0 -eq 0 ] && [ $RC1 -eq 0 ]; } || { echo "eval failed"; exit 1; }
+          fi
+          set -e
+          date '+[%F %T] eval done'
 
       - name: Upload results to OBS
         if: always()
         run: |
-          obsutil cp /data/eval/libero_results/ obs://${{ env.OBS_BUCKET }}/eval/libero_results/ -f -r -flat || true
+          obsutil cp /data/eval/libero_results/ obs://${{ env.OBS_BUCKET }}/eval/libero_results/ -f -r || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
