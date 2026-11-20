@@ -21,7 +21,7 @@ os.environ.setdefault("MUJOCO_GL", "egl")
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 
 from run_libero_eval import (  # noqa: E402
-    jaw_tip_position,
+    find_grip_site_id,
     register_so101,
     setup_libero_config,
     rescale_scene_to_reach,
@@ -82,7 +82,7 @@ class ArmIK:
     upward and just sweeps objects away.
     """
 
-    TIP = 0.075  # legacy: hand-frame fallback only; real tip = jaw_tip_position()
+    # grasp point = model grip_site (see so101_gripper.xml); no coordinate constants
 
     def __init__(self, sim):
         import mujoco
@@ -90,6 +90,7 @@ class ArmIK:
         self.mujoco = mujoco
         self.m, self.d = mj_raw(sim)
         self.pos_bid = body_id(sim, "right_moving_jaw")
+        self.site_bid, self.site_name = find_grip_site_id(self.mujoco, self.m)
         self.rot_bid = body_id(sim, "right_hand")
         self.eef_bid = self.pos_bid
         self.arm_qadr, self.arm_dofadr, self.arm_jids = [], [], []
@@ -117,7 +118,7 @@ class ArmIK:
         pos = np.array(self.d.xpos[self.pos_bid])
         zax = np.array(self.d.xmat[self.rot_bid]).reshape(3, 3)[:, 2]
         # same fingertip definition as snap-grasp (hinge-origin aware)
-        tip = jaw_tip_position(self.d, self.pos_bid)
+        tip = np.array(self.d.site_xpos[self.site_bid])
         return pos, zax, tip
 
     def solve(self, target, q_hint=None):
@@ -133,7 +134,7 @@ class ArmIK:
             if zax[2] > -0.85:
                 continue
             p = np.array(self.d.xpos[self.pos_bid])
-            e = np.linalg.norm(jaw_tip_position(self.d, self.pos_bid) - target)
+            e = np.linalg.norm(np.array(self.d.site_xpos[self.site_bid]) - target)
             cands.append((e, q))
         if q_hint is not None:
             near = self.rng.uniform(
@@ -147,7 +148,7 @@ class ArmIK:
                 if zax[2] > -0.5:
                     continue
                 p = np.array(self.d.xpos[self.pos_bid])
-                e = np.linalg.norm(jaw_tip_position(self.d, self.pos_bid) - target)
+                e = np.linalg.norm(np.array(self.d.site_xpos[self.site_bid]) - target)
                 cands.append((e, q))
         cands.sort(key=lambda c: c[0])
 
@@ -158,7 +159,7 @@ class ArmIK:
                 self._set_q(q)
                 pos = np.array(self.d.xpos[self.pos_bid])
                 zax = np.array(self.d.xmat[self.rot_bid]).reshape(3, 3)[:, 2]
-                err = target - (jaw_tip_position(self.d, self.pos_bid))
+                err = target - (np.array(self.d.site_xpos[self.site_bid]))
                 if np.linalg.norm(err) < 0.004:
                     break
                 jp = np.zeros((3, self.m.nv))
