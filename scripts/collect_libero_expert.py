@@ -448,7 +448,11 @@ def main():
     parser.add_argument("--episodes_per_task", type=int, default=5)
     parser.add_argument("--tasks", default="", help="comma-separated task indices; default all")
     parser.add_argument("--output_dir", default="/data/datasets/libero_so101_expert")
+    parser.add_argument("--smoke", action="store_true",
+                        help="L1 gate: 1 trial, 1 camera, no dataset write")
     args = parser.parse_args()
+    if args.smoke:
+        args.episodes_per_task = 1
 
     setup_libero_config()
     register_so101()
@@ -484,7 +488,7 @@ def main():
             bddl_file_name=bddl_file,
             robots=["SO101"],
             controller=ctrl_path,
-            camera_names=list(CAMERA_MAP.values()),
+            camera_names=["agentview"] if args.smoke else list(CAMERA_MAP.values()),
             camera_heights=RENDER_HW[0],
             camera_widths=RENDER_HW[1],
             control_freq=FPS,
@@ -510,6 +514,9 @@ def main():
         finally:
             env.close()
 
+    if args.smoke:
+        print(f"[smoke] trials={len(all_episodes)} collected; dataset NOT written")
+        return
     if all_episodes:
         save_dataset(all_episodes, out_root_suite, args.suite)
     print(f"\nTotal episodes collected: {len(all_episodes)}")
