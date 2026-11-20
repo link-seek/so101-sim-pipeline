@@ -332,6 +332,15 @@ class SnapGraspController:
         # tip), the tip sits 7.5cm further along the hand's +z_local axis
         tip_name = self.mujoco.mj_id2name(self.m, self.mujoco.mjtObj.mjOBJ_BODY, self.tip_bid)
         self.tcp = 0.075 if (tip_name and "hand" in tip_name.lower()) else 0.0
+        # TCP for the moving jaw: the jaw body origin is the hinge; the grasp
+        # point (fingertip midpoint) sits 113.7mm away in jaw-local frame.
+        # (Calibrated 2026-11-20: equals the pre-14196b4 tip position, at which
+        # the scripted expert reached 68%; the gripper geometry fix moved the
+        # hinge but the waypoints target the fingertips, not the hinge.)
+        self.tcp_vec = None
+        if tip_name and "moving_jaw" in tip_name.lower() or "jaw" in (tip_name or "").lower():
+            import numpy as _np
+            self.tcp_vec = _np.array([-0.0515, -0.0935, 0.0392])
 
     def _find_body(self, name, extra_candidates=(), fuzzy=()):
         cands = [name, f"robot0_{name}", *extra_candidates]
@@ -348,8 +357,10 @@ class SnapGraspController:
 
     def tip_position(self):
         pos = np.array(self.d.xpos[self.tip_bid])
-        zax = np.array(self.d.xmat[self.tip_bid]).reshape(3, 3)[:, 2]
-        return pos + self.tcp * zax
+        R = np.array(self.d.xmat[self.tip_bid]).reshape(3, 3)
+        if self.tcp_vec is not None:
+            return pos + R @ self.tcp_vec
+        return pos + self.tcp * R[:, 2]
 
     def object_position(self):
         return np.array(self.d.xpos[self.obj_bid])
