@@ -334,6 +334,7 @@ def run_episode(env, ik, max_steps=900):
     obs_list, act_list = [], []
     success = False
     success_streak = 0
+    max_streak = 0
     total_reward = 0.0
     for step_idx, act6 in enumerate(actions):
         obs_list.append({
@@ -356,6 +357,7 @@ def run_episode(env, ik, max_steps=900):
             ctrl.update()
         # LIBERO official practice: success latches only after 10 consecutive checks
         success_streak = success_streak + 1 if domain._check_success() else 0
+        max_streak = max(max_streak, success_streak)
         if (step_idx + 1) in checkpoints and obj_bid >= 0:
             label = checkpoints[step_idx + 1]
             p_obj = np.array(sim.data.xpos[obj_bid])
@@ -385,6 +387,9 @@ def run_episode(env, ik, max_steps=900):
                 success = bool(domain._check_success())
             except Exception:
                 pass
+    if obj_bid >= 0:
+        p_obj = np.array(sim.data.xpos[obj_bid])
+        print(f"    [diag] max_success_streak={max_streak}/10 obj_final={np.round(p_obj,3)}")
     return success, len(act_list), total_reward, obs_list, act_list
 
 
