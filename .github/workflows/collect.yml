@@ -19,6 +19,10 @@ on:
         description: "Suffix for output dir (per-leg sharding, e.g. _g0). Empty = legacy path"
         required: false
         default: ""
+      smoke:
+        description: "L1 gate: 1 trial, 1 camera, no dataset write (true/false)"
+        required: false
+        default: "false"
 
 permissions:
   contents: write
@@ -172,7 +176,8 @@ jobs:
               --suite "${{ inputs.suite }}" \
               --tasks "$MY" \
               --episodes_per_task ${{ inputs.episodes_per_task }} \
-              --output_dir /data/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }}'
+              --output_dir /data/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }} \
+              ${{ inputs.smoke == 'true' && '--smoke' || '' }}'
           date '+[%F %T] collect done' 
 
       - name: Fix perms (container wrote root-only 0600; runner uploads)
