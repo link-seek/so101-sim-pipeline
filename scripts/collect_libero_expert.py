@@ -227,8 +227,10 @@ def plan_actions(domain, sim, ik, q_start_rad):
     # coordinates relative to the object/basket centers
     waypoints = [
         ("move", p_obj + np.array([0.0, 0.0, 0.10]), 1.0, 1.5),
-        ("approach", p_obj + np.array([0.0, 0.0, 0.035]), 1.0, 0.8),
-        ("grip", p_obj + np.array([0.0, 0.0, 0.035]), 0.0, 1.5),
+        ("approach", p_obj + np.array([0.0, 0.0, 0.050]), 1.0, 0.8),
+        # close at the object CENTRE: staying 3.5cm above it closed on air and
+        # only worked through the kinematic snap (objects then slipped)
+        ("grip", p_obj + np.array([0.0, 0.0, 0.005]), 0.0, 1.5),
         ("lift", p_obj + np.array([0.0, 0.0, 0.20]), 0.0, 0.8),
         ("move", p_basket + np.array([0.0, 0.0, 0.22]), 0.0, 1.5),
         ("move", p_basket + np.array([0.0, 0.0, 0.10]), 0.0, 1.5),
@@ -457,7 +459,8 @@ def main():
                         help="L1 gate: 1 trial, 1 camera, no dataset write")
     args = parser.parse_args()
     if args.smoke:
-        args.episodes_per_task = 1
+        # smoke = gate mode: run the requested number of trials, write nothing
+        print(f"[smoke] {args.episodes_per_task} trial(s), 1 camera, no dataset write")
 
     setup_libero_config()
     register_so101()
