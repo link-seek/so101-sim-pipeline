@@ -319,7 +319,7 @@ class SnapGraspController:
         ctrl.detach()             # gripper opened: release with zero velocity
     """
 
-    ATTACH_DIST = 0.03  # grasp point sits at the pinch centre; 3cm tolerance
+    ATTACH_DIST = 0.045  # pinch centre vs object centre; waypoints aim at the centre
 
     def __init__(self, sim, obj_body_name):
         import mujoco
