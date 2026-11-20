@@ -89,7 +89,9 @@ class ArmIK:
 
         self.mujoco = mujoco
         self.m, self.d = mj_raw(sim)
-        self.pos_bid = body_id(sim, "right_moving_jaw")
+        # composed name is gripper0_right_right_moving_jaw; do NOT let the fuzzy
+    # fallback match "...right_hand" (that silently aimed the hand instead)
+    self.pos_bid = body_id(sim, "right_moving_jaw", contains_fallback=("moving_jaw", "jaw"))
         self.site_bid, self.site_name = find_grip_site_id(self.mujoco, self.m)
         self.rot_bid = body_id(sim, "right_hand")
         self.eef_bid = self.pos_bid
@@ -332,8 +334,10 @@ def run_episode(env, ik, max_steps=900):
     total_reward = 0.0
     for step_idx, act6 in enumerate(actions):
         obs_list.append({
-            "camera1": np.asarray(obs["birdview_image"]).copy(),
-            "camera2": np.asarray(obs["robot0_eye_in_hand_image"]).copy(),
+            **({"camera1": np.asarray(obs["birdview_image"]).copy()}
+               if "birdview_image" in obs else {}),
+            **({"camera2": np.asarray(obs["robot0_eye_in_hand_image"]).copy()}
+               if "robot0_eye_in_hand_image" in obs else {}),
             "camera3": np.asarray(obs["agentview_image"]).copy(),
             "state": np.concatenate([
                 np.degrees(np.asarray(obs["robot0_joint_pos"], dtype=np.float64).reshape(-1)[:5])
