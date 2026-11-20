@@ -362,6 +362,9 @@ def run_episode(env, ik, max_steps=900):
             label = checkpoints[step_idx + 1]
             p_obj = np.array(sim.data.xpos[obj_bid])
             tip_now = ctrl.tip_position() if ctrl is not None else None
+            q_now = np.degrees(np.array([sim.data.qpos[a] for a in ik.arm_qadr]))
+            q_cmd = np.array(act6[:5]) + SO101_CALIB_OFFSETS
+            print(f"    [q@{label}] cmd={np.round(q_cmd,1)} now={np.round(q_now,1)}")
             print(f"    [{label}@{step_idx + 1}] obj_pos={np.round(p_obj, 3)} "
                   f"tip={np.round(tip_now, 3) if tip_now is not None else None}")
             if label == "grip" and ctrl is not None:
