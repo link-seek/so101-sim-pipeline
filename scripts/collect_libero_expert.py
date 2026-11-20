@@ -155,8 +155,8 @@ class ArmIK:
                 cands.append((e, q))
         cands.sort(key=lambda c: c[0])
 
-        best, bc = None, np.inf
-        for _, q0 in cands[:5]:
+        scored = []
+        for _, q0 in cands[:8]:
             q = np.array(q0, dtype=np.float64)
             for _ in range(200):
                 self._set_q(q)
@@ -174,9 +174,19 @@ class ArmIK:
             e = np.linalg.norm(tip - target)
             if zax[2] > -0.4:
                 e += 1.0
-            if e < bc:
-                best, bc = q.copy(), e
-        return best
+            scored.append((e, q.copy()))
+        if not scored:
+            return None
+        best_e = min(e for e, _ in scored)
+        # joint-space continuity matters more than the last millimetre: among
+        # near-optimal solutions take the one closest to the current posture.
+        # Otherwise the arm flips elbow branches and drags itself through the
+        # table on the way to the basket (observed: tracking breakdown at the
+        # first post-lift waypoint).
+        near = [q for e, q in scored if e <= best_e + 0.015]
+        if q_hint is not None and near:
+            return min(near, key=lambda q: float(np.linalg.norm(q - q_hint)))
+        return min(scored, key=lambda t: t[0])[1]
 
 
 def aim_base_at(sim, target_xy):
