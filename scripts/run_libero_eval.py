@@ -283,20 +283,26 @@ def _env_action_from_policy(action):
     return np.concatenate([arm_rad, [grip_cmd]]).astype(np.float32)
 
 
-# --- SO101 grasp-point single source of truth -------------------------------
-# The moving jaw BODY origin is the HINGE (robosuite body frame), not the
-# fingertip: the fingertip midpoint sits 113.7mm away in the jaw-local frame.
-# Everything that reasons about "where the gripper can grab" must use this,
-# otherwise the planner and the attach check disagree (that mismatch made a
-# full 10-episode collection run unable to attach anything).
-SO101_JAW_TCP = np.array([-0.0515, -0.0935, 0.0392])
+# --- SO101 grasp point: the model's grip_site, nothing else -----------------
+# robosuite defines the grasp location as the gripper's "grip_site"
+# (GripperModel.important_sites["grip_site"], wired into controllers via
+# ref_name/eef_name). The site lives in so101_gripper.xml at the pinch centre,
+# so it does NOT move when the jaw closes. Everything that reasons about where
+# the gripper can grab (scripted IK, snap-grasp attach check) reads this site;
+# any coordinate constant here would silently desynchronise the two.
+SO101_GRIP_SITE_SUFFIX = "grip_site"
 
 
-def jaw_tip_position(data, jaw_bid):
-    """World position of the moving-jaw fingertip midpoint."""
-    pos = np.array(data.xpos[jaw_bid])
-    R = np.array(data.xmat[jaw_bid]).reshape(3, 3)
-    return pos + R @ SO101_JAW_TCP
+def find_grip_site_id(mujoco, model):
+    """Composed-scene id of the gripper grasp site (robosuite prefixes names)."""
+    found = []
+    for s in range(model.nsite):
+        nm = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_SITE, s) or ""
+        if nm.endswith(SO101_GRIP_SITE_SUFFIX):
+            found.append((s, nm))
+    if not found:
+        raise RuntimeError("no *grip_site in model: gripper XML lacks the grasp site")
+    return found[0][0], found[0][1]
 
 
 class SnapGraspController:
@@ -313,7 +319,7 @@ class SnapGraspController:
         ctrl.detach()             # gripper opened: release with zero velocity
     """
 
-    ATTACH_DIST = 0.09  # generous: tip must be within 9cm of object center
+    ATTACH_DIST = 0.03  # grasp point sits at the pinch centre; 3cm tolerance
 
     def __init__(self, sim, obj_body_name):
         import mujoco
@@ -353,7 +359,9 @@ class SnapGraspController:
         # (Calibrated 2026-11-20: equals the pre-14196b4 tip position, at which
         # the scripted expert reached 68%; the gripper geometry fix moved the
         # hinge but the waypoints target the fingertips, not the hinge.)
-        self.tcp_vec = SO101_JAW_TCP if "jaw" in (tip_name or "").lower() else None
+        # grasp point comes from the model site (fail closed if it is missing)
+        import mujoco as _mj
+        self.site_bid, self.site_name = find_grip_site_id(_mj, self.m)
 
     def _find_body(self, name, extra_candidates=(), fuzzy=()):
         cands = [name, f"robot0_{name}", *extra_candidates]
@@ -369,11 +377,7 @@ class SnapGraspController:
         return -1
 
     def tip_position(self):
-        if self.tcp_vec is not None:
-            return jaw_tip_position(self.d, self.tip_bid)
-        pos = np.array(self.d.xpos[self.tip_bid])
-        R = np.array(self.d.xmat[self.tip_bid]).reshape(3, 3)
-        return pos + self.tcp * R[:, 2]
+        return np.array(self.d.site_xpos[self.site_bid])
 
     def object_position(self):
         return np.array(self.d.xpos[self.obj_bid])
