@@ -184,8 +184,11 @@ def aim_base_at(sim, target_xy):
     import mujoco
 
     m, d = mj_raw(sim)
-    base_bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "base")
+    # composed body is robot0_base: looking up "base" alone silently no-ops,
+    # which left the arm facing away from the basket (unreachable transport)
+    base_bid = body_id(sim, "base")
     if base_bid < 0:
+        print("    [aim] base body not found; arm not aimed")
         return
     base_pos = np.array(d.xpos[base_bid])[:2]
     dir_xy = np.asarray(target_xy) - base_pos
