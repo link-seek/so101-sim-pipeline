@@ -361,7 +361,9 @@ def run_episode(env, ik, max_steps=900):
         if (step_idx + 1) in checkpoints and obj_bid >= 0:
             label = checkpoints[step_idx + 1]
             p_obj = np.array(sim.data.xpos[obj_bid])
-            print(f"    [{label}@{step_idx + 1}] obj_pos={np.round(p_obj, 3)}")
+            tip_now = ctrl.tip_position() if ctrl is not None else None
+            print(f"    [{label}@{step_idx + 1}] obj_pos={np.round(p_obj, 3)} "
+                  f"tip={np.round(tip_now, 3) if tip_now is not None else None}")
             if label == "grip" and ctrl is not None:
                 if ctrl.maybe_attach(gripper_closed=True):
                     print("    [snap-grasp] ATTACHED")
