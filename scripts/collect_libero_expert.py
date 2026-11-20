@@ -90,8 +90,9 @@ class ArmIK:
         self.mujoco = mujoco
         self.m, self.d = mj_raw(sim)
         # composed name is gripper0_right_right_moving_jaw; do NOT let the fuzzy
-    # fallback match "...right_hand" (that silently aimed the hand instead)
-    self.pos_bid = body_id(sim, "right_moving_jaw", contains_fallback=("moving_jaw", "jaw"))
+        # fallback match "...right_hand" (that silently aimed the hand instead)
+        self.pos_bid = body_id(sim, "right_moving_jaw",
+                               contains_fallback=("moving_jaw", "jaw"))
         self.site_bid, self.site_name = find_grip_site_id(self.mujoco, self.m)
         self.rot_bid = body_id(sim, "right_hand")
         self.eef_bid = self.pos_bid
