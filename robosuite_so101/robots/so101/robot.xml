@@ -69,7 +69,7 @@
               <geom type="mesh" group="1" contype="0" conaffinity="0" pos="0 -0.028 0.0181" quat="0.5 -0.5 -0.5 -0.5" mesh="wrist_roll_pitch_so101_v2" material="arm_white"/>
               <geom type="mesh" group="0" pos="0 -0.028 0.0181" quat="0.5 -0.5 -0.5 -0.5" mesh="wrist_roll_pitch_so101_v2" material="arm_white"/>
 
-              <body name="gripper" pos="0 -0.0611 0.0181" quat="3.31663e-08 -3.31663e-08 -0.707107 -0.707107">
+              <body name="gripper" pos="0 -0.0611 0.0181" quat="0.0172091 -0.0172091 0.706897 0.706897">
                 <joint name="joint5" type="hinge" axis="0 0 1" range="-2.7925268969992407 2.7925267093826136" damping="0.60" frictionloss="0.052" armature="0.028"/>
                 <inertial pos="0.000213627 0.000245138 -0.025187" mass="0.087" fullinertia="2.75087e-05 4.33657e-05 3.45059e-05 -3.35241e-07 -5.7352e-06 -5.17847e-08"/>
                 <geom type="mesh" group="1" contype="0" conaffinity="0" pos="0.0077 0.0001 -0.0234" quat="0.707107 -0.707107 6.48145e-15 1.58472e-15" mesh="sts3215_03a_v1" material="arm_gray"/>
