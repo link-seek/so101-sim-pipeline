@@ -24,7 +24,7 @@
         <site name="ee_z" pos="0 0 0.1" size="0.005 .1" quat="1 0 0 0" rgba="0 0 1 0" type="cylinder" group="1"/>
       </body>
 
-      <body name="right_moving_jaw" pos="0.0202 0.0188 -0.0234" quat="0.707107 0.707107 0 0">
+      <body name="right_moving_jaw" pos="-0.0190181 -0.0747274 0.0281" quat="0 -0.70710678 -0.70710678 0">
         <joint name="right_gripper_joint" type="hinge" class="so101_gripper" axis="0 0 1" range="-0.17453292519943295 1.7453292519943295"/>
         <inertial pos="-0.00157495 -0.0300244 0.0192755" mass="0.012" fullinertia="6.61427e-06 1.89032e-06 5.28738e-06 -3.19807e-07 -5.90717e-09 -1.09945e-07"/>
         <geom type="mesh" group="1" contype="0" conaffinity="0" pos="0 0 0.0189" quat="1 0 0 0" mesh="moving_jaw_so101_v1" material="gripper_white"/>
