@@ -283,6 +283,22 @@ def _env_action_from_policy(action):
     return np.concatenate([arm_rad, [grip_cmd]]).astype(np.float32)
 
 
+# --- SO101 grasp-point single source of truth -------------------------------
+# The moving jaw BODY origin is the HINGE (robosuite body frame), not the
+# fingertip: the fingertip midpoint sits 113.7mm away in the jaw-local frame.
+# Everything that reasons about "where the gripper can grab" must use this,
+# otherwise the planner and the attach check disagree (that mismatch made a
+# full 10-episode collection run unable to attach anything).
+SO101_JAW_TCP = np.array([-0.0515, -0.0935, 0.0392])
+
+
+def jaw_tip_position(data, jaw_bid):
+    """World position of the moving-jaw fingertip midpoint."""
+    pos = np.array(data.xpos[jaw_bid])
+    R = np.array(data.xmat[jaw_bid]).reshape(3, 3)
+    return pos + R @ SO101_JAW_TCP
+
+
 class SnapGraspController:
     """Kinematic snap-grasp (the standard robosuite/MetaWorld approach).
 
@@ -337,10 +353,7 @@ class SnapGraspController:
         # (Calibrated 2026-11-20: equals the pre-14196b4 tip position, at which
         # the scripted expert reached 68%; the gripper geometry fix moved the
         # hinge but the waypoints target the fingertips, not the hinge.)
-        self.tcp_vec = None
-        if tip_name and "moving_jaw" in tip_name.lower() or "jaw" in (tip_name or "").lower():
-            import numpy as _np
-            self.tcp_vec = _np.array([-0.0515, -0.0935, 0.0392])
+        self.tcp_vec = SO101_JAW_TCP if "jaw" in (tip_name or "").lower() else None
 
     def _find_body(self, name, extra_candidates=(), fuzzy=()):
         cands = [name, f"robot0_{name}", *extra_candidates]
@@ -356,10 +369,10 @@ class SnapGraspController:
         return -1
 
     def tip_position(self):
+        if self.tcp_vec is not None:
+            return jaw_tip_position(self.d, self.tip_bid)
         pos = np.array(self.d.xpos[self.tip_bid])
         R = np.array(self.d.xmat[self.tip_bid]).reshape(3, 3)
-        if self.tcp_vec is not None:
-            return pos + R @ self.tcp_vec
         return pos + self.tcp * R[:, 2]
 
     def object_position(self):
