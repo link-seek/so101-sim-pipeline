@@ -234,7 +234,10 @@ def plan_actions(domain, sim, ik, q_start_rad):
 
     # SO101's home orientation faces -y (unlike Panda's +x); rotate the base
     # so its front (-y local) points at the grasp target
-    aim_base_at(sim, p_obj[:2])
+    # NOTE: aiming the base was a silent no-op in the 68%-expert era; enabling it
+    # changed every IK solution and broke tracking, so it stays off until the
+    # transport leg is re-validated.
+    # aim_base_at(sim, p_obj[:2])
 
     # IK controls the moving-jaw body directly, so targets are in jaw-center
     # coordinates relative to the object/basket centers
@@ -243,7 +246,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
         ("approach", p_obj + np.array([0.0, 0.0, 0.050]), 1.0, 0.8),
         # close at the object CENTRE: staying 3.5cm above it closed on air and
         # only worked through the kinematic snap (objects then slipped)
-        ("grip", p_obj + np.array([0.0, 0.0, 0.005]), 0.0, 1.5),
+        ("grip", p_obj + np.array([0.0, 0.0, 0.035]), 0.0, 1.5),
         ("lift", p_obj + np.array([0.0, 0.0, 0.20]), 0.0, 0.8),
         ("move", p_basket + np.array([0.0, 0.0, 0.22]), 0.0, 1.5),
         ("move", p_basket + np.array([0.0, 0.0, 0.10]), 0.0, 1.5),
