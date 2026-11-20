@@ -27,6 +27,7 @@ on:
 permissions:
   contents: write
   packages: read
+  actions: read
 
 env:
   EVAL_IMAGE: swr.cn-north-4.myhuaweicloud.com/link-seek/so101-eval:latest
@@ -200,7 +201,21 @@ jobs:
           tar -xzf /tmp/hcloud.tar.gz -C /tmp/
           sudo mv /tmp/hcloud /usr/local/bin/hcloud
 
+      - name: Skip stop while another collection is running
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          others=$(gh run list --repo "${{ github.repository }}" --workflow=collect.yml \
+            --status=in_progress --json databaseId \
+            --jq "[.[] | select(.databaseId != ${{ github.run_id }})] | length" || echo 0)
+          echo "others=$others" >> "$GITHUB_OUTPUT"
+          if [ "$others" -gt 0 ]; then
+            echo "another Collect Expert Data run is in progress; keeping ECS up"
+          fi
+
       - name: Stop ECS
+        if: steps.guard.outputs.others == '0'
         env:
           HCLOUD_AGREE_PRIVACY: "true"
         run: |
