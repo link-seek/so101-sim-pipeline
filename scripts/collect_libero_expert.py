@@ -24,7 +24,7 @@ from run_libero_eval import (  # noqa: E402
     find_grip_site_id,
     register_so101,
     setup_libero_config,
-    rescale_scene_to_reach,
+    place_base_at,
     _env_action_from_policy,
     SO101_CALIB_OFFSETS,
     SO101_JOINT_LO,
@@ -34,6 +34,9 @@ from run_libero_eval import (  # noqa: E402
 CAMERA_MAP = {"camera1": "birdview", "camera2": "robot0_eye_in_hand", "camera3": "agentview"}
 RENDER_HW = (480, 640)
 CART_STEP = 0.01  # metres between task-space IK samples along a path
+# Nobody scales LIBERO's scene: its layout is sized for a Panda and scaling it
+# pushed objects into the robot. We move the robot's base instead (see --base_xy).
+BASE_XY = None
 # stream progress: docker logs is block-buffered otherwise, so a multi-hour run
 # looks dead for tens of minutes
 try:
@@ -321,7 +324,8 @@ def _has_body(sim, name):
 
 def run_episode(env, ik, max_steps=900):
     obs = env.reset()
-    rescale_scene_to_reach(env)
+    if BASE_XY is not None:
+        place_base_at(env, BASE_XY)
     sim = env.env.sim
     domain = env.env
 
@@ -509,9 +513,13 @@ def main():
     parser.add_argument("--episodes_per_task", type=int, default=5)
     parser.add_argument("--tasks", default="", help="comma-separated task indices; default all")
     parser.add_argument("--output_dir", default="/data/datasets/libero_so101_expert")
+    parser.add_argument("--base_xy", nargs=2, type=float, default=None,
+                        help="place robot0_base at this world xy (scene untouched)")
     parser.add_argument("--smoke", action="store_true",
                         help="L1 gate: 1 trial, 1 camera, no dataset write")
     args = parser.parse_args()
+    global BASE_XY
+    BASE_XY = tuple(args.base_xy) if args.base_xy else None
     if args.smoke:
         # smoke = gate mode: run the requested number of trials, write nothing
         print(f"[smoke] {args.episodes_per_task} trial(s), 1 camera, no dataset write")
