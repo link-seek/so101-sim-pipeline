@@ -272,6 +272,9 @@ def plan_actions(domain, sim, ik, q_start_rad):
         if np.linalg.norm(u) > 1e-6:
             u = u / np.linalg.norm(u)
             aim_base_at(sim, target_base + 0.2 * u)
+    _bb = body_id(sim, "base")
+    print(f"    [plan-base] xpos={np.round(np.array(sim.data.xpos[_bb]),3)} "
+          f"quat={np.round(np.array(sim.data.xquat[_bb]),3)}")
 
     # IK controls the moving-jaw body directly, so targets are in jaw-center
     # coordinates relative to the object/basket centers
@@ -385,6 +388,9 @@ def run_episode(env, ik, max_steps=900):
     else:
         ctrl = None
 
+    _bb = body_id(sim, "base")
+    print(f"    [exec-base] xpos={np.round(np.array(sim.data.xpos[_bb]),3)} "
+          f"quat={np.round(np.array(sim.data.xquat[_bb]),3)}")
     obs_list, act_list = [], []
     success = False
     success_streak = 0
