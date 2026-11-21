@@ -120,6 +120,31 @@ class ArmIK:
             self.d.qpos[a] = v
         self.mujoco.mj_forward(self.m, self.d)
 
+    def _robot_geoms(self):
+        """Geom ids that belong to the robot itself (links + gripper)."""
+        if getattr(self, "_rg", None) is not None:
+            return self._rg
+        ids = set()
+        for g in range(self.m.ngeom):
+            bn = self.mujoco.mj_id2name(
+                self.m, self.mujoco.mjtObj.mjOBJ_BODY, int(self.m.geom_bodyid[g])
+            ) or ""
+            if bn.startswith("robot0") or bn.startswith("gripper0"):
+                ids.add(g)
+        self._rg = ids
+        return ids
+
+    def self_contacts(self, q):
+        """Number of penetrating self-contacts at posture q (0 = feasible)."""
+        self._set_q(q)
+        rg = self._robot_geoms()
+        n = 0
+        for i in range(self.d.ncon):
+            c = self.d.contact[i]
+            if c.dist < -0.001 and c.geom1 in rg and c.geom2 in rg:
+                n += 1
+        return n
+
     def _fk(self, q):
         self._set_q(q)
         pos = np.array(self.d.xpos[self.pos_bid])
@@ -209,10 +234,17 @@ class ArmIK:
         # Otherwise the arm flips elbow branches and drags itself through the
         # table on the way to the basket (observed: tracking breakdown at the
         # first post-lift waypoint).
-        near = [q for e, q in scored if e <= best_e + 0.015]
-        if q_hint is not None and near:
-            return min(near, key=lambda q: float(np.linalg.norm(q - q_hint)))
-        return min(scored, key=lambda t: t[0])[1]
+        near = [(e, q) for e, q in scored if e <= best_e + 0.015]
+        # IK has no notion of collision: solutions that fold the arm into itself
+        # are physically unreachable (the servos just stall), so drop them.
+        feasible = [(e, q) for e, q in near if self.self_contacts(q) == 0]
+        pool = feasible if feasible else near
+        if not feasible:
+            print(f"    [ik] no collision-free solution (best {best_e*1000:.0f}mm, "
+                  f"{len(near)} candidates)")
+        if q_hint is not None:
+            return min(pool, key=lambda t: float(np.linalg.norm(t[1] - q_hint)))[1]
+        return min(pool, key=lambda t: t[0])[1]
 
 
 def aim_base_at(sim, target_xy):
