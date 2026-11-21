@@ -23,11 +23,15 @@ class PositionServoJointController(JointPositionController):
     """JOINT_POSITION that is correct for both motor and position actuators."""
 
     def _position_actuated(self):
+        """True if THIS arm's joints are driven by MuJoCo position servos."""
         model = self.sim.model
         bias = getattr(model, "actuator_biastype", None)
-        if bias is None:
-            bias = getattr(model._model, "actuator_biastype", None)
-        if bias is None:
+        trn = getattr(model, "actuator_trnid", None)
+        if bias is None or trn is None:
+            raw = getattr(model, "_model", model)
+            bias = getattr(raw, "actuator_biastype", None)
+            trn = getattr(raw, "actuator_trnid", None)
+        if bias is None or trn is None:
             return False
         try:
             import mujoco
@@ -35,7 +39,12 @@ class PositionServoJointController(JointPositionController):
             affine = int(mujoco.mjtBias.mjBIAS_AFFINE)
         except Exception:
             affine = 1
-        return bool(np.all(np.asarray(bias)[np.asarray(self.actuators)] == affine))
+        bias = np.asarray(bias).reshape(-1)
+        joint_of_act = np.asarray(trn).reshape(-1, 2)[:, 0]
+        mine = np.isin(joint_of_act, np.asarray(self.joint_indexes["joints"]))
+        if not bool(mine.any()):
+            return False
+        return bool(np.all(bias[mine] == affine))
 
     def run_controller(self):
         if not self._position_actuated():
