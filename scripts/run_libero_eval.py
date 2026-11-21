@@ -215,7 +215,7 @@ def place_base_at(env, xy):
     """
     import mujoco
 
-    sim = env.env.sim
+    sim = env.env.sim if hasattr(env, "env") else env
     m = sim.model._model if hasattr(sim.model, "_model") else sim.model
     d = sim.data._data if hasattr(sim.data, "_data") else sim.data
     bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "robot0_base")
