@@ -43,7 +43,7 @@ def register_so101():
 
     # SO101 joints are MuJoCo position servos (official model), not torque
     # motors: JOINT_POSITION must write joint targets into data.ctrl.
-    from controllers.so101_servo import install as _install_servo
+    from so101_servo import install as _install_servo
 
     _install_servo()
 
