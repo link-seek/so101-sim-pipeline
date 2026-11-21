@@ -333,8 +333,12 @@ def _has_body(sim, name):
     return mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, name) >= 0
 
 
-def run_episode(env, ik, max_steps=900):
+def run_episode(env, ik=None, max_steps=900):
     obs = env.reset()
+    # env.reset() swaps the live MjModel/MjData; an ArmIK built before the reset
+    # keeps the stale buffers, so its FK disagrees with the simulator (the plan
+    # lands 15cm away from where the same joints actually go).
+    ik = ArmIK(env.env.sim)
     sim = env.env.sim
     domain = env.env
 
