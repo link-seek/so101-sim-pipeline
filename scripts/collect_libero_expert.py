@@ -33,6 +33,7 @@ from run_libero_eval import (  # noqa: E402
 
 CAMERA_MAP = {"camera1": "birdview", "camera2": "robot0_eye_in_hand", "camera3": "agentview"}
 RENDER_HW = (480, 640)
+CART_STEP = 0.01  # metres between task-space IK samples along a path
 # stream progress: docker logs is block-buffered otherwise, so a multi-hour run
 # looks dead for tens of minutes
 try:
@@ -123,6 +124,28 @@ class ArmIK:
         # same fingertip definition as snap-grasp (hinge-origin aware)
         tip = np.array(self.d.site_xpos[self.site_bid])
         return pos, zax, tip
+
+    def solve_local(self, target, q_hint, iters=80, tol=0.004):
+        """Refine from a hint only: keeps the arm on one branch, ~1000x cheaper
+        than the global search. Used for Cartesian path sampling."""
+        q = np.array(q_hint, dtype=np.float64)
+        for _ in range(iters):
+            self._set_q(q)
+            tip = np.array(self.d.site_xpos[self.site_bid])
+            err = target - tip
+            if np.linalg.norm(err) < tol:
+                break
+            jp = np.zeros((3, self.m.nv))
+            self.mujoco.mj_jacBody(self.m, self.d, jp, None, self.pos_bid)
+            J = jp[:, self.arm_dofadr]
+            dq = J.T @ np.linalg.solve(J @ J.T + 0.05 * np.eye(3), err)
+            q = np.clip(q + dq, self.LO, self.HI)
+        self._set_q(q)
+        tip = np.array(self.d.site_xpos[self.site_bid])
+        zax = np.array(self.d.xmat[self.rot_bid]).reshape(3, 3)[:, 2]
+        if np.linalg.norm(target - tip) > 0.02 or zax[2] > -0.35:
+            return None
+        return q
 
     def solve(self, target, q_hint=None):
         """Return joint angles (rad) putting the claw tip at target, claw down."""
@@ -268,19 +291,36 @@ def plan_actions(domain, sim, ik, q_start_rad):
             f"    [ik:{phase}] tip_err={np.linalg.norm(tgt - tip):.4f}m "
             f"tip={np.round(tip, 3)} z_axis={np.round(zax, 2)}"
         )
-        tgt_deg = np.degrees(q_sol) - SO101_CALIB_OFFSETS
-        cur_deg = np.degrees(q) - SO101_CALIB_OFFSETS
-        dist = float(np.max(np.abs(tgt_deg - cur_deg)))
-        n = max(4, int(dist / max_step_deg))
-        for k in range(1, n + 1):
-            t = k / n
-            a5 = (1 - t) * cur_deg + t * tgt_deg
-            actions.append(np.concatenate([a5, [grip_open * 100.0]]))
+        # walk the straight line in TASK space, solving locally at each step:
+        # the tool stays on the line (no sweeping through the table) and the
+        # arm cannot jump branches on the way
+        p_cur = ik._fk(q)[2]
+        seg = float(np.linalg.norm(np.asarray(tgt) - p_cur))
+        n_pts = max(1, int(seg / CART_STEP))
+        q_prev = np.array(q, dtype=np.float64)
+        for i in range(1, n_pts + 1):
+            p_i = np.asarray(tgt) + (p_cur - np.asarray(tgt)) * (1.0 - i / n_pts)
+            q_i = ik.solve_local(p_i, q_hint=q_prev)
+            if q_i is None:
+                q_i = ik.solve(p_i, q_hint=q_prev)
+            if q_i is None:
+                print(f"    [ik:{phase}] no local solution at sample {i}/{n_pts}; stop path")
+                break
+            cur_deg = np.degrees(q_prev) - SO101_CALIB_OFFSETS
+            tgt_deg_i = np.degrees(q_i) - SO101_CALIB_OFFSETS
+            dist = float(np.max(np.abs(tgt_deg_i - cur_deg)))
+            m_steps = max(2, int(dist / max_step_deg))
+            for k in range(1, m_steps + 1):
+                tt = k / m_steps
+                a5 = (1 - tt) * cur_deg + tt * tgt_deg_i
+                actions.append(np.concatenate([a5, [grip_open * 100.0]]))
+            q_prev = q_i
+        tgt_deg = np.degrees(q_prev) - SO101_CALIB_OFFSETS
         hold = GRIP_HOLD if phase in ("grip", "release") else HOLD
         for _ in range(hold):
             actions.append(np.concatenate([tgt_deg, [grip_open * 100.0]]))
         checkpoints[len(actions)] = phase
-        q = q_sol
+        q = q_prev
     return actions, checkpoints
 
 
