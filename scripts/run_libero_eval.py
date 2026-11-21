@@ -41,6 +41,12 @@ def register_so101():
     from so101_robot import MountedSO101
     from so101_gripper import SO101Gripper
 
+    # SO101 joints are MuJoCo position servos (official model), not torque
+    # motors: JOINT_POSITION must write joint targets into data.ctrl.
+    from controllers.so101_servo import install as _install_servo
+
+    _install_servo()
+
     print(f"robosuite version: {suite.__version__}")
     print(f"ALL_ROBOTS: {suite.ALL_ROBOTS}")
     print(f"ALL_GRIPPERS: {suite.ALL_GRIPPERS}")
