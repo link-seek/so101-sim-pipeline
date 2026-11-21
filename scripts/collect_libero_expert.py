@@ -291,36 +291,24 @@ def plan_actions(domain, sim, ik, q_start_rad):
             f"    [ik:{phase}] tip_err={np.linalg.norm(tgt - tip):.4f}m "
             f"tip={np.round(tip, 3)} z_axis={np.round(zax, 2)}"
         )
-        # walk the straight line in TASK space, solving locally at each step:
-        # the tool stays on the line (no sweeping through the table) and the
-        # arm cannot jump branches on the way
-        p_cur = ik._fk(q)[2]
-        seg = float(np.linalg.norm(np.asarray(tgt) - p_cur))
-        n_pts = max(1, int(seg / CART_STEP))
-        q_prev = np.array(q, dtype=np.float64)
-        for i in range(1, n_pts + 1):
-            p_i = np.asarray(tgt) + (p_cur - np.asarray(tgt)) * (1.0 - i / n_pts)
-            q_i = ik.solve_local(p_i, q_hint=q_prev)
-            if q_i is None:
-                q_i = ik.solve(p_i, q_hint=q_prev)
-            if q_i is None:
-                print(f"    [ik:{phase}] no local solution at sample {i}/{n_pts}; stop path")
-                break
-            cur_deg = np.degrees(q_prev) - SO101_CALIB_OFFSETS
-            tgt_deg_i = np.degrees(q_i) - SO101_CALIB_OFFSETS
-            dist = float(np.max(np.abs(tgt_deg_i - cur_deg)))
-            m_steps = max(2, int(dist / max_step_deg))
-            for k in range(1, m_steps + 1):
-                tt = k / m_steps
-                a5 = (1 - tt) * cur_deg + tt * tgt_deg_i
-                actions.append(np.concatenate([a5, [grip_open * 100.0]]))
-            q_prev = q_i
-        tgt_deg = np.degrees(q_prev) - SO101_CALIB_OFFSETS
+        # joint-space blend is fine now that the servos actually track: the
+        # earlier table-drag came from 20deg of tracking error, not from the
+        # interpolation itself. Cartesian sampling blew the action count up.
+        tgt_deg = np.degrees(q_sol) - SO101_CALIB_OFFSETS
+        cur_deg = np.degrees(q) - SO101_CALIB_OFFSETS
+        dist = float(np.max(np.abs(tgt_deg - cur_deg)))
+        n = max(4, int(dist / max_step_deg))
+        for k in range(1, n + 1):
+            t = k / n
+            a5 = (1 - t) * cur_deg + t * tgt_deg
+            actions.append(np.concatenate([a5, [grip_open * 100.0]]))
+        q_prev = q_sol
+        tgt_deg = np.degrees(q_sol) - SO101_CALIB_OFFSETS
         hold = GRIP_HOLD if phase in ("grip", "release") else HOLD
         for _ in range(hold):
             actions.append(np.concatenate([tgt_deg, [grip_open * 100.0]]))
         checkpoints[len(actions)] = phase
-        q = q_prev
+        q = q_sol
     return actions, checkpoints
 
 
