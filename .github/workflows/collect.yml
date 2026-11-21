@@ -23,6 +23,10 @@ on:
         description: "L1 gate: 1 trial, 1 camera, no dataset write (true/false)"
         required: false
         default: "false"
+      base_xy:
+        description: "Place robot0_base at this world xy, e.g. '0.23 0.11' (scene untouched; empty = default)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -178,7 +182,8 @@ jobs:
               --tasks "$MY" \
               --episodes_per_task ${{ inputs.episodes_per_task }} \
               --output_dir /data/datasets/libero_so101_expert${{ inputs.output_suffix }}-g${{ matrix.gpu }} \
-              ${{ inputs.smoke == 'true' && '--smoke' || '' }}'
+              ${{ inputs.smoke == 'true' && '--smoke' || '' }} \
+              ${{ inputs.base_xy != '' && format('--base_xy {0}', inputs.base_xy) || '' }}'
           date '+[%F %T] collect done' 
 
       - name: Fix perms (container wrote root-only 0600; runner uploads)
