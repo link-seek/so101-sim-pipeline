@@ -205,6 +205,31 @@ SO101_GRIP_HI = 1.7453292520
 SCENE_SCALE_FACTOR = 0.55  # SO101 reach (~0.47m) vs Panda reach (~0.86m)
 
 
+def place_base_at(env, xy):
+    """Move the robot base in the world.
+
+    LIBERO's layouts are sized for a Panda; rather than distorting the official
+    scene (no scaling — that pushed objects into the robot), we move the robot's
+    own mounting position so both the object and the basket stay inside the
+    smaller reach envelope. The scene itself is untouched.
+    """
+    import mujoco
+
+    sim = env.env.sim
+    m = sim.model._model if hasattr(sim.model, "_model") else sim.model
+    d = sim.data._data if hasattr(sim.data, "_data") else sim.data
+    bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "robot0_base")
+    if bid < 0:
+        print("    [base] robot0_base not found; base left untouched")
+        return False
+    m.body_pos[bid][0] = float(xy[0])
+    m.body_pos[bid][1] = float(xy[1])
+    mujoco.mj_forward(m, d)
+    base = np.array(d.xpos[bid])
+    print(f"    [base] placed at ({base[0]:.3f}, {base[1]:.3f})")
+    return True
+
+
 def rescale_scene_to_reach(env, factor=SCENE_SCALE_FACTOR):
     """Shrink the xy position of all task-relevant objects (movable + fixtures)
     toward the table center so they fall within SO101's smaller reach envelope.
