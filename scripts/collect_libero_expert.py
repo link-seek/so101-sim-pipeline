@@ -258,12 +258,20 @@ def plan_actions(domain, sim, ik, q_start_rad):
     p_basket = body_pos(sim, domain.objects_dict[basket_name].root_body)
     print(f"    plan: obj={obj_name}@{np.round(p_obj, 3)} goal={basket_name}@{np.round(p_basket, 3)}")
 
-    # SO101's home orientation faces -y (unlike Panda's +x); rotate the base
-    # so its front (-y local) points at the grasp target
-    # NOTE: aiming the base was a silent no-op in the 68%-expert era; enabling it
-    # changed every IK solution and broke tracking, so it stays off until the
-    # transport leg is re-validated.
-    # aim_base_at(sim, p_obj[:2])
+    # Official scene, untouched: move OUR mount and face the bisector of the two
+    # targets so both stay in front and within reach (a fixed-yaw base cannot
+    # cover an object/basket pair that straddles it).
+    base_now = np.array(sim.data.xpos[body_id(sim, "base")])[:2]
+    target_base = np.array(BASE_XY) if BASE_XY is not None else base_now
+    if BASE_XY is not None:
+        place_base_at(sim, target_base)
+    v1 = p_obj[:2] - target_base
+    v2 = p_basket[:2] - target_base
+    if np.linalg.norm(v1) > 1e-6 and np.linalg.norm(v2) > 1e-6:
+        u = v1 / np.linalg.norm(v1) + v2 / np.linalg.norm(v2)
+        if np.linalg.norm(u) > 1e-6:
+            u = u / np.linalg.norm(u)
+            aim_base_at(sim, target_base + 0.2 * u)
 
     # IK controls the moving-jaw body directly, so targets are in jaw-center
     # coordinates relative to the object/basket centers
@@ -324,8 +332,6 @@ def _has_body(sim, name):
 
 def run_episode(env, ik, max_steps=900):
     obs = env.reset()
-    if BASE_XY is not None:
-        place_base_at(env, BASE_XY)
     sim = env.env.sim
     domain = env.env
 
