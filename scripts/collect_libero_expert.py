@@ -42,7 +42,7 @@ SNAP_GRASP = False  # physical contact only: no teleporting objects
 # treat qpos < 0 as "closed"; the lower range limit (-0.1745) is over-closed and
 # pushes objects away. Close to this angle instead, converted through the
 # actuator range (never a hand-tuned action value).
-GRIP_CLOSED_Q = 0.0
+GRIP_CLOSED_Q = None  # None = use the actuator range minimum (official travel)
 # stream progress: docker logs is block-buffered otherwise, so a multi-hour run
 # looks dead for tens of minutes
 try:
@@ -282,7 +282,7 @@ def _grip_action(open_flag, sim):
     gj = [j for j in range(m.njnt) if "gripper" in (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j) or "")][0]
     act = [a for a in range(m.nu) if int(m.actuator_trnid[a][0]) == gj][0]
     lo, hi = m.actuator_ctrlrange[act]
-    q = hi if open_flag > 0.5 else GRIP_CLOSED_Q
+    q = hi if open_flag > 0.5 else (lo if GRIP_CLOSED_Q is None else GRIP_CLOSED_Q)
     return 100.0 * (float(q) - float(lo)) / (float(hi) - float(lo))
 
 
