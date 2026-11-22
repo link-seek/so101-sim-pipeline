@@ -376,7 +376,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
         hold = GRIP_HOLD if phase in ("grip", "release") else HOLD
         for _ in range(hold):
             actions.append(np.concatenate([tgt_deg, [a5_open if grip_open > 0.5 else a5_closed]]))
-        checkpoints[len(actions)] = phase
+        checkpoints[len(actions)] = (phase, np.asarray(tgt, dtype=float))
         q = q_sol
     return actions, checkpoints
 
@@ -478,7 +478,8 @@ def run_episode(env, ik=None, max_steps=900):
         success_streak = success_streak + 1 if domain._check_success() else 0
         max_streak = max(max_streak, success_streak)
         if (step_idx + 1) in checkpoints and obj_bid >= 0:
-            label = checkpoints[step_idx + 1]
+            label, tgt_plan = checkpoints[step_idx + 1]
+            print(f"    [plan@{label}] want={np.round(tgt_plan, 3)}")
             p_obj = np.array(sim.data.xpos[obj_bid])
             try:
                 import mujoco as _mj
