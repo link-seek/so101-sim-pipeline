@@ -584,12 +584,15 @@ def run_episode(env, ik=None, max_steps=900):
                 )
                 if touched:
                     q_jaw = float(d_g.qpos[m_g.jnt_qposadr[gjnt]])
+                    # keep squeezing a little past first contact: touching is not
+                    # holding -- without normal force the object slides out
+                    q_jaw = max(jaw_lo, q_jaw - 0.06)
                     q_jaw = min(max(q_jaw, jaw_lo), jaw_hi)
                     a5_freeze = 100.0 * (q_jaw - jaw_lo) / (jaw_hi - jaw_lo)
                     act6 = np.array(act6, dtype=np.float64)
                     act6[5] = a5_freeze
                     frozen = True
-                    print(f"    [grip-lock] contact at jaw={q_jaw:+.3f} rad -> holding")
+                    print(f"    [grip-lock] contact at jaw={q_jaw:+.3f} rad -> squeezing 60mrad further")
         obs, reward, done, info = env.step(_env_action_from_policy(act6))
         total_reward += float(reward)
         if ctrl is not None:
