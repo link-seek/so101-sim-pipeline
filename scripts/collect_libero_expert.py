@@ -324,7 +324,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
         ("move", p_basket + np.array([0.0, 0.0, 0.28]), 1.0, 1.5),
     ]
 
-    HOLD, GRIP_HOLD = 10, 30
+    HOLD, GRIP_HOLD = 10, 70  # the GRIP servo ramps: ~60 steps to fully close
     q = np.array(q_start_rad, dtype=np.float64)
     actions = []
     checkpoints = {}
@@ -468,7 +468,9 @@ def run_episode(env, ik=None, max_steps=900):
             q_now = np.degrees(np.array([sim.data.qpos[a] for a in ik.arm_qadr]))
             q_cmd = np.array(act6[:5]) + SO101_CALIB_OFFSETS
             print(f"    [q@{label}] cmd={np.round(q_cmd,1)} now={np.round(q_now,1)}")
-            print(f"    [{label}@{step_idx + 1}] obj_pos={np.round(p_obj, 3)} "
+            _gj = [j for j in range(m_raw.njnt) if "gripper" in (mujoco.mj_id2name(m_raw, mujoco.mjtObj.mjOBJ_JOINT, j) or "")][0]
+            _jaw = float(sim.data.qpos[sim.model.jnt_qposadr[_gj]]) if hasattr(sim.model, "jnt_qposadr") else float(d_raw.qpos[m_raw.jnt_qposadr[_gj]])
+            print(f"    [{label}@{step_idx + 1}] obj_pos={np.round(p_obj, 3)} jaw={_jaw:+.2f} "
                   f"tip={np.round(tip_now, 3) if tip_now is not None else None}")
             if label == "grip" and ctrl is not None:
                 if ctrl.maybe_attach(gripper_closed=True):
