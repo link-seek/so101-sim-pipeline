@@ -38,6 +38,11 @@ CART_STEP = 0.01  # metres between task-space IK samples along a path
 # pushed objects into the robot. We move the robot's base instead (see --base_xy).
 BASE_XY = None
 SNAP_GRASP = False  # physical contact only: no teleporting objects
+# Community SO101 sims (masato-ka/gym-soarm) drive the gripper joint directly and
+# treat qpos < 0 as "closed"; the lower range limit (-0.1745) is over-closed and
+# pushes objects away. Close to this angle instead, converted through the
+# actuator range (never a hand-tuned action value).
+GRIP_CLOSED_Q = 0.0
 # stream progress: docker logs is block-buffered otherwise, so a multi-hour run
 # looks dead for tens of minutes
 try:
@@ -269,6 +274,18 @@ def aim_base_at(sim, target_xy):
     print(f"    base aimed at {np.round(target_xy, 3)} (yaw {np.degrees(theta):.0f} deg)")
 
 
+def _grip_action(open_flag, sim):
+    """Action-space value (0-100) for the jaw: open = range max, closed = GRIP_CLOSED_Q."""
+    import mujoco
+
+    m, _ = mj_raw(sim)
+    gj = [j for j in range(m.njnt) if "gripper" in (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j) or "")][0]
+    act = [a for a in range(m.nu) if int(m.actuator_trnid[a][0]) == gj][0]
+    lo, hi = m.actuator_ctrlrange[act]
+    q = hi if open_flag > 0.5 else GRIP_CLOSED_Q
+    return 100.0 * (float(q) - float(lo)) / (float(hi) - float(lo))
+
+
 def plan_actions(domain, sim, ik, q_start_rad):
     """Return list of per-step action vectors in .pos units (5 arm deg + gripper 0-100)."""
     # resolve the object to grasp and the goal container from BDDL obj_of_interest
@@ -325,6 +342,9 @@ def plan_actions(domain, sim, ik, q_start_rad):
     ]
 
     HOLD, GRIP_HOLD = 10, 70  # the GRIP servo ramps: ~60 steps to fully close
+    a5_open = _grip_action(1.0, sim)
+    a5_closed = _grip_action(0.0, sim)
+    print(f"    [grip] open_a5={a5_open:.1f} closed_a5={a5_closed:.1f} (q={GRIP_CLOSED_Q} rad)")
     q = np.array(q_start_rad, dtype=np.float64)
     actions = []
     checkpoints = {}
@@ -348,12 +368,12 @@ def plan_actions(domain, sim, ik, q_start_rad):
         for k in range(1, n + 1):
             t = k / n
             a5 = (1 - t) * cur_deg + t * tgt_deg
-            actions.append(np.concatenate([a5, [grip_open * 100.0]]))
+            actions.append(np.concatenate([a5, [a5_open if grip_open > 0.5 else a5_closed]]))
         q_prev = q_sol
         tgt_deg = np.degrees(q_sol) - SO101_CALIB_OFFSETS
         hold = GRIP_HOLD if phase in ("grip", "release") else HOLD
         for _ in range(hold):
-            actions.append(np.concatenate([tgt_deg, [grip_open * 100.0]]))
+            actions.append(np.concatenate([tgt_deg, [a5_open if grip_open > 0.5 else a5_closed]]))
         checkpoints[len(actions)] = phase
         q = q_sol
     return actions, checkpoints
