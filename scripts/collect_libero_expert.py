@@ -310,6 +310,45 @@ def _grip_action(open_flag, sim):
     return 100.0 * (float(q) - float(lo)) / (float(hi) - float(lo))
 
 
+def object_align_dir(sim, name):
+    """Horizontal direction of the object's NARROW axis: close the jaws across
+    the short side (butter is 77.5mm long but 39.6mm wide -- closing across the
+    long side can never close)."""
+    import mujoco
+
+    m, d = mj_raw(sim)
+    bid = body_id(sim, name)
+    pts = []
+    for g in range(m.ngeom):
+        if int(m.geom_bodyid[g]) != bid:
+            continue
+        mid = int(m.geom_dataid[g])
+        if mid < 0:
+            continue
+        adr, num = int(m.mesh_vertadr[mid]), int(m.mesh_vertnum[mid])
+        v = np.array(m.mesh_vert[adr:adr + num], dtype=float)
+        R = np.array(d.geom_xmat[g]).reshape(3, 3)
+        pts.append((R @ v.T).T + np.array(d.geom_xpos[g]))
+    if not pts:
+        return None
+    P = np.vstack([p for p in pts if len(p)])
+    if len(P) > 4000:
+        P = P[np.random.default_rng(0).choice(len(P), 4000, replace=False)]
+    C = P - P.mean(axis=0)
+    w, V = np.linalg.eigh(np.cov(C.T))
+    cands = []
+    for i in range(3):
+        v = V[:, i]
+        if abs(v[2]) > 0.4:
+            continue
+        proj = C @ v
+        cands.append((float(proj.max() - proj.min()), v))
+    if not cands:
+        return None
+    cands.sort(key=lambda t: t[0])
+    return np.array([cands[0][1][0], cands[0][1][1], 0.0])
+
+
 def body_aabb_center(sim, name):
     """Geometric centre of a body's collision geoms (the body origin of LIBERO
     floor objects sits at the floor plane, so targeting it drives the arm INTO
@@ -353,14 +392,9 @@ def plan_actions(domain, sim, ik, q_start_rad):
     print(f"    plan: obj={obj_name}@{np.round(p_obj, 3)} goal={basket_name}@{np.round(p_basket, 3)}")
 
     # Object yaw -> the gripper should close across two opposite faces, not a corner
-    import mujoco as _mj
-    _m, _d = mj_raw(sim)
-    _ob = body_id(sim, domain.objects_dict[obj_name].root_body)
-    _q = np.array(_d.xquat[_ob])
-    _yaw = float(np.arctan2(2 * (_q[0] * _q[3] + _q[1] * _q[2]),
-                            1 - 2 * (_q[2] ** 2 + _q[3] ** 2)))
-    face_dir = np.array([np.cos(_yaw), np.sin(_yaw), 0.0])
-    print(f"    [align] object yaw={np.degrees(_yaw):.0f} deg")
+    face_dir = object_align_dir(sim, domain.objects_dict[obj_name].root_body)
+    if face_dir is not None:
+        print(f"    [align] closing across the narrow axis: dir={np.round(face_dir, 2)}")
 
     # Official scene, untouched: move OUR mount and face the bisector of the two
     # targets so both stay in front and within reach (a fixed-yaw base cannot
