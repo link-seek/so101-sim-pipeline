@@ -514,8 +514,6 @@ def run_episode(env, ik=None, max_steps=900):
     obj_geoms = set()
     if obj_bid >= 0:
         obj_geoms = {g for g in range(m_g.ngeom) if int(m_g.geom_bodyid[g]) == obj_bid}
-    jaw_bodies = {b for b in range(m_g.nbody)
-                  if (m_g.body(b) if hasattr(m_g, "body") else None) is not None}  # placeholder
     jaw_geoms = {g for g in range(m_g.ngeom)
                  if (_mj.mj_id2name(m_g, _mj.mjtObj.mjOBJ_BODY, int(m_g.geom_bodyid[g])) or "").endswith("moving_jaw")}
     gjnt = [j for j in range(m_g.njnt) if (_mj.mj_id2name(m_g, _mj.mjtObj.mjOBJ_JOINT, j) or "").endswith("gripper_joint")][0]
