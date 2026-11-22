@@ -283,7 +283,8 @@ def _grip_action(open_flag, sim):
     act = [a for a in range(m.nu) if int(m.actuator_trnid[a][0]) == gj][0]
     lo, hi = m.actuator_ctrlrange[act]
     q = hi if open_flag > 0.5 else GRIP_CLOSED_Q
-    return 100.0 * (float(q) - float(lo)) / (float(hi) - float(lo))
+    # radian target for the absolute joint-position gripper part
+    return float(q)
 
 
 def plan_actions(domain, sim, ik, q_start_rad):
@@ -344,7 +345,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
     HOLD, GRIP_HOLD = 10, 70  # the GRIP servo ramps: ~60 steps to fully close
     a5_open = _grip_action(1.0, sim)
     a5_closed = _grip_action(0.0, sim)
-    print(f"    [grip] open_a5={a5_open:.1f} closed_a5={a5_closed:.1f} (q={GRIP_CLOSED_Q} rad)")
+    print(f"    [grip] open={a5_open:+.3f} rad closed={a5_closed:+.3f} rad")
     q = np.array(q_start_rad, dtype=np.float64)
     actions = []
     checkpoints = {}
