@@ -37,6 +37,7 @@ CART_STEP = 0.01  # metres between task-space IK samples along a path
 # Nobody scales LIBERO's scene: its layout is sized for a Panda and scaling it
 # pushed objects into the robot. We move the robot's base instead (see --base_xy).
 BASE_XY = None
+SNAP_GRASP = False  # physical contact only: no teleporting objects
 # stream progress: docker logs is block-buffered otherwise, so a multi-hour run
 # looks dead for tens of minutes
 try:
@@ -417,7 +418,7 @@ def run_episode(env, ik=None, max_steps=900):
     obj_z0 = float(np.array(sim.data.xpos[obj_bid])[2]) if obj_bid >= 0 else 0.0
 
     # kinematic snap-grasp: attach object to claw when gripper closes on it
-    if obj_name:
+    if obj_name and SNAP_GRASP:
         from run_libero_eval import SnapGraspController
 
         ctrl = SnapGraspController(sim, domain.objects_dict[obj_name].root_body)
@@ -563,11 +564,14 @@ def main():
     parser.add_argument("--output_dir", default="/data/datasets/libero_so101_expert")
     parser.add_argument("--base_xy", nargs=2, type=float, default=None,
                         help="place robot0_base at this world xy (scene untouched)")
+    parser.add_argument("--snap", action="store_true",
+                        help="kinematic attach (cheating: teleports the object). Off by default.")
     parser.add_argument("--smoke", action="store_true",
                         help="L1 gate: 1 trial, 1 camera, no dataset write")
     args = parser.parse_args()
-    global BASE_XY
+    global BASE_XY, SNAP_GRASP
     BASE_XY = tuple(args.base_xy) if args.base_xy else None
+    SNAP_GRASP = bool(args.snap)
     if args.smoke:
         # smoke = gate mode: run the requested number of trials, write nothing
         print(f"[smoke] {args.episodes_per_task} trial(s), 1 camera, no dataset write")
