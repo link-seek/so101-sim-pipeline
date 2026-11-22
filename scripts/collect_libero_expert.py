@@ -404,6 +404,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
     q = np.array(q_start_rad, dtype=np.float64)
     actions = []
     checkpoints = {}
+    grip_span = None
     for phase, tgt, grip_open, max_step_deg in waypoints:
         q_sol = ik.solve(tgt, q_hint=q,
                          align_dir=face_dir if phase == "grip" else None)
@@ -429,11 +430,13 @@ def plan_actions(domain, sim, ik, q_start_rad):
         q_prev = q_sol
         tgt_deg = np.degrees(q_sol) - SO101_CALIB_OFFSETS
         hold = GRIP_HOLD if phase in ("grip", "release") else HOLD
+        if phase == "grip":
+            grip_span = (len(actions), len(actions) + hold)
         for _ in range(hold):
             actions.append(np.concatenate([tgt_deg, [a5_open if grip_open > 0.5 else a5_closed]]))
         checkpoints[len(actions)] = (phase, np.asarray(tgt, dtype=float))
         q = q_sol
-    return actions, checkpoints
+    return actions, checkpoints, grip_span
 
 
 def _has_body(sim, name):
@@ -461,7 +464,7 @@ def run_episode(env, ik=None, max_steps=900):
     # Planning: IK solvers write sim state, so snapshot & restore afterwards
     qpos_snapshot = np.array(sim.data.qpos).copy()
     qvel_snapshot = np.array(sim.data.qvel).copy()
-    actions, checkpoints = plan_actions(domain, sim, ik, q_start)
+    actions, checkpoints, grip_span = plan_actions(domain, sim, ik, q_start)
     if actions is None:
         return False, 0, 0.0, [], []
     sim.data.qpos[:] = qpos_snapshot
@@ -505,6 +508,21 @@ def run_episode(env, ik=None, max_steps=900):
     _bb = body_id(sim, "base")
     print(f"    [exec-base] xpos={np.round(np.array(sim.data.xpos[_bb]),3)} "
           f"quat={np.round(np.array(sim.data.xquat[_bb]),3)}")
+    # contact-triggered close: stop squeezing as soon as the pads touch the object
+    import mujoco as _mj
+    m_g, d_g = mj_raw(sim)
+    obj_geoms = set()
+    if obj_bid >= 0:
+        obj_geoms = {g for g in range(m_g.ngeom) if int(m_g.geom_bodyid[g]) == obj_bid}
+    jaw_bodies = {b for b in range(m_g.nbody)
+                  if (m_g.body(b) if hasattr(m_g, "body") else None) is not None}  # placeholder
+    jaw_geoms = {g for g in range(m_g.ngeom)
+                 if (_mj.mj_id2name(m_g, _mj.mjtObj.mjOBJ_BODY, int(m_g.geom_bodyid[g])) or "").endswith("moving_jaw")}
+    gjnt = [j for j in range(m_g.njnt) if (_mj.mj_id2name(m_g, _mj.mjtObj.mjOBJ_JOINT, j) or "").endswith("gripper_joint")][0]
+    gact = [a for a in range(m_g.nu) if int(m_g.actuator_trnid[a][0]) == gjnt][0]
+    jaw_lo, jaw_hi = float(m_g.actuator_ctrlrange[gact][0]), float(m_g.actuator_ctrlrange[gact][1])
+    frozen = False
+
     obs_list, act_list = [], []
     success = False
     success_streak = 0
@@ -525,6 +543,21 @@ def run_episode(env, ik=None, max_steps=900):
             ]).astype(np.float32),
         })
         act_list.append(act6.astype(np.float32))
+        if grip_span is not None and grip_span[0] <= step_idx < grip_span[1]:
+            if not frozen:
+                touched = any(
+                    (c.geom1 in jaw_geoms and c.geom2 in obj_geoms) or
+                    (c.geom2 in jaw_geoms and c.geom1 in obj_geoms)
+                    for c in (d_g.contact[i] for i in range(d_g.ncon))
+                )
+                if touched:
+                    q_jaw = float(d_g.qpos[m_g.jnt_qposadr[gjnt]])
+                    q_jaw = min(max(q_jaw, jaw_lo), jaw_hi)
+                    a5_freeze = 100.0 * (q_jaw - jaw_lo) / (jaw_hi - jaw_lo)
+                    act6 = np.array(act6, dtype=np.float64)
+                    act6[5] = a5_freeze
+                    frozen = True
+                    print(f"    [grip-lock] contact at jaw={q_jaw:+.3f} rad -> holding")
         obs, reward, done, info = env.step(_env_action_from_policy(act6))
         total_reward += float(reward)
         if ctrl is not None:
