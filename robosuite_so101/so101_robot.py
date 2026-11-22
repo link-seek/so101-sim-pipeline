@@ -97,4 +97,7 @@ class MountedSO101(ManipulatorModel):
 
     @property
     def _eef_name(self):
-        return {"right": "right_hand"}
+        # Official SO-ARM100 has the jaw as a child of the "gripper" body, not of
+        # the 9.8cm-lower gripperframe. Mounting the gripper model at "gripper"
+        # lets the jaw use the official pose verbatim (no inverse transform).
+        return {"right": "gripper"}
