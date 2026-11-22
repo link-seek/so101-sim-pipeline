@@ -458,7 +458,13 @@ def run_episode(env, ik=None, max_steps=900):
         if (step_idx + 1) in checkpoints and obj_bid >= 0:
             label = checkpoints[step_idx + 1]
             p_obj = np.array(sim.data.xpos[obj_bid])
-            tip_now = ctrl.tip_position() if ctrl is not None else None
+            try:
+                import mujoco as _mj
+                _m, _d = mj_raw(sim)
+                _sid, _ = __import__("run_libero_eval").find_grip_site_id(_mj, _m)
+                tip_now = np.array(_d.site_xpos[_sid])
+            except Exception:
+                tip_now = None
             q_now = np.degrees(np.array([sim.data.qpos[a] for a in ik.arm_qadr]))
             q_cmd = np.array(act6[:5]) + SO101_CALIB_OFFSETS
             print(f"    [q@{label}] cmd={np.round(q_cmd,1)} now={np.round(q_now,1)}")
