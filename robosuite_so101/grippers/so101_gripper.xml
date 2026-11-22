@@ -32,7 +32,7 @@
         <joint name="right_gripper_joint" type="hinge" class="so101_gripper" axis="0 0 1" range="-0.17453292519943295 1.7453292519943295"/>
         <inertial pos="-0.00157495 -0.0300244 0.0192755" mass="0.012" fullinertia="6.61427e-06 1.89032e-06 5.28738e-06 -3.19807e-07 -5.90717e-09 -1.09945e-07"/>
         <geom type="mesh" group="1" contype="0" conaffinity="0" pos="0 0 0.0189" quat="1 0 0 0" mesh="moving_jaw_so101_v1" material="gripper_white"/>
-        <geom type="mesh" group="0" pos="0 0 0.0189" quat="1 0 0 0" mesh="moving_jaw_so101_v1" material="gripper_white"/>
+        <geom type="mesh" group="0" pos="0 0 0.0189" quat="1 0 0 0" mesh="moving_jaw_so101_v1" material="gripper_white" friction="2.0 0.05 0.001"/>
       </body>
     </body>
   </worldbody>
@@ -41,6 +41,6 @@
     <torque name="torque_ee" site="ft_frame"/>
   </sensor>
   <actuator>
-    <position name="right_gripper_motor" joint="right_gripper_joint" ctrlrange="-0.1745 1.7453" ctrllimited="true" kp="100" forcelimited="true" forcerange="-3.35 3.35"/>
+    <position name="right_gripper_motor" joint="right_gripper_joint" ctrlrange="-0.1745 1.7453" ctrllimited="true" kp="998.22" kv="2.731" forcelimited="true" forcerange="-3.35 3.35"/>
   </actuator>
 </mujoco>
