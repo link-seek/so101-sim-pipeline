@@ -75,7 +75,7 @@
                 <geom type="mesh" group="1" contype="0" conaffinity="0" pos="0.0077 0.0001 -0.0234" quat="0.707107 -0.707107 6.48145e-15 1.58472e-15" mesh="sts3215_03a_v1" material="arm_gray"/>
                 <geom type="mesh" group="0" pos="0.0077 0.0001 -0.0234" quat="0.707107 -0.707107 6.48145e-15 1.58472e-15" mesh="sts3215_03a_v1" material="arm_gray"/>
                 <geom type="mesh" group="1" contype="0" conaffinity="0" pos="5.55112e-17 -0.000218214 0.000949706" quat="0 1 0 0" mesh="wrist_roll_follower_so101_v1" material="arm_white"/>
-                <geom type="mesh" group="0" pos="5.55112e-17 -0.000218214 0.000949706" quat="0 1 0 0" mesh="wrist_roll_follower_so101_v1" material="arm_white" friction="2.0 0.05 0.001"/>
+                <geom type="mesh" group="0" pos="5.55112e-17 -0.000218214 0.000949706" quat="0 1 0 0" mesh="wrist_roll_follower_so101_v1" material="arm_white" friction="1.5 1.0 0.1"/>
 
                 <body name="right_hand" pos="-0.0079 -0.000218121 -0.0981274" quat="0.5 -0.5 0.5 -0.5">
                   <camera mode="fixed" name="eye_in_hand" pos="0.05 0 0" quat="0.5 0.5 -0.5 -0.5" fovy="75"/>
@@ -88,10 +88,10 @@
     </body>
   </worldbody>
   <actuator>
-    <position name="actuator1" joint="joint1" kp="998.22" kv="2.731" forcerange="-3.35 3.35" ctrlrange="-1.91986 1.91986" ctrllimited="true"/>
-    <position name="actuator2" joint="joint2" kp="998.22" kv="2.731" forcerange="-3.35 3.35" ctrlrange="-1.74533 1.74533" ctrllimited="true"/>
-    <position name="actuator3" joint="joint3" kp="998.22" kv="2.731" forcerange="-3.35 3.35" ctrlrange="-1.69 1.69" ctrllimited="true"/>
-    <position name="actuator4" joint="joint4" kp="998.22" kv="2.731" forcerange="-3.35 3.35" ctrlrange="-1.65806 1.65806" ctrllimited="true"/>
-    <position name="actuator5" joint="joint5" kp="998.22" kv="2.731" forcerange="-3.35 3.35" ctrlrange="-2.74385 2.84121" ctrllimited="true"/>
+    <position name="actuator1" joint="joint1" kp="300" kv="2.731" forcerange="-3.35 3.35" ctrlrange="-1.91986 1.91986" ctrllimited="true"/>
+    <position name="actuator2" joint="joint2" kp="300" kv="2.731" forcerange="-3.35 3.35" ctrlrange="-1.74533 1.74533" ctrllimited="true"/>
+    <position name="actuator3" joint="joint3" kp="1600" kv="2.731" forcerange="-3.35 3.35" ctrlrange="-1.69 1.69" ctrllimited="true"/>
+    <position name="actuator4" joint="joint4" kp="1600" kv="2.731" forcerange="-3.35 3.35" ctrlrange="-1.65806 1.65806" ctrllimited="true"/>
+    <position name="actuator5" joint="joint5" kp="1600" kv="2.731" forcerange="-3.35 3.35" ctrlrange="-2.74385 2.84121" ctrllimited="true"/>
   </actuator>
 </mujoco>
