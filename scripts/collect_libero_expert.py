@@ -105,6 +105,10 @@ class ArmIK:
                                contains_fallback=("moving_jaw", "jaw"))
         self.site_bid, self.site_name = find_grip_site_id(self.mujoco, self.m)
         self.rot_bid = body_id(sim, "right_hand")
+        try:
+            self.fix_bid = body_id(sim, "gripper")
+        except Exception:
+            self.fix_bid = -1
         self.eef_bid = self.pos_bid
         self.arm_qadr, self.arm_dofadr, self.arm_jids = [], [], []
         for j in range(self.m.njnt):
@@ -181,7 +185,7 @@ class ArmIK:
             return None
         return q
 
-    def solve(self, target, q_hint=None):
+    def solve(self, target, q_hint=None, align_dir=None):
         """Return joint angles (rad) putting the claw tip at target, claw down."""
         rng = self.rng
         n_glob, n_near = 20000, 25000
@@ -248,6 +252,26 @@ class ArmIK:
         if not feasible:
             print(f"    [ik] no collision-free solution (best {best_e*1000:.0f}mm, "
                   f"{len(near)} candidates)")
+        if align_dir is not None and len(pool) > 1:
+            # prefer the posture whose closing plane matches the object's faces;
+            # closing across a corner shoves the object instead of gripping it
+            def score(item):
+                q = item[1]
+                self._set_q(q)
+                pj = np.array(self.d.xpos[self.pos_bid])
+                try:
+                    pf = np.array(self.d.xpos[self.fix_bid])
+                except Exception:
+                    return 0.0
+                d_ = pf - pj
+                n = np.linalg.norm(d_)
+                if n < 1e-6:
+                    return 0.0
+                d_ /= n
+                a = np.array(align_dir, dtype=float)
+                a /= max(1e-9, np.linalg.norm(a))
+                return abs(float(np.dot(d_, a)))
+            pool = sorted(pool, key=lambda it: (-score(it), it[0]))[:3]
         if q_hint is not None:
             return min(pool, key=lambda t: float(np.linalg.norm(t[1] - q_hint)))[1]
         return min(pool, key=lambda t: t[0])[1]
@@ -328,6 +352,16 @@ def plan_actions(domain, sim, ik, q_start_rad):
     p_basket = body_pos(sim, domain.objects_dict[basket_name].root_body)
     print(f"    plan: obj={obj_name}@{np.round(p_obj, 3)} goal={basket_name}@{np.round(p_basket, 3)}")
 
+    # Object yaw -> the gripper should close across two opposite faces, not a corner
+    import mujoco as _mj
+    _m, _d = mj_raw(sim)
+    _ob = body_id(sim, domain.objects_dict[obj_name].root_body)
+    _q = np.array(_d.xquat[_ob])
+    _yaw = float(np.arctan2(2 * (_q[0] * _q[3] + _q[1] * _q[2]),
+                            1 - 2 * (_q[2] ** 2 + _q[3] ** 2)))
+    face_dir = np.array([np.cos(_yaw), np.sin(_yaw), 0.0])
+    print(f"    [align] object yaw={np.degrees(_yaw):.0f} deg")
+
     # Official scene, untouched: move OUR mount and face the bisector of the two
     # targets so both stay in front and within reach (a fixed-yaw base cannot
     # cover an object/basket pair that straddles it).
@@ -371,7 +405,8 @@ def plan_actions(domain, sim, ik, q_start_rad):
     actions = []
     checkpoints = {}
     for phase, tgt, grip_open, max_step_deg in waypoints:
-        q_sol = ik.solve(tgt, q_hint=q)
+        q_sol = ik.solve(tgt, q_hint=q,
+                         align_dir=face_dir if phase == "grip" else None)
         if q_sol is None:
             print(f"    [ik:{phase}] NO SOLUTION; aborting plan")
             return None, None
