@@ -310,7 +310,8 @@ def _env_action_from_policy(action):
         a = a[:6]
     arm_rad = np.radians(a[:5] + SO101_CALIB_OFFSETS)
     arm_rad = np.clip(arm_rad, SO101_JOINT_LO, SO101_JOINT_HI)
-    grip_cmd = np.clip(a[5] / 50.0 - 1.0, -1.0, 1.0)
+    # gripper is now an absolute joint target in radians (see so101_basic.json).
+    grip_cmd = float(a[5])
     return np.concatenate([arm_rad, [grip_cmd]]).astype(np.float32)
 
 
