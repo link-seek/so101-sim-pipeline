@@ -330,10 +330,12 @@ def plan_actions(domain, sim, ik, q_start_rad):
     # coordinates relative to the object/basket centers
     waypoints = [
         ("move", p_obj + np.array([0.0, 0.0, 0.10]), 1.0, 1.5),
-        ("approach", p_obj + np.array([0.0, 0.0, 0.050]), 1.0, 0.8),
+        ("approach", p_obj + np.array([0.0, 0.0, 0.060]), 1.0, 0.8),
         # close at the object CENTRE: staying 3.5cm above it closed on air and
         # only worked through the kinematic snap (objects then slipped)
-        ("grip", p_obj + np.array([0.0, 0.0, 0.035]), 0.0, 1.5),
+        # grasp at the object CENTRE height: the jaws close around the mid-section
+        # (aiming 3.5cm above closed in the air for short box-like objects)
+        ("grip", p_obj + np.array([0.0, 0.0, 0.0]), 0.0, 1.5),
         ("lift", p_obj + np.array([0.0, 0.0, 0.20]), 0.0, 0.8),
         ("move", p_basket + np.array([0.0, 0.0, 0.22]), 0.0, 1.5),
         ("move", p_basket + np.array([0.0, 0.0, 0.10]), 0.0, 1.5),
