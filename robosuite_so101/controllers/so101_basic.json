@@ -10,20 +10,7 @@
                 "velocity_limits": [-2, 2],
                 "interpolation": null,
                 "gripper": {
-                    "type": "JOINT_POSITION",
-                    "input_type": "absolute",
-                    "input_max": 3.2,
-                    "input_min": -3.2,
-                    "output_max": 3.2,
-                    "output_min": -3.2,
-                    "kp": 998.22,
-                    "damping_ratio": 1,
-                    "impedance_mode": "fixed",
-                    "kp_limits": [0, 1200],
-                    "damping_ratio_limits": [0, 10],
-                    "qpos_limits": null,
-                    "interpolation": null,
-                    "ramp_ratio": 0.2
+                    "type": "GRIP"
                 }
             }
         }
