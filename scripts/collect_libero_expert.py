@@ -286,6 +286,26 @@ def _grip_action(open_flag, sim):
     return 100.0 * (float(q) - float(lo)) / (float(hi) - float(lo))
 
 
+def body_aabb_center(sim, name):
+    """Geometric centre of a body's collision geoms (the body origin of LIBERO
+    floor objects sits at the floor plane, so targeting it drives the arm INTO
+    the ground -- joint 4 ended 52 deg short because of exactly that)."""
+    import mujoco
+
+    m, d = mj_raw(sim)
+    bid = body_id(sim, name)
+    gs = [g for g in range(m.ngeom) if int(m.geom_bodyid[g]) == bid]
+    if not gs:
+        return np.array(d.xpos[bid])
+    pts = []
+    for g in gs:
+        lo = np.array(m.geom_aabb[g][:3]); hi = np.array(m.geom_aabb[g][3:])
+        R = np.array(d.geom_xmat[g]).reshape(3, 3)
+        c_local = (lo + hi) / 2
+        pts.append(np.array(d.geom_xpos[g]) + R @ c_local)
+    return np.mean(pts, axis=0)
+
+
 def plan_actions(domain, sim, ik, q_start_rad):
     """Return list of per-step action vectors in .pos units (5 arm deg + gripper 0-100)."""
     # resolve the object to grasp and the goal container from BDDL obj_of_interest
@@ -304,7 +324,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
                 obj_name = name
     if obj_name is None or basket_name is None:
         raise RuntimeError(f"could not resolve objects: {list(domain.objects_dict)}")
-    p_obj = body_pos(sim, domain.objects_dict[obj_name].root_body)
+    p_obj = body_aabb_center(sim, domain.objects_dict[obj_name].root_body)
     p_basket = body_pos(sim, domain.objects_dict[basket_name].root_body)
     print(f"    plan: obj={obj_name}@{np.round(p_obj, 3)} goal={basket_name}@{np.round(p_basket, 3)}")
 
