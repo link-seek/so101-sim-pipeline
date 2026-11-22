@@ -17,12 +17,14 @@
       <site name="ft_frame" pos="0 0 0" size="0.01" rgba="1 0 0 1" type="sphere" group="1"/>
 
       <body name="eef" pos="0 0 0" quat="1 0 0 0">
-        <!-- grasp point = pinch centre between the pads, at the CLOSED jaw pose.
+        <!-- grasp point = measured midpoint of the two jaw meshes at the CLOSED
+             jaw pose (hand frame). The previous value was 6cm off the real pad
+             region, which is why closing the jaws never touched the object.
              A point on the moving jaw would swing ~160mm as the jaw closes, which
              desynchronises planning from attach checks. robosuite reads this site
              as the gripper's grasp location (GripperModel.important_sites). -->
-        <site name="grip_site" pos="0.020182 0.018773 -0.0234" size="0.01" rgba="1 0.3 0.3 1" type="sphere" group="1"/>
-        <site name="grip_site_cylinder" pos="0.020182 0.018773 -0.0234" size="0.005 10" rgba="0 1 0 0.3" type="cylinder" group="1"/>
+        <site name="grip_site" pos="0.007482 -0.03818 0.009849" size="0.01" rgba="1 0.3 0.3 1" type="sphere" group="1"/>
+        <site name="grip_site_cylinder" pos="0.007482 -0.03818 0.009849" size="0.005 10" rgba="0 1 0 0.3" type="cylinder" group="1"/>
         <site name="ee_x" pos="0.1 0 0" size="0.005 .1" quat="0.707105 0 0.707108 0" rgba="1 0 0 0" type="cylinder" group="1"/>
         <site name="ee_y" pos="0 0.1 0" size="0.005 .1" quat="0.707105 0.707108 0 0" rgba="0 1 0 0" type="cylinder" group="1"/>
         <site name="ee_z" pos="0 0 0.1" size="0.005 .1" quat="1 0 0 0" rgba="0 0 1 0" type="cylinder" group="1"/>
