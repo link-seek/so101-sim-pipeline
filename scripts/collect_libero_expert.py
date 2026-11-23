@@ -349,6 +349,30 @@ def object_align_dir(sim, name):
     return np.array([cands[0][1][0], cands[0][1][1], 0.0])
 
 
+def object_top_z(sim, name):
+    """Highest point of the object's collision geoms, in world z."""
+    import mujoco
+
+    m, d = mj_raw(sim)
+    bid = body_id(sim, name)
+    best = None
+    for g in range(m.ngeom):
+        if int(m.geom_bodyid[g]) != bid:
+            continue
+        mid = int(m.geom_dataid[g])
+        if mid >= 0:
+            adr, num = int(m.mesh_vertadr[mid]), int(m.mesh_vertnum[mid])
+            v = np.array(m.mesh_vert[adr:adr + num], dtype=float)
+        else:
+            s = np.array(m.geom_size[g])
+            v = np.array([[sx, sy, sz] for sx in (-s[0], s[0]) for sy in (-s[1], s[1]) for sz in (-s[2], s[2])])
+        R = np.array(d.geom_xmat[g]).reshape(3, 3)
+        w = (R @ v.T).T + np.array(d.geom_xpos[g])
+        z = float(w[:, 2].max())
+        best = z if best is None else max(best, z)
+    return best if best is not None else float(d.xpos[bid][2])
+
+
 def body_aabb_center(sim, name):
     """Geometric centre of a body's collision geoms (the body origin of LIBERO
     floor objects sits at the floor plane, so targeting it drives the arm INTO
@@ -388,6 +412,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
     if obj_name is None or basket_name is None:
         raise RuntimeError(f"could not resolve objects: {list(domain.objects_dict)}")
     p_obj = body_aabb_center(sim, domain.objects_dict[obj_name].root_body)
+    print(f"    [geom] obj centre={np.round(p_obj, 3)} top_z={object_top_z(sim, domain.objects_dict[obj_name].root_body):.3f}")
     p_basket = body_pos(sim, domain.objects_dict[basket_name].root_body)
     print(f"    plan: obj={obj_name}@{np.round(p_obj, 3)} goal={basket_name}@{np.round(p_basket, 3)}")
 
@@ -425,7 +450,9 @@ def plan_actions(domain, sim, ik, q_start_rad):
         # (aiming 3.5cm above closed in the air for short box-like objects)
         # grasp slightly ABOVE the geometric centre: with the object on the floor
         # the lower pad pressed on the ground and the jaw stalled at ~1.69rad
-        ("grip", p_obj + np.array([0.0, 0.0, 0.006]), 0.0, 1.5),
+        # grasp a little below the object's TOP surface: targeting the geometric
+        # centre of a floor object drove the arm into the ground (joint 4 blocked)
+        ("grip", np.array([p_obj[0], p_obj[1], object_top_z(sim, domain.objects_dict[obj_name].root_body) - 0.012]), 0.0, 1.5),
         ("lift", p_obj + np.array([0.0, 0.0, 0.20]), 0.0, 0.8),
         ("move", p_basket + np.array([0.0, 0.0, 0.22]), 0.0, 1.5),
         ("move", p_basket + np.array([0.0, 0.0, 0.10]), 0.0, 1.5),
