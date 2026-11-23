@@ -411,8 +411,10 @@ def plan_actions(domain, sim, ik, q_start_rad):
                 obj_name = name
     if obj_name is None or basket_name is None:
         raise RuntimeError(f"could not resolve objects: {list(domain.objects_dict)}")
-    p_obj = body_aabb_center(sim, domain.objects_dict[obj_name].root_body)
-    print(f"    [geom] obj centre={np.round(p_obj, 3)} top_z={object_top_z(sim, domain.objects_dict[obj_name].root_body):.3f}")
+    _root = domain.objects_dict[obj_name].root_body
+    p_obj = np.array(sim.data.xpos[body_id(sim, _root)], dtype=float)  # official body pose
+    print(f"    [geom] body xpos={np.round(p_obj, 3)}")
+    print(f"    [geom] obj centre={np.round(p_obj, 3)} top_z={object_top_z(sim, _root):.3f}")
     p_basket = body_pos(sim, domain.objects_dict[basket_name].root_body)
     print(f"    plan: obj={obj_name}@{np.round(p_obj, 3)} goal={basket_name}@{np.round(p_basket, 3)}")
 
@@ -452,7 +454,7 @@ def plan_actions(domain, sim, ik, q_start_rad):
         # the lower pad pressed on the ground and the jaw stalled at ~1.69rad
         # grasp a little below the object's TOP surface: targeting the geometric
         # centre of a floor object drove the arm into the ground (joint 4 blocked)
-        ("grip", np.array([p_obj[0], p_obj[1], object_top_z(sim, domain.objects_dict[obj_name].root_body) - 0.012]), 0.0, 1.5),
+        ("grip", np.array([p_obj[0], p_obj[1], object_top_z(sim, _root) - 0.012]), 0.0, 1.5),
         ("lift", p_obj + np.array([0.0, 0.0, 0.20]), 0.0, 0.8),
         ("move", p_basket + np.array([0.0, 0.0, 0.22]), 0.0, 1.5),
         ("move", p_basket + np.array([0.0, 0.0, 0.10]), 0.0, 1.5),
@@ -541,7 +543,11 @@ def run_episode(env, ik=None, max_steps=900):
         return False, 0, 0.0, [], []
 
     # track the manipulated object body for diagnostics
-    obj_name = next(
+    # official: the object is decided by the BDDL :obj_of_interest section
+    # (env.obj_of_interest), never by iteration order
+    interest = getattr(domain, "obj_of_interest", None) or []
+    names = [n for n in (interest or []) if n in domain.objects_dict]
+    obj_name = names[0] if names else next(
         (n for n in domain.objects_dict if "basket" not in n.lower()), None
     )
     obj_bid = -1
