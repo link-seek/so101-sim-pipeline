@@ -423,7 +423,9 @@ def plan_actions(domain, sim, ik, q_start_rad):
         # only worked through the kinematic snap (objects then slipped)
         # grasp at the object CENTRE height: the jaws close around the mid-section
         # (aiming 3.5cm above closed in the air for short box-like objects)
-        ("grip", p_obj + np.array([0.0, 0.0, 0.0]), 0.0, 1.5),
+        # grasp slightly ABOVE the geometric centre: with the object on the floor
+        # the lower pad pressed on the ground and the jaw stalled at ~1.69rad
+        ("grip", p_obj + np.array([0.0, 0.0, 0.006]), 0.0, 1.5),
         ("lift", p_obj + np.array([0.0, 0.0, 0.20]), 0.0, 0.8),
         ("move", p_basket + np.array([0.0, 0.0, 0.22]), 0.0, 1.5),
         ("move", p_basket + np.array([0.0, 0.0, 0.10]), 0.0, 1.5),
